@@ -28,6 +28,7 @@ button{cursor:pointer}
 .icon-btn.on{border-color:var(--accent);color:var(--accent)}
 .wrap{padding:12px 14px 24px;max-width:520px;margin:0 auto}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:12px}
+.card.hero{background:radial-gradient(130% 160% at 100% 0%,rgba(229,167,94,.12),transparent 55%),linear-gradient(160deg,#1A1C24,#161820)}
 .card-title{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px;font-weight:600}
 .big{font-size:28px;font-weight:700;letter-spacing:-.02em}
 .muted{color:var(--muted)}
@@ -39,7 +40,7 @@ button{cursor:pointer}
 .pill.off{border-color:#6B7280;color:#9CA3AF}
 .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:8px}
 .cal-h{text-align:center;font-size:11px;color:var(--muted);padding:4px 0}
-.cal-d{aspect-ratio:1;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:13px;background:var(--card2);border:1px solid transparent;position:relative}
+.cal-d{aspect-ratio:1;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:13px;background:var(--card2);border:1px solid transparent}
 .cal-d.today{border-color:var(--accent)}
 .cal-d.other{opacity:.35}
 .cal-d .dot{width:5px;height:5px;border-radius:50%;margin-top:2px}
@@ -47,14 +48,19 @@ button{cursor:pointer}
 .cal-d.night .dot{background:#818CF8}
 .cal-d.off .dot{background:#6B7280}
 .stat{display:flex;flex-direction:column;gap:2px}
-.stat b{font-size:16px}
+.stat b{font-size:18px}
 .stat span{font-size:12px;color:var(--muted)}
 .list{display:flex;flex-direction:column;gap:8px}
 .item{display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--card2);border-radius:12px;border:1px solid var(--line);gap:10px}
 .item .left{display:flex;flex-direction:column;gap:2px;min-width:0}
 .item .amt{font-weight:600;white-space:nowrap}
-.amt.plus{color:var(--green)}
-.amt.minus{color:var(--red)}
+.amt.plus,.plus{color:var(--green)}
+.amt.minus,.minus,.neg{color:var(--red)}
+.cash-card .divider{height:1px;background:var(--line);margin:12px 0}
+.cash-card .rows .row{padding:5px 0;font-size:14px}
+.cash-card .hint{margin-top:10px;font-size:12px;color:var(--muted);line-height:1.4}
+.cat-row{margin-bottom:10px}
+.cat-row .cat-top{display:flex;justify-content:space-between;margin-bottom:4px;font-size:13px}
 .fab-wrap{position:fixed;right:18px;bottom:calc(18px + var(--safe-b));z-index:60}
 .fab{width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,#F0C384,#E5A75E);color:#1A1208;font-size:28px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 28px rgba(229,167,94,.35);border:none;transition:transform .2s}
 .fab.open{transform:rotate(45deg)}
@@ -69,21 +75,17 @@ button{cursor:pointer}
 .field{margin-bottom:12px}
 .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
 .field input,.field select,.field textarea{width:100%;padding:12px 14px;border-radius:12px;background:var(--card2);border:1px solid var(--line)}
-.field textarea{min-height:70px;resize:vertical}
 .btns{display:flex;gap:10px;margin-top:16px}
+.btns.col{flex-direction:column}
 .btn{flex:1;padding:13px;border-radius:12px;font-weight:600;text-align:center}
 .btn.primary{background:linear-gradient(135deg,#F0C384,#E5A75E);color:#1A1208}
 .btn.ghost{background:var(--card2);border:1px solid var(--line)}
 .btn.danger{background:rgba(248,113,113,.15);color:var(--red);border:1px solid rgba(248,113,113,.3)}
 .toast{position:fixed;left:50%;bottom:calc(90px + var(--safe-b));transform:translateX(-50%) translateY(20px);background:var(--card2);border:1px solid var(--line);padding:10px 16px;border-radius:12px;z-index:100;opacity:0;pointer-events:none;transition:.25s;white-space:nowrap;font-size:14px}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-.progress{height:6px;background:var(--line);border-radius:99px;overflow:hidden;margin-top:8px}
+.progress{height:6px;background:var(--line);border-radius:99px;overflow:hidden;margin-top:4px}
 .progress>i{display:block;height:100%;background:linear-gradient(90deg,#E5A75E,#F0C384);border-radius:99px}
-.seg{display:flex;gap:6px;margin-bottom:12px}
-.seg button{flex:1;padding:10px;border-radius:10px;background:var(--card2);border:1px solid var(--line);font-size:13px;font-weight:600}
-.seg button.on{border-color:var(--accent);color:var(--accent);background:rgba(229,167,94,.1)}
-.empty{text-align:center;padding:24px;color:var(--muted);font-size:14px}
-.cloud-status{font-size:11px;color:var(--muted);margin-left:4px}
+.empty{text-align:center;padding:20px;color:var(--muted);font-size:14px}
 </style>
 </head>
 <body>
@@ -91,7 +93,7 @@ button{cursor:pointer}
   <h1>Копейка</h1>
   <div class="top-actions">
     <button class="icon-btn" id="btnCloud" title="Облако">☁</button>
-    <button class="icon-btn" id="btnMonth" title="Месяц">📅</button>
+    <button class="icon-btn" id="btnMonth" title="Настройки">📅</button>
   </div>
 </div>
 
