@@ -1,15 +1,16 @@
-/* app loader */
+/* app loader v3 */
 (function(){
   Promise.all([
-    fetch('app_p1.js?v=1').then(r=>r.text()),
-    fetch('app_p2.js?v=1').then(r=>r.text())
+    fetch('ap0.js?v=3').then(r=>r.text()),
+    fetch('ap1.js?v=3').then(r=>r.text()),
+    fetch('ap2.js?v=3').then(r=>r.text())
   ]).then(function(parts){
     var s=document.createElement('script');
-    s.textContent=parts[0]+parts[1];
+    s.textContent=parts.join('');
     document.head.appendChild(s);
   }).catch(function(e){
     console.error(e);
     var m=document.getElementById('main');
-    if(m) m.innerHTML='<div class="card">Ошибка загрузки приложения</div>';
+    if(m) m.innerHTML='<div class="card">Ошибка загрузки. Обнови страницу.</div>';
   });
 })();
