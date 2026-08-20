@@ -96,9 +96,7 @@ button{cursor:pointer}
     <button class="icon-btn" id="btnMonth" title="Настройки">📅</button>
   </div>
 </div>
-
 <div class="wrap" id="app"></div>
-
 <div class="fab-wrap">
   <div class="radial" id="radial">
     <button data-act="income"><span class="ic" style="background:rgba(74,222,128,.15)">➕</span> Доход</button>
@@ -108,16 +106,10 @@ button{cursor:pointer}
   </div>
   <button class="fab" id="fab">+</button>
 </div>
-
 <div class="modal-bg" id="modalBg"></div>
 <div class="toast" id="toast"></div>
-
 <script src="app.js"></script>
 <script src="cloud.js"></script>
-<script>
-if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('sw.js').catch(()=>{});
-}
-</script>
+<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(function(){});}</script>
 </body>
 </html>
