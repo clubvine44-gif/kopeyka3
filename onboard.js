@@ -9,6 +9,7 @@ var STEPS=[
   {t:'Кнопка +',b:'Внизу справа: доход, расход, резерв, долг, обязательный платёж. Всё сразу идёт в кассу и аналитику.'},
   {t:'Разделы',b:'Обязательные повторяются каждый месяц. Резервы и цели переносятся между месяцами. Долги уменьшают «доступно».'},
   {t:'Облако',b:'Иконка ☁ — вход или регистрация. У каждого аккаунта свои данные, они не смешиваются с чужими.'},
+  {t:'Голосовой ввод',b:'🎙️ теперь можно нажать микрофон и сказать: «добавь расход 500 рублей на сигареты», «купил майонез за 120 рублей» или «получил 5000 рублей зарплата». Приложение распознает сумму, тип и категорию.'},
   {t:'Установить как приложение',b:'Chrome (Android): меню ⋮ → «Установить приложение» или «На экран».\nSafari (iPhone): «Поделиться» → «На экран Домой».\nChrome (ПК): иконка установки в адресной строке.'}
 ];
 function done(){try{return localStorage.getItem(ONBOARD_KEY)==='1';}catch(e){return false;}}
@@ -51,4 +52,11 @@ function bootOnboard(){
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bootOnboard);
 else bootOnboard();
+})();
+(function(){
+  function loadVoice(){
+    if(document.getElementById('kopeykaVoiceScript'))return;
+    var s=document.createElement('script');s.id='kopeykaVoiceScript';s.src='voice.js?v=1';document.body.appendChild(s);
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',loadVoice);else loadVoice();
 })();
