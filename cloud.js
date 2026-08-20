@@ -43,6 +43,11 @@ function normalize(raw){
   if(!Array.isArray(out.settings.cyclePattern)||!out.settings.cyclePattern.length)
     out.settings.cyclePattern=(base.settings&&base.settings.cyclePattern)||['day','day','night','night','off','off'];
   if(!out.shiftsOverride||typeof out.shiftsOverride!=='object') out.shiftsOverride={};
+  // force shifts to strings day/night/off only
+  const okShift={day:1,night:1,off:1};
+  const so={};
+  Object.keys(out.shiftsOverride).forEach(k=>{ const v=out.shiftsOverride[k]; if(typeof v==='string'&&okShift[v]) so[k]=v; });
+  out.shiftsOverride=so;
   ['income','expenses','reserves','reserveOps','debts'].forEach(k=>{
     if(!Array.isArray(out[k])) out[k]=Array.isArray(base[k])?base[k].slice():[];
   });
@@ -111,12 +116,17 @@ async function loadFromCloud(){
       }
       const ct=totals(cloudState);
       const lt=totals(normalize(local||{}));
-      if(ct.sum > 2000000 && lt.sum < 500000){
-        console.warn('cloud rejected insane totals', ct);
-        toast('В облаке старые кривые данные — оставлены локальные');
+      const cloudCash = ct.open + ct.inc - ct.exp - ct.dep;
+      const localClean = (lt.inc===0 && lt.exp===0 && lt.dep===0 && Math.abs(lt.open)<1);
+      if((ct.sum > 2000000 && lt.sum < 500000) || (cloudCash < -50 && ct.inc===0 && ct.exp===0 && localClean)){
+        console.warn('cloud rejected bad state', ct, cloudCash);
+        toast('В облаке битые данные — сброшены');
         ready=true;
         setStatus(true,'Локальные данные');
-        if(local && score(local)>0) saveToCloud(true).catch(()=>{});
+        if(typeof window.setAppState==='function' && typeof window.defaultState==='function'){
+          window.setAppState(window.defaultState());
+        }
+        saveToCloud(true).catch(()=>{});
         return true;
       }
       const merged=mergeStates(local, cloudState);
@@ -180,12 +190,9 @@ function scheduleSave(){
 function setStatus(ok,text){
   const el=document.getElementById('cloudStatus');
   if(el){ el.textContent=text||''; el.className='cloud-st'+(ok?' ok':''); }
-  const dot=document.getElementById('cloudDot');
-  if(dot) dot.className='cloud-dot'+(ok?' on':'');
 }
 function ensureAccountBtn(){
   if(document.getElementById('cloudAccount')) return;
-
   if(!document.getElementById('cloudCss')){
     const st=document.createElement('style'); st.id='cloudCss';
     st.textContent=
@@ -207,13 +214,10 @@ function ensureAccountBtn(){
       '.icon-btn.on{border-color:#E5A75E;color:#E5A75E}';
     document.head.appendChild(st);
   }
-
   const existingBtn=document.getElementById('btnCloud')||document.getElementById('cloudBtn');
   const top=document.querySelector('.top-actions')||document.querySelector('.topbar')||document.body;
-
   const wrap=document.createElement('div');
   wrap.id='cloudAccount'; wrap.className='cloud-wrap';
-
   let btn;
   if(existingBtn){
     btn=existingBtn;
@@ -228,7 +232,6 @@ function ensureAccountBtn(){
     top.appendChild(wrap);
     btn=document.getElementById('cloudBtn');
   }
-
   const menu=document.createElement('div');
   menu.className='cloud-menu'; menu.id='cloudMenu'; menu.hidden=true;
   menu.innerHTML=
@@ -238,7 +241,6 @@ function ensureAccountBtn(){
     '<button type="button" class="btn" id="cloudSync">Синхронизировать</button>'+
     '<button type="button" class="btn" id="cloudLogout" style="display:none">Выйти</button>';
   wrap.appendChild(menu);
-
   btn.onclick=e=>{ e.stopPropagation(); menu.hidden=!menu.hidden; };
   document.addEventListener('click',()=>{ menu.hidden=true; });
   menu.onclick=e=>e.stopPropagation();
@@ -274,14 +276,14 @@ function showAuth(){
   root.id='cloudAuth'; root.className='cloud-auth';
   root.innerHTML=
     '<div class="cloud-auth-card">'+
-    '<button type="button" id="cloudAuthClose" style="position:absolute;right:14px;top:12px;background:none;border:0;font-size:22px;color:var(--mute);cursor:pointer">×</button>'+
+    '<button type="button" id="cloudAuthClose" style="position:absolute;right:14px;top:12px;background:none;border:0;font-size:22px;color:#8B90A0;cursor:pointer">×</button>'+
     '<h2 style="margin:0 0 8px">Облако Копейки</h2>'+
     '<p class="sm" style="margin-bottom:12px">Тот же аккаунт, что в прошлых версиях. Данные подтянутся после входа.</p>'+
     '<div class="cloud-auth-msg" id="cloudAuthMsg"></div>'+
     '<div class="field"><input type="email" id="cloudEmailIn" placeholder="Email" autocomplete="username"></div>'+
     '<div class="field"><input type="password" id="cloudPassIn" placeholder="Пароль" autocomplete="current-password"></div>'+
     '<div style="display:flex;gap:8px;margin-top:8px">'+
-    '<button type="button" class="btn bs" id="cloudSignup">Создать</button>'+
+    '<button type="button" class="btn" id="cloudSignup">Создать</button>'+
     '<button type="button" class="btn bp" id="cloudSignin">Войти</button>'+
     '</div></div>';
   document.body.appendChild(root);
