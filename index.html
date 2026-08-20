@@ -35,7 +35,6 @@ button,input,select{font:inherit;color:inherit;border:none;outline:none;backgrou
 .item{display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--card2);border-radius:12px;border:1px solid var(--line);gap:10px}
 .item .left{display:flex;flex-direction:column;gap:2px;min-width:0}.item .amt{font-weight:600;white-space:nowrap}
 .plus,.amt.plus{color:var(--green)}.minus,.amt.minus,.neg{color:var(--red)}
-.cat-row{margin-bottom:10px}.cat-row .cat-top{display:flex;justify-content:space-between;margin-bottom:4px;font-size:13px}
 .progress{height:6px;background:var(--line);border-radius:99px;overflow:hidden;margin-top:4px}
 .progress>i{display:block;height:100%;background:linear-gradient(90deg,#E5A75E,#F0C384);border-radius:99px}
 .fab-wrap{position:fixed;right:18px;bottom:calc(18px + var(--safe-b));z-index:60}
@@ -45,16 +44,13 @@ button,input,select{font:inherit;color:inherit;border:none;outline:none;backgrou
 .radial.show{opacity:1;pointer-events:auto;transform:none}
 .radial button{display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:14px;background:rgba(24,26,33,.95);border:1px solid var(--line);backdrop-filter:blur(12px);white-space:nowrap;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.35)}
 .radial button span.ic{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px}
-.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:80;display:none;align-items:flex-end;justify-content:center}
-.modal-bg.show{display:flex}
-.modal{width:100%;max-width:520px;max-height:90vh;overflow:auto;background:var(--card);border-radius:20px 20px 0 0;padding:20px 16px calc(20px + var(--safe-b));border:1px solid var(--line);border-bottom:none}
 .toast{position:fixed;left:50%;bottom:calc(90px + var(--safe-b));transform:translateX(-50%) translateY(20px);background:var(--card2);border:1px solid var(--line);padding:10px 16px;border-radius:12px;z-index:100;opacity:0;pointer-events:none;transition:.25s;white-space:nowrap;font-size:14px}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .month-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px}
 .month-title{font-size:15px;font-weight:700;letter-spacing:-.01em;text-align:center;flex:1}
 .mnav{width:36px;height:36px;border-radius:10px;background:var(--card2);border:1px solid var(--line);font-size:22px;line-height:1;display:flex;align-items:center;justify-content:center;color:var(--text)}
 .mnav:active{background:var(--line)}
-.analytics-wrap{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.analytics-wrap{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:8px}
 .donut{flex-shrink:0}
 .analytics-legend{flex:1;min-width:140px;display:flex;flex-direction:column;gap:8px}
 .leg-row{display:flex;align-items:center;gap:8px;font-size:13px}
@@ -62,6 +58,11 @@ button,input,select{font:inherit;color:inherit;border:none;outline:none;backgrou
 .leg-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
 .leg-pct{color:var(--muted);font-size:12px;min-width:32px;text-align:right}
 .leg-row b{font-size:13px;white-space:nowrap}
+.flow-bars{margin-bottom:4px}
+.flow-row{display:flex;justify-content:space-between;align-items:center;font-size:13px;margin-bottom:4px}
+.progress.flow{height:8px;margin-bottom:10px}
+.progress.flow>i.inc{background:linear-gradient(90deg,#4ADE80,#22C55E)}
+.progress.flow>i.exp{background:linear-gradient(90deg,#F87171,#EF4444)}
 .empty{text-align:center;padding:20px;color:var(--muted);font-size:14px}
 </style></head>
 <body>
@@ -74,8 +75,8 @@ button,input,select{font:inherit;color:inherit;border:none;outline:none;backgrou
 <button data-act="debt"><span class="ic" style="background:rgba(167,139,250,.15)">📉</span> Долг</button>
 <button data-act="oblig"><span class="ic" style="background:rgba(251,146,60,.15)">📅</span> Обязательный</button>
 </div><button class="fab" id="fab">+</button></div>
-<div class="modal-bg" id="modalBg"></div><div class="toast" id="toast"></div>
-<script src="app.js?v=5"></script>
-<script src="cloud.js?v=5"></script>
-<script>if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js?v=5').catch(function(){});</script>
+<div class="toast" id="toast"></div>
+<script src="app.js?v=6"></script>
+<script src="cloud.js?v=6"></script>
+<script>if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js?v=6').catch(function(){});</script>
 </body></html>
