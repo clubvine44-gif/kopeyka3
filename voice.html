@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Копейка · Голос</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#111318;color:#f2f3f7;font:16px system-ui,sans-serif;padding:20px;box-sizing:border-box}.card{max-width:420px;width:100%;padding:24px;border:1px solid #2a2d38;border-radius:18px;background:#181a21;box-sizing:border-box}.amount{font-size:30px;font-weight:700;margin:10px 0}.muted{color:#9aa0af;font-size:14px}.ok{color:#4ade80}.err{color:#f87171}</style>
+</head>
+<body>
+<div class="card" id="status"><div class="muted">Копейка</div><div class="amount">Обработка…</div></div>
+<script>
+(function(){'use strict';
+var KEY='kopeyka3_state_v1';
+function num(v){var n=Number(v);return isFinite(n)&&n>0?Math.round(n):0;}
+function today(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
+function esc(s){return String(s==null?'':s).replace(/[&<>\"]/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','\\':'&#92;','\"':'&quot;'}[c]);});}
+function show(cls,title,text){document.getElementById('status').innerHTML='<div class="muted">Копейка · голос</div><div class="amount '+cls+'">'+title+'</div><div>'+text+'</div><div class="muted" style="margin-top:14px">Возврат в приложение…</div>';}
+try{
+ var q=new URLSearchParams(location.search),type=(q.get('type')||'').toLowerCase(),amount=num(q.get('amount')),comment=(q.get('comment')||'').trim(),category=(q.get('category')||'Прочее').trim()||'Прочее';
+ if(type!=='expense'&&type!=='income')throw new Error('Неизвестный тип операции');
+ if(!amount)throw new Error('Некорректная сумма');
+ var raw=localStorage.getItem(KEY),state=raw?JSON.parse(raw):null;
+ if(!state||typeof state!=='object')throw new Error('Сначала открой Копейку на этом телефоне и создай локальное состояние');
+ if(!Array.isArray(state.expenses))state.expenses=[];
+ if(!Array.isArray(state.income))state.income=[];
+ var item={id:uid(),date:today(),amount:amount,category:category};
+ if(comment)item.note=comment;
+ if(type==='expense')state.expenses.push(item);else state.income.push(item);
+ state.updatedAt=new Date().toISOString();
+ localStorage.setItem(KEY,JSON.stringify(state));
+ show('ok',type==='expense'?'−'+amount.toLocaleString('ru-RU')+' ₽':'+'+amount.toLocaleString('ru-RU')+' ₽',comment?esc(comment):'Операция добавлена');
+ setTimeout(function(){location.href='index.html?voiceDone=1';},900);
+}catch(e){show('err','Не добавлено',esc(e.message||'Ошибка'));setTimeout(function(){location.href='index.html?voiceError=1';},1800);}
+})();
+</script>
+</body>
+</html>
