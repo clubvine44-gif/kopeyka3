@@ -14,22 +14,42 @@ var KEY='kopeyka3_state_v1';
 function num(v){var n=Number(v);return isFinite(n)&&n>0?Math.round(n):0;}
 function today(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
-function esc(s){return String(s==null?'':s).replace(/[&<>\"]/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','\\':'&#92;','\"':'&quot;'}[c]);});}
+function esc(s){return String(s==null?'':s).replace(/[&<>\\\"]/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','\\':'&#92;','\"':'&quot;'}[c]);});}
 function show(cls,title,text){document.getElementById('status').innerHTML='<div class="muted">Копейка · голос</div><div class="amount '+cls+'">'+title+'</div><div>'+text+'</div><div class="muted" style="margin-top:14px">Возврат в приложение…</div>';}
+function normalize(s){return String(s||'').toLowerCase().replace(/ё/g,'е').replace(/[^a-zа-я0-9]+/g,' ').trim();}
+function categoryFromText(text){
+ var s=normalize(text);
+ var rules=[
+  ['Сигареты',['сигарет','сигарета','сигареты','табак','пачка сигарет']],
+  ['Продукты',['продукт','продукты','еда','магазин','продовольств']],
+  ['Транспорт',['бензин','топливо','заправк','такси','проезд','автобус','маршрутка','транспорт']],
+  ['Кафе и рестораны',['кафе','ресторан','ресторант','кофе','пицца','бургер']],
+  ['Коммунальные услуги',['коммунал','квартплат','свет','газ','вода','отоплен']],
+  ['Связь',['телефон','мобильн','интернет','связь']],
+  ['Здоровье',['аптек','лекарств','врач','медицин','здоров']],
+  ['Одежда',['одежд','обув','куртк','футболк','штаны']],
+  ['Развлечения',['кино','игр','развлечен','бар','клуб']],
+  ['Дом',['дом','ремонт','мебел','бытов']],
+  ['Другое',['прочее','другое']]
+ ];
+ for(var i=0;i<rules.length;i++){for(var j=0;j<rules[i][1].length;j++){if(s.indexOf(rules[i][1][j])!==-1)return rules[i][0];}}
+ return '';
+}
 try{
- var q=new URLSearchParams(location.search),type=(q.get('type')||'').toLowerCase(),amount=num(q.get('amount')),comment=(q.get('comment')||'').trim(),category=(q.get('category')||'Прочее').trim()||'Прочее';
+ var q=new URLSearchParams(location.search),type=(q.get('type')||'').toLowerCase(),amount=num(q.get('amount')),comment=(q.get('comment')||'').trim(),category=(q.get('category')||'').trim();
  if(type!=='expense'&&type!=='income')throw new Error('Неизвестный тип операции');
  if(!amount)throw new Error('Некорректная сумма');
  var raw=localStorage.getItem(KEY),state=raw?JSON.parse(raw):null;
  if(!state||typeof state!=='object')throw new Error('Сначала открой Копейку на этом телефоне и создай локальное состояние');
  if(!Array.isArray(state.expenses))state.expenses=[];
  if(!Array.isArray(state.income))state.income=[];
+ if(!category)category=categoryFromText(comment)||'Прочее';
  var item={id:uid(),date:today(),amount:amount,category:category};
  if(comment)item.note=comment;
  if(type==='expense')state.expenses.push(item);else state.income.push(item);
  state.updatedAt=new Date().toISOString();
  localStorage.setItem(KEY,JSON.stringify(state));
- show('ok',type==='expense'?'−'+amount.toLocaleString('ru-RU')+' ₽':'+'+amount.toLocaleString('ru-RU')+' ₽',comment?esc(comment):'Операция добавлена');
+ show('ok',type==='expense'?'−'+amount.toLocaleString('ru-RU')+' ₽':'+'+amount.toLocaleString('ru-RU')+' ₽',esc(category)+(comment?' · '+esc(comment):'')+'<br>Операция добавлена');
  setTimeout(function(){location.href='index.html?voiceDone=1';},900);
 }catch(e){show('err','Не добавлено',esc(e.message||'Ошибка'));setTimeout(function(){location.href='index.html?voiceError=1';},1800);}
 })();
