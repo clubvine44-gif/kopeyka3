@@ -36,17 +36,9 @@ button,input,select{font:inherit;color:inherit;border:none;outline:none;backgrou
 <div class="modal-bg" id="modalBg"></div><div class="toast" id="toast"></div>
 <script src="app.js?v=13"></script>
 <script src="onboard.js?v=13"></script>
-<script src="cloud.js?v=13"></script>
+<script src="cloud.js?v=16"></script>
 <script>
-/* Detect the explicit "clear all data" action from app.js and persist that intent until cloud sync. */
-(function(){
-  var KEY='kopeyka3_state_v1',LAST='kopeyka3_clear_watch_v1';
-  function read(){try{var s=localStorage.getItem(KEY);return s?JSON.parse(s):null;}catch(e){return null;}}
-  function empty(s){if(!s)return true;var ks=['income','expenses','reserves','debts','reserveOps','obligations','obligationPays'];return ks.every(function(k){return !Array.isArray(s[k])||s[k].length===0;})&&(!s.shiftsOverride||Object.keys(s.shiftsOverride).length===0)&&(!s.settings||(!Number(s.settings.openingBalance)&&!Number(s.settings.dayRate)&&!Number(s.settings.nightRate)));}
-  var prev=read();try{localStorage.setItem(LAST,JSON.stringify(prev||{}));}catch(e){}
-  setInterval(function(){var cur=read();if(cur&&empty(cur)&&prev&&!empty(prev)&&window.kopeykaCloud&&window.kopeykaCloud.markLocalReset)window.kopeykaCloud.markLocalReset();prev=cur;},500);
-})();
-if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js?v=13').catch(function(){});
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js?v=16').catch(function(){});
 </script>
 </body>
 </html>
