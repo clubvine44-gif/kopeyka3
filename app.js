@@ -7,6 +7,7 @@ var MONTHS_RU=['Январь','Февраль','Март','Апрель','Май
 function monthLabel(ym){var p=String(ym||'').split('-').map(Number);return (MONTHS_RU[(p[1]||1)-1]||'')+' '+(p[0]||'');}
 function shiftMonth(ym,delta){var p=String(ym).split('-').map(Number);var d=new Date(p[0],(p[1]||1)-1+delta,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
 var viewMonth=null;
+var openSecs={ops:1,obl:1,an:0,res:0,debt:0};
 function getViewMonth(){return viewMonth||(STATE.settings&&STATE.settings.month)||today().slice(0,7);}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
 function today(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
@@ -75,22 +76,6 @@ function ensureMonth(){
 }
 function toast(m){var el=document.getElementById('toast');if(!el)return;el.textContent=m;el.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(function(){el.classList.remove('show');},2600);}
 window.toast=toast;
-function donutSVG(cats,size){
- size=size||128;var r=size/2-8,cx=size/2,cy=size/2,circ=2*Math.PI*r;
- var total=cats.reduce(function(s,x){return s+x.amount;},0)||1;
- var colors=['#E5A75E','#60A5FA','#F87171','#4ADE80','#A78BFA','#FBBF24','#F472B6','#2DD4BF'];
- var html='<svg class="donut" width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'">';
- html+='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="#2A2D38" stroke-width="14"/>';
- var off=0;
- cats.slice(0,8).forEach(function(x,i){
-  var len=Math.max(1,(x.amount/total)*circ);
-  html+='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+colors[i%colors.length]+'" stroke-width="14" stroke-dasharray="'+len.toFixed(2)+' '+(circ-len).toFixed(2)+'" stroke-dashoffset="'+(-off).toFixed(2)+'" transform="rotate(-90 '+cx+' '+cy+')"/>';
-  off+=len;
- });
- html+='<text x="'+cx+'" y="'+(cy-2)+'" text-anchor="middle" fill="#F2F3F7" font-size="14" font-weight="700">'+Math.round(total).toLocaleString('ru-RU')+'</text>';
- html+='<text x="'+cx+'" y="'+(cy+14)+'" text-anchor="middle" fill="#8B90A0" font-size="10">расходы</text></svg>';
- return html;
-}
 function render(){
  ensureMonth();
  var t=today(),month=getViewMonth(),isCurrent=(month===t.slice(0,7));
@@ -104,35 +89,36 @@ function render(){
   var hasObl=STATE.obligations.some(function(ob){return ob.active!==false&&num(ob.day)===d;});
   cal+='<div class="cal-d '+s+(ds===t&&isCurrent?' today':'')+(hasObl?' has-obl':'')+'" data-date="'+ds+'">'+d+'<span class="dot"></span></div>';
  }cal+='</div>';
- var resH=STATE.reserves.length?STATE.reserves.map(function(r){var pct=r.target>0?Math.min(100,Math.round(num(r.saved)/num(r.target)*100)):0;return '<div class="item" data-id="'+r.id+'" data-k="res"><div class="left"><b>'+esc(r.name)+'</b><span class="muted">'+fmt(r.saved)+(r.target?' / '+fmt(r.target)+' · '+pct+'%':'')+'</span></div></div>';}).join(''):'<div class="empty">Резервов нет</div>';
- var debH=STATE.debts.length?STATE.debts.map(function(d){var left=Math.max(0,num(d.total)-num(d.paid));return '<div class="item" data-id="'+d.id+'" data-k="debt"><div class="left"><b>'+esc(d.name)+'</b><span class="muted">'+fmt(left)+' из '+fmt(d.total)+'</span></div></div>';}).join(''):'<div class="empty">Долгов нет</div>';
- var oblH=STATE.obligations.length?STATE.obligations.map(function(ob){var paid=0;STATE.obligationPays.forEach(function(p){if(p.obligId===ob.id&&p.month===month)paid+=num(p.amount);});var left=Math.max(0,num(ob.amount)-paid);return '<div class="item" data-id="'+ob.id+'" data-k="obl"><div class="left"><b>'+esc(ob.name)+'</b><span class="muted">'+fmt(ob.amount)+' / мес · '+(left<=0?'✓ оплачено':'до '+ob.day+'-го · '+fmt(left))+'</span></div>'+(left>0?'<div class="amt minus">−'+fmt(left)+'</div>':'<div class="amt plus">✓</div>')+'</div>';}).join(''):'<div class="empty">Обязательных платежей нет</div>';
+ var resH=STATE.reserves.length?STATE.reserves.map(function(r){var pct=r.target>0?Math.min(100,Math.round(num(r.saved)/num(r.target)*100)):0;return '<div class="item" data-id="'+r.id+'" data-k="res"><div class="left"><b>'+esc(r.name)+'</b><span class="muted">'+fmt(r.saved)+(r.target?' / '+fmt(r.target)+' · '+pct+'%':'')+'</span></div></div>';}).join(''):'<div class="empty tight">Резервов нет</div>';
+ var debH=STATE.debts.length?STATE.debts.map(function(d){var left=Math.max(0,num(d.total)-num(d.paid));return '<div class="item" data-id="'+d.id+'" data-k="debt"><div class="left"><b>'+esc(d.name)+'</b><span class="muted">'+fmt(left)+' из '+fmt(d.total)+'</span></div></div>';}).join(''):'<div class="empty tight">Долгов нет</div>';
+ var oblH=STATE.obligations.length?STATE.obligations.map(function(ob){var paid=0;STATE.obligationPays.forEach(function(p){if(p.obligId===ob.id&&p.month===month)paid+=num(p.amount);});var left=Math.max(0,num(ob.amount)-paid);return '<div class="item" data-id="'+ob.id+'" data-k="obl"><div class="left"><b>'+esc(ob.name)+'</b><span class="muted">'+fmt(ob.amount)+' / мес · '+(left<=0?'✓ оплачено':'до '+ob.day+'-го · '+fmt(left))+'</span></div>'+(left>0?'<div class="amt minus">−'+fmt(left)+'</div>':'<div class="amt plus">✓</div>')+'</div>';}).join(''):'<div class="empty tight">Нет платежей</div>';
  var ops=[];STATE.income.forEach(function(i){if(inMonth(i.date,month))ops.push({t:i.date,type:'in',a:i.amount,n:i.note||'Доход',id:i.id});});
  STATE.expenses.forEach(function(e){if(inMonth(e.date,month))ops.push({t:e.date,type:'ex',a:e.amount,n:e.category||'Расход',id:e.id});});
  ops.sort(function(a,b){return(b.t||'').localeCompare(a.t||'');});
- var opsH=ops.slice(0,15).map(function(o){return '<div class="item" data-id="'+o.id+'" data-k="'+o.type+'"><div class="left"><b>'+esc(o.n)+'</b><span class="muted">'+(o.t||'')+'</span></div><div class="amt '+(o.type==='in'?'plus':'minus')+'">'+(o.type==='in'?'+':'−')+fmt(o.a)+'</div></div>';}).join('')||'<div class="empty">Нет операций в этом месяце</div>';
+ var opsH=ops.slice(0,12).map(function(o){return '<div class="item" data-id="'+o.id+'" data-k="'+o.type+'"><div class="left"><b>'+esc(o.n)+'</b><span class="muted">'+(o.t||'')+'</span></div><div class="amt '+(o.type==='in'?'plus':'minus')+'">'+(o.type==='in'?'+':'−')+fmt(o.a)+'</div></div>';}).join('')||'<div class="empty tight">Нет операций</div>';
  var colors=['#E5A75E','#60A5FA','#F87171','#4ADE80','#A78BFA','#FBBF24','#F472B6','#2DD4BF'];
- var flowTotal=Math.max(1,c.incomeSum+c.expenseSum);
- var catH='<div class="flow-bars">';
- catH+='<div class="flow-row"><span class="muted">Доходы</span><b class="plus">'+fmt(c.incomeSum)+'</b></div>';
- catH+='<div class="progress flow"><i class="inc" style="width:'+Math.round(c.incomeSum/flowTotal*100)+'%"></i></div>';
- catH+='<div class="flow-row"><span class="muted">Расходы</span><b class="minus">'+fmt(c.expenseSum)+'</b></div>';
- catH+='<div class="progress flow"><i class="exp" style="width:'+Math.round(c.expenseSum/flowTotal*100)+'%"></i></div></div>';
+ var catH='';
  if(c.cats.length){var totalCat=c.cats.reduce(function(s,x){return s+x.amount;},0)||1;
-  catH+='<div class="analytics-wrap">'+donutSVG(c.cats,128)+'<div class="analytics-legend">';
-  catH+=c.cats.slice(0,6).map(function(x,i){return '<div class="leg-row"><span class="leg-dot" style="background:'+colors[i%colors.length]+'"></span><span class="leg-name">'+esc(x.name)+'</span><span class="leg-pct">'+Math.round(x.amount/totalCat*100)+'%</span><b>'+fmt(x.amount)+'</b></div>';}).join('');
-  catH+='</div></div>';
- }else catH+='<div class="empty" style="padding:12px 0 0">Добавь расходы — появится разбивка по категориям</div>';
+  catH=c.cats.slice(0,5).map(function(x,i){return '<div class="mini-cat"><span class="leg-dot" style="background:'+colors[i%colors.length]+'"></span><span class="leg-name">'+esc(x.name)+'</span><span class="leg-pct">'+Math.round(x.amount/totalCat*100)+'%</span><b>'+fmt(x.amount)+'</b></div>';}).join('');
+ }else catH='<div class="empty tight">Нет расходов</div>';
+ function sec(id,title,right,body){
+  var on=!!openSecs[id];
+  return '<div class="sec'+(on?' open':'')+'" data-sec="'+id+'"><button type="button" class="sec-head"><span class="sec-title">'+title+'</span><span class="sec-right">'+right+'</span><span class="sec-chev">›</span></button><div class="sec-body">'+body+'</div></div>';
+ }
+ var chips='<span class="chip">остаток '+fmt(c.open)+'</span><span class="chip plus">+'+fmt(c.incomeSum)+'</span><span class="chip minus">−'+fmt(c.expenseSum)+'</span>';
+ if(c.depSum)chips+='<span class="chip minus">рез. −'+fmt(c.depSum)+'</span>';
+ if(c.obligDue)chips+='<span class="chip warn">обяз. −'+fmt(c.obligDue)+'</span>';
+ if(c.debtLeft)chips+='<span class="chip warn">долги −'+fmt(c.debtLeft)+'</span>';
  app.innerHTML=
-  '<div class="card hero"><div class="row" style="margin-bottom:8px"><div class="card-title" style="margin:0">Сегодня · '+sl+'</div><span class="pill '+sh+'">'+sl+'</span></div><div class="big">'+fmt(c.daily)+'</div><div class="muted">можно потратить сегодня · ещё '+c.daysLeft+' дн.</div></div>'+
-  '<div class="card"><div class="grid2"><div class="stat"><b class="'+(c.cash<0?'neg':'')+'">'+fmt(c.cash)+'</b><span>Касса</span></div><div class="stat"><b class="'+(c.available<0?'neg':'')+'">'+fmt(c.available)+'</b><span>Доступно</span></div></div>'+
-  '<div style="margin-top:12px;font-size:13px"><div class="row"><span class="muted">Остаток на начало</span><b>'+fmt(c.open)+'</b></div><div class="row"><span class="muted">Доходы</span><b class="plus">+'+fmt(c.incomeSum)+'</b></div><div class="row"><span class="muted">Расходы</span><b class="minus">−'+fmt(c.expenseSum)+'</b></div>'+(c.depSum?('<div class="row"><span class="muted">В резервы</span><b class="minus">−'+fmt(c.depSum)+'</b></div>'):'')+(c.obligDue?('<div class="row"><span class="muted">Обязательные (ещё)</span><b class="minus">−'+fmt(c.obligDue)+'</b></div>'):'')+(c.debtLeft?('<div class="row"><span class="muted">Долги</span><b class="minus">−'+fmt(c.debtLeft)+'</b></div>'):'')+'</div></div>'+
-  '<div class="card"><div class="month-nav"><button type="button" class="mnav" id="mPrev">‹</button><div class="month-title">'+monthLabel(month)+(isCurrent?'':' · просмотр')+'</div><button type="button" class="mnav" id="mNext">›</button></div>'+cal+'</div>'+
-  '<div class="card"><div class="card-title">Аналитика · '+monthLabel(month)+'</div>'+catH+'</div>'+
-  '<div class="card"><div class="card-title">Обязательные платежи'+(c.obligDue?' · ещё '+fmt(c.obligDue):'')+'</div><div class="list">'+oblH+'</div></div>'+
-  '<div class="card"><div class="card-title">Резервы · '+fmt(c.reservesTotal)+'</div><div class="list">'+resH+'</div></div>'+
-  '<div class="card"><div class="card-title">Долги · '+fmt(c.debtLeft)+'</div><div class="list">'+debH+'</div></div>'+
-  '<div class="card"><div class="card-title">Операции · '+monthLabel(month)+'</div><div class="list">'+opsH+'</div></div>';
+  '<div class="card hero compact"><div class="hero-top"><div><div class="card-title" style="margin:0">Сегодня · '+sl+'</div><div class="big">'+fmt(c.daily)+'</div><div class="muted">на день · '+c.daysLeft+' дн.</div></div>'+
+  '<div class="hero-side"><div class="hs"><b class="'+(c.cash<0?'neg':'')+'">'+fmt(c.cash)+'</b><span>Касса</span></div><div class="hs"><b class="'+(c.available<0?'neg':'')+'">'+fmt(c.available)+'</b><span>Доступно</span></div></div></div><div class="chips">'+chips+'</div></div>'+
+  '<div class="card tight"><div class="month-nav"><button type="button" class="mnav" id="mPrev">‹</button><div class="month-title">'+monthLabel(month)+(isCurrent?'':' · просмотр')+'</div><button type="button" class="mnav" id="mNext">›</button></div>'+cal+'</div>'+
+  sec('obl','Обязательные',(c.obligDue?fmt(c.obligDue):'—'),'<div class="list">'+oblH+'</div>')+
+  sec('res','Резервы',fmt(c.reservesTotal),'<div class="list">'+resH+'</div>')+
+  sec('debt','Долги',(c.debtLeft?fmt(c.debtLeft):'—'),'<div class="list">'+debH+'</div>')+
+  sec('an','Аналитика',fmt(c.expenseSum),catH)+
+  sec('ops','Операции',String(ops.length),'<div class="list">'+opsH+'</div>');
+ app.querySelectorAll('.sec-head').forEach(function(btn){btn.onclick=function(e){e.stopPropagation();var secEl=btn.parentElement,id=secEl.dataset.sec;openSecs[id]=!openSecs[id];secEl.classList.toggle('open',!!openSecs[id]);};});
  var mp=document.getElementById('mPrev'),mn=document.getElementById('mNext');
  if(mp)mp.onclick=function(e){e.stopPropagation();viewMonth=shiftMonth(getViewMonth(),-1);render();};
  if(mn)mn.onclick=function(e){e.stopPropagation();viewMonth=shiftMonth(getViewMonth(),1);render();};
