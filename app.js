@@ -13,7 +13,7 @@ function today(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()
 function fmt(n){n=Math.round(+n||0);return(n<0?'−':'')+Math.abs(n).toLocaleString('ru-RU')+' ₽';}
 function num(v){var n=Number(v);return(!isFinite(n)||n!==n)?0:Math.round(n);}
 function sane(v){var n=num(v);return Math.abs(n)>5e6?0:n;}
-function esc(s){return String(s==null?'':s).replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>').replace(/"/g,'"').replace(/'/g,'&#39;');}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&'+'amp;').replace(/</g,'&'+'lt;').replace(/>/g,'&'+'gt;').replace(/"/g,'&'+'quot;').replace(/'/g,'&#39;');}
 function pd(s){var p=String(s||'').split('-').map(Number);return new Date(p[0],(p[1]||1)-1,p[2]||1);}
 function days(a,b){return Math.round((pd(b)-pd(a))/864e5);}
 function shift(ds,ov){var v=ov&&ov[ds];if(typeof v==='string'&&SHIFT_LABEL[v])return v;return CYCLE[((days(ANCHOR,ds)%6)+6)%6];}
@@ -82,19 +82,13 @@ function showShiftPay(){
   var month=getViewMonth(),sc=countShifts(month);
   var dr=num(STATE.settings.dayRate),nr=num(STATE.settings.nightRate);
   var pay=sc.day*dr+sc.night*nr;
-  var html='<div class="modal-card"><div class="modal-title">Смены · '+monthLabel(month)+'</div><div class="sp-grid">'+'<div class="sp-item"><b>'+sc.day+'</b><span>День</span></div><div class="sp-item"><b>'+sc.night+'</b><span>Ночь</span></div><div class="sp-item"><b>'+sc.off+'</b><span>Выходной</span></div></div>'+'<div class="sp-pay"><div class="muted">Ожидаемая зарплата</div><div class="big" style="font-size:22px">'+fmt(pay)+'</div>'+(dr||nr?'<div class="muted" style="margin-top:6px">день '+fmt(dr)+' · ночь '+fmt(nr)+'</div>':'<div class="muted" style="margin-top:6px">Задай ставки в настройках ⚙</div>')+'</div><button type="button" class="btn-primary" id="spClose">Закрыть</button></div>';
+  var html='<div class="modal-card"><div class="modal-title">Смены · '+monthLabel(month)+'</div><div class="sp-grid"><div class="sp-item"><b>'+sc.day+'</b><span>День</span></div><div class="sp-item"><b>'+sc.night+'</b><span>Ночь</span></div><div class="sp-item"><b>'+sc.off+'</b><span>Выходной</span></div></div><div class="sp-pay"><div class="muted">Ожидаемая зарплата</div><div class="big" style="font-size:22px">'+fmt(pay)+'</div>'+(dr||nr?'<div class="muted" style="margin-top:6px">день '+fmt(dr)+' · ночь '+fmt(nr)+'</div>':'<div class="muted" style="margin-top:6px">Задай ставки в настройках ⚙</div>')+'</div><button type="button" class="btn-primary" id="spClose">Закрыть</button></div>';
   openModal(html,function(){var c=document.getElementById('spClose');if(c)c.onclick=closeModal;});
 }
 function openModal(html,bind){var bg=document.getElementById('modalBg');if(!bg)return;bg.innerHTML=html;bg.classList.add('show');bg.onclick=function(e){if(e.target===bg)closeModal();};if(bind)bind();}
 function closeModal(){var bg=document.getElementById('modalBg');if(!bg)return;bg.classList.remove('show');bg.innerHTML='';}
 function showSettings(){
-  var html='<div class="modal-card"><div class="modal-title">Настройки</div>'+
-    '<button type="button" class="set-row" id="setUndo"><span>↩ Отменить последнее действие</span><span class="muted">'+(undoStack.length?'есть':'пусто')+'</span></button>'+
-    '<button type="button" class="set-row" id="setOpen"><span>Начальный остаток</span><span class="muted">'+fmt(STATE.settings.openingBalance)+'</span></button>'+
-    '<button type="button" class="set-row" id="setDay"><span>Ставка за дневную смену</span><span class="muted">'+fmt(STATE.settings.dayRate)+'</span></button>'+
-    '<button type="button" class="set-row" id="setNight"><span>Ставка за ночную смену</span><span class="muted">'+fmt(STATE.settings.nightRate)+'</span></button>'+
-    '<button type="button" class="set-row danger" id="setClear"><span>Очистить все данные</span></button>'+
-    '<button type="button" class="btn-primary" id="setClose">Закрыть</button></div>';
+  var html='<div class="modal-card"><div class="modal-title">Настройки</div><button type="button" class="set-row" id="setUndo"><span>↩ Отменить последнее действие</span><span class="muted">'+(undoStack.length?'есть':'пусто')+'</span></button><button type="button" class="set-row" id="setOpen"><span>Начальный остаток</span><span class="muted">'+fmt(STATE.settings.openingBalance)+'</span></button><button type="button" class="set-row" id="setDay"><span>Ставка за дневную смену</span><span class="muted">'+fmt(STATE.settings.dayRate)+'</span></button><button type="button" class="set-row" id="setNight"><span>Ставка за ночную смену</span><span class="muted">'+fmt(STATE.settings.nightRate)+'</span></button><button type="button" class="set-row danger" id="setClear"><span>Очистить все данные</span></button><button type="button" class="btn-primary" id="setClose">Закрыть</button></div>';
   openModal(html,function(){
     document.getElementById('setClose').onclick=closeModal;
     document.getElementById('setUndo').onclick=function(){closeModal();undoLast();};
@@ -104,7 +98,9 @@ function showSettings(){
     document.getElementById('setClear').onclick=function(){if(!confirm('Точно очистить ВСЕ данные?'))return;pushUndo();STATE=def();save(true);closeModal();render();toast('Данные очищены');};
   });
 }
-function render(){
+var _rafRender=0,_renderQueued=false;
+function render(){if(_renderQueued)return;_renderQueued=true;_rafRender=requestAnimationFrame(function(){_renderQueued=false;_renderNow();});}
+function _renderNow(){
   ensureMonth();
   var t=today(),month=getViewMonth(),isCurrent=(month===t.slice(0,7));
   var c=compute();
@@ -130,33 +126,35 @@ function render(){
   var chips='<span class="chip">остаток '+fmt(c.open)+'</span><span class="chip plus">+'+fmt(c.incomeSum)+'</span><span class="chip minus">−'+fmt(c.expenseSum)+'</span>';
   if(c.depSum)chips+='<span class="chip minus">рез. −'+fmt(c.depSum)+'</span>';if(c.obligDue)chips+='<span class="chip warn">обяз. −'+fmt(c.obligDue)+'</span>';if(c.debtLeft)chips+='<span class="chip warn">долги −'+fmt(c.debtLeft)+'</span>';
   var whyDaily=c.available<=0?'<div class="hint">Сегодня 0 ₽: доступно ≤ 0 (касса минус долги и неоплаченные обязательные). Когда появится свободный остаток — лимит на день рассчитается.</div>':'';
-  app.innerHTML='<div class="card hero compact"><div class="hero-top"><div><div class="card-title" style="margin:0">Сегодня · '+sl+'</div><div class="big">'+fmt(c.daily)+'</div><div class="muted">на день · ещё '+c.daysLeft+' дн.</div></div><div class="hero-side"><div class="hs"><b class="'+(c.cash<0?'neg':'')+'">'+fmt(c.cash)+'</b><span>Касса</span></div><div class="hs"><b class="'+(c.available<0?'neg':'')+'">'+fmt(c.available)+'</b><span>Доступно</span></div></div></div><div class="chips">'+chips+'</div>'+whyDaily+'</div>'+
-    '<div class="card tight"><div class="month-nav"><button type="button" class="mnav" id="mPrev">‹</button><div class="month-title">'+monthLabel(month)+(isCurrent?'':' · просмотр')+'</div><button type="button" class="mnav" id="mNext">›</button></div>'+cal+'<button type="button" class="btn-shift" id="btnShiftPay">Смены и зарплата</button></div>'+
-    sec('obl','Обязательные',(c.obligDue?fmt(c.obligDue):'—'),'<div class="list">'+oblH+'</div>')+sec('res','Резервы и цели',fmt(c.reservesTotal),'<div class="list">'+resH+'</div>')+sec('debt','Долги',(c.debtLeft?fmt(c.debtLeft):'—'),'<div class="list">'+debH+'</div>')+sec('an','Аналитика',fmt(c.expenseSum),catH)+sec('ops','Операции',String(ops.length),'<div class="list">'+opsH+'</div>');
-  app.querySelectorAll('.sec-head').forEach(function(btn){btn.onclick=function(e){e.stopPropagation();var secEl=btn.parentElement,id=secEl.dataset.sec;openSecs[id]=!openSecs[id];secEl.classList.toggle('open',!!openSecs[id]);};});
-  var mp=document.getElementById('mPrev'),mn=document.getElementById('mNext');
-  if(mp)mp.onclick=function(e){e.stopPropagation();viewMonth=shiftMonth(getViewMonth(),-1);render();};
-  if(mn)mn.onclick=function(e){e.stopPropagation();viewMonth=shiftMonth(getViewMonth(),1);render();};
-  var bsp=document.getElementById('btnShiftPay');if(bsp)bsp.onclick=function(e){e.stopPropagation();showShiftPay();};
-  app.querySelectorAll('.cal-d[data-date]').forEach(function(el){el.onclick=function(){if(!isCurrent){viewMonth=t.slice(0,7);render();toast('Вернись к текущему месяцу');return;}pushUndo();var ds=el.dataset.date,cur=shift(ds,STATE.shiftsOverride),n=cur==='day'?'night':cur==='night'?'off':'day';STATE.shiftsOverride[ds]=n;save(true);render();toast('Смена: '+(SHIFT_LABEL[n]||n));};});
-  app.querySelectorAll('.item[data-id]').forEach(function(el){el.onclick=function(){
-    var id=el.dataset.id,k=el.dataset.k;
-    if(k==='in'){if(!confirm('Удалить доход?'))return;pushUndo();STATE.income=STATE.income.filter(function(i){return i.id!==id;});save(true);render();toast('Удалено');}
-    if(k==='ex'){if(!confirm('Удалить расход?'))return;pushUndo();STATE.expenses=STATE.expenses.filter(function(i){return i.id!==id;});save(true);render();toast('Удалено');}
-    if(k==='res'){var r=STATE.reserves.find(function(i){return i.id===id;});if(!r)return;var act=prompt('Резерв «'+r.name+'»\n1 — пополнить\n2 — снять\n3 — удалить','1');
-      if(act==='3'){if(!confirm('Удалить резерв?'))return;pushUndo();STATE.reserves=STATE.reserves.filter(function(i){return i.id!==id;});STATE.reserveOps=STATE.reserveOps.filter(function(o){return o.reserveId!==id;});save(true);render();toast('Удалено');}
-      else if(act==='2'){var a=num(prompt('Снять:','0'));if(a>0&&a<=num(r.saved)){pushUndo();r.saved=num(r.saved)-a;STATE.reserveOps.push({id:uid(),reserveId:id,type:'withdraw',amount:a,date:today()});save(true);render();toast('Снято');}}
-      else if(act==='1'){var a2=num(prompt('Пополнить:','0'));if(a2>0){pushUndo();r.saved=num(r.saved)+a2;STATE.reserveOps.push({id:uid(),reserveId:id,type:'deposit',amount:a2,date:today()});save(true);render();toast('Пополнено');}}}
-    if(k==='debt'){var d=STATE.debts.find(function(i){return i.id===id;});if(!d)return;var act=prompt('Долг «'+d.name+'»\n1 — платёж\n2 — удалить','1');
-      if(act==='2'){if(!confirm('Удалить долг?'))return;pushUndo();STATE.debts=STATE.debts.filter(function(i){return i.id!==id;});save(true);render();toast('Удалено');}
-      else{var a=num(prompt('Сумма платежа:','0'));if(a>0){pushUndo();d.paid=num(d.paid)+a;STATE.expenses.push({id:uid(),amount:a,category:'Долг',note:d.name,date:today()});save(true);render();toast('Платёж: '+d.name);}}}
-    if(k==='obl'){var ob=STATE.obligations.find(function(i){return i.id===id;});if(!ob)return;
-      if(el.dataset.paid==='1'){if(!confirm('Сбросить оплату «'+ob.name+'» за этот месяц?'))return;pushUndo();STATE.obligationPays=STATE.obligationPays.filter(function(p){return !(p.obligId===id&&p.month===month);});STATE.expenses=STATE.expenses.filter(function(e){return !(e.obligId===id&&inMonth(e.date,month));});save(true);render();toast('Оплата сброшена');return;}
-      var act=prompt('«'+ob.name+'»\n1 — отметить оплату\n2 — изменить\n3 — удалить','1');
-      if(act==='3'){if(!confirm('Удалить?'))return;pushUndo();STATE.obligations=STATE.obligations.filter(function(i){return i.id!==id;});save(true);render();toast('Удалено');}
-      else if(act==='2'){var nn=prompt('Название:',ob.name);if(nn===null)return;var aa=num(prompt('Сумма:',String(ob.amount)));var dd=num(prompt('День 1–31:',String(ob.day)));if(aa>0&&dd>=1&&dd<=31){pushUndo();ob.name=nn;ob.amount=aa;ob.day=dd;save(true);render();toast('Обновлено');}}
-      else{var paid=0;STATE.obligationPays.forEach(function(p){if(p.obligId===id&&p.month===month)paid+=num(p.amount);});var left=Math.max(0,num(ob.amount)-paid);if(left<=0)return toast('Уже оплачено');var a=num(prompt('Сумма (осталось '+left+'):',String(left)));if(a<=0)return;if(a>left)a=left;pushUndo();STATE.obligationPays.push({id:uid(),obligId:id,month:month,amount:a,date:today()});STATE.expenses.push({id:uid(),amount:a,category:'Обязательные',note:ob.name,date:today(),obligId:id});save(true);render();toast('Оплата учтена');}}
-  };});
+  app.innerHTML='<div class="card hero compact"><div class="hero-top"><div><div class="card-title" style="margin:0">Сегодня · '+sl+'</div><div class="big">'+fmt(c.daily)+'</div><div class="muted">на день · ещё '+c.daysLeft+' дн.</div></div><div class="hero-side"><div class="hs"><b class="'+(c.cash<0?'neg':'')+'">'+fmt(c.cash)+'</b><span>Касса</span></div><div class="hs"><b class="'+(c.available<0?'neg':'')+'">'+fmt(c.available)+'</b><span>Доступно</span></div></div></div><div class="chips">'+chips+'</div>'+whyDaily+'</div><div class="card tight"><div class="month-nav"><button type="button" class="mnav" id="mPrev">‹</button><div class="month-title">'+monthLabel(month)+(isCurrent?'':' · просмотр')+'</div><button type="button" class="mnav" id="mNext">›</button></div>'+cal+'<button type="button" class="btn-shift" id="btnShiftPay">Смены и зарплата</button></div>'+sec('obl','Обязательные',(c.obligDue?fmt(c.obligDue):'—'),'<div class="list">'+oblH+'</div>')+sec('res','Резервы и цели',fmt(c.reservesTotal),'<div class="list">'+resH+'</div>')+sec('debt','Долги',(c.debtLeft?fmt(c.debtLeft):'—'),'<div class="list">'+debH+'</div>')+sec('an','Аналитика',fmt(c.expenseSum),catH)+sec('ops','Операции',String(ops.length),'<div class="list">'+opsH+'</div>');
+  if(!app._bound){
+    app._bound=true;
+    app.addEventListener('click',function(e){
+      var t=e.target.closest('[data-date],.item[data-id],.sec-head,#mPrev,#mNext,#btnShiftPay');
+      if(!t||!app.contains(t))return;
+      if(t.id==='mPrev'){viewMonth=shiftMonth(getViewMonth(),-1);render();return;}
+      if(t.id==='mNext'){viewMonth=shiftMonth(getViewMonth(),1);render();return;}
+      if(t.id==='btnShiftPay'){showShiftPay();return;}
+      if(t.classList.contains('sec-head')){var secEl=t.parentElement,id=secEl.dataset.sec;openSecs[id]=!openSecs[id];secEl.classList.toggle('open',!!openSecs[id]);return;}
+      if(t.dataset.date){var isCur=(getViewMonth()===today().slice(0,7));if(!isCur){viewMonth=today().slice(0,7);render();toast('Вернись к текущему месяцу');return;}pushUndo();var ds=t.dataset.date,cur=shift(ds,STATE.shiftsOverride),n=cur==='day'?'night':cur==='night'?'off':'day';STATE.shiftsOverride[ds]=n;save(true);render();toast('Смена: '+(SHIFT_LABEL[n]||n));return;}
+      var id=t.dataset.id,k=t.dataset.k,month=getViewMonth();if(!id||!k)return;
+      if(k==='in'){if(!confirm('Удалить доход?'))return;pushUndo();STATE.income=STATE.income.filter(function(i){return i.id!==id;});save(true);render();toast('Удалено');return;}
+      if(k==='ex'){if(!confirm('Удалить расход?'))return;pushUndo();STATE.expenses=STATE.expenses.filter(function(i){return i.id!==id;});save(true);render();toast('Удалено');return;}
+      if(k==='res'){var r=STATE.reserves.find(function(i){return i.id===id;});if(!r)return;var act=prompt('Резерв «'+r.name+'»\n1 — пополнить\n2 — снять\n3 — удалить','1');
+        if(act==='3'){if(!confirm('Удалить резерв?'))return;pushUndo();STATE.reserves=STATE.reserves.filter(function(i){return i.id!==id;});STATE.reserveOps=STATE.reserveOps.filter(function(o){return o.reserveId!==id;});save(true);render();toast('Удалено');}
+        else if(act==='2'){var a=num(prompt('Снять:','0'));if(a>0&&a<=num(r.saved)){pushUndo();r.saved=num(r.saved)-a;STATE.reserveOps.push({id:uid(),reserveId:id,type:'withdraw',amount:a,date:today()});save(true);render();toast('Снято');}}
+        else if(act==='1'){var a2=num(prompt('Пополнить:','0'));if(a2>0){pushUndo();r.saved=num(r.saved)+a2;STATE.reserveOps.push({id:uid(),reserveId:id,type:'deposit',amount:a2,date:today()});save(true);render();toast('Пополнено');}}return;}
+      if(k==='debt'){var d=STATE.debts.find(function(i){return i.id===id;});if(!d)return;var act=prompt('Долг «'+d.name+'»\n1 — платёж\n2 — удалить','1');
+        if(act==='2'){if(!confirm('Удалить долг?'))return;pushUndo();STATE.debts=STATE.debts.filter(function(i){return i.id!==id;});save(true);render();toast('Удалено');}
+        else{var a=num(prompt('Сумма платежа:','0'));if(a>0){pushUndo();d.paid=num(d.paid)+a;STATE.expenses.push({id:uid(),amount:a,category:'Долг',note:d.name,date:today()});save(true);render();toast('Платёж: '+d.name);}}return;}
+      if(k==='obl'){var ob=STATE.obligations.find(function(i){return i.id===id;});if(!ob)return;
+        if(t.dataset.paid==='1'){if(!confirm('Сбросить оплату «'+ob.name+'» за этот месяц?'))return;pushUndo();STATE.obligationPays=STATE.obligationPays.filter(function(p){return !(p.obligId===id&&p.month===month);});STATE.expenses=STATE.expenses.filter(function(e){return !(e.obligId===id&&inMonth(e.date,month));});save(true);render();toast('Оплата сброшена');return;}
+        var act=prompt('«'+ob.name+'»\n1 — отметить оплату\n2 — изменить\n3 — удалить','1');
+        if(act==='3'){if(!confirm('Удалить?'))return;pushUndo();STATE.obligations=STATE.obligations.filter(function(i){return i.id!==id;});save(true);render();toast('Удалено');}
+        else if(act==='2'){var nn=prompt('Название:',ob.name);if(nn===null)return;var aa=num(prompt('Сумма:',String(ob.amount)));var dd=num(prompt('День 1–31:',String(ob.day)));if(aa>0&&dd>=1&&dd<=31){pushUndo();ob.name=nn;ob.amount=aa;ob.day=dd;save(true);render();toast('Обновлено');}}
+        else{var paid=0;STATE.obligationPays.forEach(function(p){if(p.obligId===id&&p.month===month)paid+=num(p.amount);});var left=Math.max(0,num(ob.amount)-paid);if(left<=0)return toast('Уже оплачено');var a=num(prompt('Сумма (осталось '+left+'):',String(left)));if(a<=0)return;if(a>left)a=left;pushUndo();STATE.obligationPays.push({id:uid(),obligId:id,month:month,amount:a,date:today()});STATE.expenses.push({id:uid(),amount:a,category:'Обязательные',note:ob.name,date:today(),obligId:id});save(true);render();toast('Оплата учтена');}}
+    });
+  }
 }
 function addIncome(){var a=prompt('Сумма дохода:');if(a===null)return;a=num(a);if(a<=0)return toast('Укажи сумму');var n=prompt('Комментарий:','')||'Доход';pushUndo();STATE.income.push({id:uid(),amount:a,note:n,date:today()});save(true);render();toast('Доход добавлен');}
 function addExpense(){var a=prompt('Сумма расхода:');if(a===null)return;a=num(a);if(a<=0)return toast('Укажи сумму');var cat=prompt('Категория:\n'+CATS.join(', '),'Продукты')||'Прочее';pushUndo();STATE.expenses.push({id:uid(),amount:a,category:cat,note:'',date:today()});save(true);render();toast('Расход добавлен');}
