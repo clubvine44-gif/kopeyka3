@@ -3,7 +3,7 @@
   'use strict';
 
   const STORAGE_KEY = 'kopeyka3_state_v1';
-  const ANCHOR = '2026-08-17'; // день цикла: day,day,night,night,off,off
+  const ANCHOR = '2026-08-17';
   const CYCLE = ['day', 'day', 'night', 'night', 'off', 'off'];
 
   const EXP_CATS = [
@@ -64,11 +64,18 @@
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return defaultState();
-      const s = JSON.parse(raw);
-      return normalize(s);
+      return normalize(JSON.parse(raw));
     } catch (e) {
       return defaultState();
     }
+  }
+
+  function saneNum(v, max) {
+    var n = Number(v);
+    if (!isFinite(n) || n !== n) return 0;
+    n = Math.round(n);
+    if (max != null && Math.abs(n) > max) return 0;
+    return n;
   }
 
   function normalize(raw) {
@@ -80,14 +87,30 @@
       if (!Array.isArray(out[k])) out[k] = [];
     });
     if (!out.shiftsOverride || typeof out.shiftsOverride !== 'object') out.shiftsOverride = {};
-    out.settings.openingBalance = Number(out.settings.openingBalance) || 0;
-    (out.reserves || []).forEach(r => {
-      r.saved = Number(r.saved) || 0;
-      r.target = Number(r.target) || 0;
+
+    var MAX = 5000000;
+    out.settings.openingBalance = saneNum(out.settings.openingBalance, MAX);
+
+    out.income = (out.income || []).filter(function(i){ return i && i.id; }).map(function(i){
+      return Object.assign({}, i, { amount: saneNum(i.amount, MAX) });
     });
-    (out.debts || []).forEach(d => {
-      d.total = Number(d.total) || 0;
-      d.paid = Number(d.paid) || 0;
+    out.expenses = (out.expenses || []).filter(function(e){ return e && e.id; }).map(function(e){
+      return Object.assign({}, e, { amount: saneNum(e.amount, MAX) });
+    });
+    out.reserves = (out.reserves || []).filter(function(r){ return r && r.id; }).map(function(r){
+      return Object.assign({}, r, {
+        saved: saneNum(r.saved, MAX),
+        target: saneNum(r.target, MAX)
+      });
+    });
+    out.debts = (out.debts || []).filter(function(d){ return d && d.id; }).map(function(d){
+      return Object.assign({}, d, {
+        total: saneNum(d.total, MAX),
+        paid: saneNum(d.paid, MAX)
+      });
+    });
+    out.reserveOps = (out.reserveOps || []).filter(function(o){ return o && o.id; }).map(function(o){
+      return Object.assign({}, o, { amount: saneNum(o.amount, MAX) });
     });
     return out;
   }
@@ -113,7 +136,6 @@
   window.saveState = saveState;
   window.STATE = STATE;
 
-  // ——— Calculations ———
   function compute() {
     const open = Number(STATE.settings.openingBalance) || 0;
     let incomeSum = 0, expenseSum = 0, depSum = 0, wdSum = 0;
@@ -127,13 +149,11 @@
       else if (op.type === 'withdraw') wdSum += a;
     });
 
-    // Also count reserve.saved as deposited (legacy / direct)
-    // Prefer ops; if no ops but saved > 0, use saved
     let reservesTotal = 0;
     STATE.reserves.forEach(r => {
       reservesTotal += Number(r.saved) || 0;
     });
-    if (depSum === 0 && reservesTotal > 0) depSum = reservesTotal;
+    if (depSum === 0 && wdSum === 0 && reservesTotal > 0) depSum = reservesTotal;
 
     const cash = open + incomeSum - expenseSum - depSum + wdSum;
 
@@ -144,7 +164,6 @@
 
     const available = cash - debtLeft;
 
-    // Daily limit: remaining available / days left in current cycle-ish or month
     const t = todayStr();
     const month = t.slice(0, 7);
     const [y, m] = month.split('-').map(Number);
@@ -154,20 +173,11 @@
     const daily = available > 0 ? Math.floor(available / daysLeft) : 0;
 
     return {
-      cash,
-      available,
-      incomeSum,
-      expenseSum,
-      depSum,
-      wdSum,
-      debtLeft,
-      reservesTotal,
-      daily,
-      daysLeft
+      cash, available, incomeSum, expenseSum, depSum, wdSum,
+      debtLeft, reservesTotal, daily, daysLeft
     };
   }
 
-  // ——— UI helpers ———
   function toast(msg) {
     const el = document.getElementById('toast');
     if (!el) return;
@@ -191,7 +201,10 @@
     bg.onclick = (e) => { if (e.target === bg) closeModal(); };
   }
 
-  // ——— Render ———
+  function esc(s) {
+    return String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
   function render() {
     window.STATE = STATE;
     const c = compute();
@@ -203,10 +216,9 @@
     const app = document.getElementById('app');
     if (!app) return;
 
-    // Calendar
     const [y, m] = month.split('-').map(Number);
     const first = new Date(y, m - 1, 1);
-    const startWeek = (first.getDay() + 6) % 7; // Mon=0
+    const startWeek = (first.getDay() + 6) % 7;
     const daysInMonth = new Date(y, m, 0).getDate();
     let calHtml = '<div class="cal">';
     ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].forEach(d => {
@@ -222,7 +234,6 @@
     }
     calHtml += '</div>';
 
-    // Reserves list
     let resHtml = '';
     if (STATE.reserves.length === 0) {
       resHtml = '<div class="empty">Резервов пока нет</div>';
@@ -238,7 +249,6 @@
       resHtml += '</div>';
     }
 
-    // Debts
     let debtHtml = '';
     if (STATE.debts.length === 0) {
       debtHtml = '<div class="empty">Долгов нет</div>';
@@ -254,7 +264,6 @@
       debtHtml += '</div>';
     }
 
-    // Recent ops
     const ops = [];
     STATE.income.forEach(i => ops.push({ t: i.date || '', type: 'income', amount: i.amount, note: i.note || i.category || 'Доход', id: i.id }));
     STATE.expenses.forEach(e => ops.push({ t: e.date || '', type: 'expense', amount: e.amount, note: e.category || e.note || 'Расход', id: e.id }));
@@ -286,8 +295,8 @@
           '<div class="stat"><b>' + fmt(c.available) + '</b><span>Доступно</span></div>' +
         '</div>' +
         '<div class="grid2" style="margin-top:10px">' +
-          '<div class="stat"><b class="plus" style="color:var(--green)">' + fmt(c.incomeSum) + '</b><span>Доходы</span></div>' +
-          '<div class="stat"><b class="minus" style="color:var(--red)">' + fmt(c.expenseSum) + '</b><span>Расходы</span></div>' +
+          '<div class="stat"><b style="color:var(--green)">' + fmt(c.incomeSum) + '</b><span>Доходы</span></div>' +
+          '<div class="stat"><b style="color:var(--red)">' + fmt(c.expenseSum) + '</b><span>Расходы</span></div>' +
         '</div>' +
       '</div>' +
 
@@ -307,7 +316,6 @@
         '<div class="card-title">Последние операции</div>' + opsHtml +
       '</div>';
 
-    // Calendar day click → override shift
     app.querySelectorAll('.cal-d[data-date]').forEach(el => {
       el.onclick = () => {
         const ds = el.dataset.date;
@@ -320,7 +328,6 @@
       };
     });
 
-    // Item click → edit/delete
     app.querySelectorAll('.item[data-id]').forEach(el => {
       el.onclick = () => {
         const id = el.dataset.id;
@@ -333,11 +340,6 @@
     });
   }
 
-  function esc(s) {
-    return String(s || '').replace(/[&<>"']/g, c => ({ '&': '&', '<': '<', '>': '>', '"': '"', "'": '&#39;' }[c]));
-  }
-
-  // ——— Forms ———
   function showIncomeForm(edit) {
     const it = edit || { amount: '', note: '', date: todayStr(), toReserve: '' };
     const resOpts = STATE.reserves.map(r =>
@@ -482,7 +484,6 @@
       '<div class="muted" style="margin-bottom:12px">' + fmt(r.saved) + (r.target ? ' из ' + fmt(r.target) : '') + '</div>' +
       '<div class="btns" style="flex-direction:column">' +
         '<button class="btn primary" id="fDep">Пополнить</button>' +
-        '<button class="btn ghost" id="fWd">Снять</button>' +
         '<button class="btn ghost" id="fEdit">Изменить</button>' +
         '<button class="btn danger" id="fDel">Удалить</button>' +
         '<button class="btn ghost" id="fCancel">Закрыть</button>' +
@@ -509,23 +510,6 @@
         r.saved = (Number(r.saved) || 0) + amount;
         STATE.reserveOps.push({ id: uid(), reserveId: id, type: 'deposit', amount, date: todayStr() });
         saveState(); closeModal(); render(); toast('Пополнено');
-      };
-    };
-    document.getElementById('fWd').onclick = () => {
-      closeModal();
-      openModal(
-        '<h2>Снять · ' + esc(r.name) + '</h2>' +
-        '<div class="field"><label>Сумма</label><input type="number" inputmode="decimal" id="fAmt" placeholder="0"></div>' +
-        '<div class="btns"><button class="btn ghost" id="fCancel">Отмена</button><button class="btn primary" id="fOk">Ок</button></div>'
-      );
-      document.getElementById('fCancel').onclick = closeModal;
-      document.getElementById('fOk').onclick = () => {
-        const amount = Number(document.getElementById('fAmt').value) || 0;
-        if (amount <= 0) return toast('Укажи сумму');
-        if (amount > (r.saved || 0)) return toast('Недостаточно в резерве');
-        r.saved = (Number(r.saved) || 0) - amount;
-        STATE.reserveOps.push({ id: uid(), reserveId: id, type: 'withdraw', amount, date: todayStr() });
-        saveState(); closeModal(); render(); toast('Снято');
       };
     };
   }
@@ -608,7 +592,6 @@
     };
   }
 
-  // ——— FAB & top buttons ———
   function setupUI() {
     const fab = document.getElementById('fab');
     const radial = document.getElementById('radial');
@@ -631,10 +614,11 @@
     document.getElementById('btnMonth').onclick = () => {
       const cur = STATE.settings.month || todayStr().slice(0, 7);
       openModal(
-        '<h2>Месяц</h2>' +
+        '<h2>Настройки</h2>' +
         '<div class="field"><label>Показать месяц</label><input type="month" id="fMonth" value="' + cur + '"></div>' +
-        '<div class="field"><label>Начальный остаток (перенос)</label><input type="number" inputmode="decimal" id="fOpen" value="' + (STATE.settings.openingBalance || 0) + '"></div>' +
-        '<div class="btns"><button class="btn ghost" id="fCancel">Отмена</button><button class="btn primary" id="fOk">Ок</button></div>'
+        '<div class="field"><label>Начальный остаток (перенос с прошлого месяца)</label><input type="number" inputmode="decimal" id="fOpen" value="' + (STATE.settings.openingBalance || 0) + '"></div>' +
+        '<div class="btns"><button class="btn ghost" id="fCancel">Отмена</button><button class="btn primary" id="fOk">Сохранить</button></div>' +
+        '<div class="btns" style="margin-top:10px"><button class="btn danger" id="fReset" style="flex:1">Очистить все данные</button></div>'
       );
       document.getElementById('fCancel').onclick = closeModal;
       document.getElementById('fOk').onclick = () => {
@@ -642,13 +626,27 @@
         STATE.settings.openingBalance = Number(document.getElementById('fOpen').value) || 0;
         saveState(); closeModal(); render(); toast('Сохранено');
       };
+      document.getElementById('fReset').onclick = () => {
+        if (!confirm('Удалить все доходы, расходы, резервы и долги?')) return;
+        STATE = defaultState();
+        STATE.settings.month = cur;
+        saveState();
+        if (window.kopeykaCloud && window.kopeykaCloud.save) window.kopeykaCloud.save();
+        closeModal(); render(); toast('Всё очищено');
+      };
     };
-
-    // Cloud button is managed by cloud.js (ensureAccountBtn)
   }
 
-  // Boot
   function boot() {
+    try {
+      var c = compute();
+      if (Math.abs(c.cash) > 2000000 || Math.abs(c.incomeSum) > 2000000 || Math.abs(c.expenseSum) > 2000000) {
+        console.warn('reset insane local state', c);
+        STATE = defaultState();
+        saveState();
+        setTimeout(function(){ toast('Сброшены кривые данные'); }, 400);
+      }
+    } catch (e) {}
     setupUI();
     render();
   }
