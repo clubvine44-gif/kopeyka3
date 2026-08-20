@@ -1,2 +1,1 @@
-/* see next */
-console.log('temp');
+/* app logic is inlined in index.html */
