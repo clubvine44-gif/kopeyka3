@@ -1,5 +1,5 @@
-const CACHE='kopeyka3-v11';
-const APP_SHELL=['./','./index.html','./app.js?v=14','./cloud.js?v=16','./onboard.js?v=13','./voice2.js','./voice3.js','./manifest.json','./icon.svg','./sw.js?v=21'];
+const CACHE='kopeyka3-v12';
+const APP_SHELL=['./','./index.html','./app.js?v=14','./cloud.js?v=16','./onboard.js?v=13','./voice.js','./voice2.js','./manifest.json','./icon.svg','./sw.js?v=22'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(APP_SHELL)).then(()=>self.skipWaiting()));
@@ -13,10 +13,6 @@ self.addEventListener('fetch',event=>{
   if(event.request.method!=='GET')return;
   const url=new URL(event.request.url);
   if(url.origin!==self.location.origin)return;
-  if(url.pathname.endsWith('/voice.js')){
-    event.respondWith(caches.match('./voice3.js').then(cached=>cached||fetch(new URL('./voice3.js',url).toString(),{cache:'no-store'})));
-    return;
-  }
   event.respondWith(
     fetch(event.request,{cache:'no-store'})
       .then(response=>{
