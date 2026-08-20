@@ -160,24 +160,64 @@ function setStatus(ok,text){
 }
 function ensureAccountBtn(){
   if(document.getElementById('cloudAccount')) return;
-  const top=document.getElementById('topAct')||document.querySelector('.top-act')||document.querySelector('.top');
-  if(!top) return;
+
+  // Minimal CSS for cloud UI
+  if(!document.getElementById('cloudCss')){
+    const st=document.createElement('style'); st.id='cloudCss';
+    st.textContent=
+      '.cloud-wrap{position:relative;display:inline-flex;align-items:center}'+
+      '.cloud-menu{position:absolute;right:0;top:46px;min-width:220px;background:#1E2129;border:1px solid #2A2D38;border-radius:14px;padding:12px;z-index:90;box-shadow:0 10px 30px rgba(0,0,0,.45)}'+
+      '.cloud-menu .cloud-email{font-weight:600;margin-bottom:4px;font-size:13px}'+
+      '.cloud-menu .cloud-st{font-size:12px;color:#8B90A0;margin-bottom:10px}'+
+      '.cloud-menu .btn{display:block;width:100%;padding:10px;border-radius:10px;margin-bottom:6px;font-weight:600;text-align:center;border:1px solid #2A2D38;background:#181A21;color:#F2F3F7;cursor:pointer}'+
+      '.cloud-menu .btn.bp{background:linear-gradient(135deg,#F0C384,#E5A75E);color:#1A1208;border:none}'+
+      '.cloud-auth{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px}'+
+      '.cloud-auth-card{position:relative;width:100%;max-width:360px;background:#181A21;border:1px solid #2A2D38;border-radius:16px;padding:20px}'+
+      '.cloud-auth-card h2{font-size:18px;margin:0 0 8px}'+
+      '.cloud-auth-card .sm{font-size:13px;color:#8B90A0}'+
+      '.cloud-auth-card .field{margin-bottom:10px}'+
+      '.cloud-auth-card input{width:100%;padding:12px 14px;border-radius:12px;background:#1E2129;border:1px solid #2A2D38;color:#F2F3F7;box-sizing:border-box}'+
+      '.cloud-auth-card .btn{flex:1;padding:12px;border-radius:12px;font-weight:600;border:1px solid #2A2D38;background:#1E2129;color:#F2F3F7;cursor:pointer}'+
+      '.cloud-auth-card .btn.bp{background:linear-gradient(135deg,#F0C384,#E5A75E);color:#1A1208;border:none}'+
+      '.cloud-auth-msg{font-size:13px;color:#F87171;min-height:18px;margin-bottom:8px}'+
+      '.icon-btn.on{border-color:#E5A75E;color:#E5A75E}';
+    document.head.appendChild(st);
+  }
+
+  const existingBtn=document.getElementById('btnCloud')||document.getElementById('cloudBtn');
+  const top=document.querySelector('.top-actions')||document.querySelector('.topbar')||document.body;
+
   const wrap=document.createElement('div');
   wrap.id='cloudAccount'; wrap.className='cloud-wrap';
-  wrap.innerHTML=
-    '<button type="button" class="cloud-btn" id="cloudBtn" title="Облако">'+
-    '<span id="cloudAvatar">☁</span><span id="cloudDot" class="cloud-dot"></span></button>'+
-    '<div class="cloud-menu" id="cloudMenu" hidden>'+
+
+  let btn;
+  if(existingBtn){
+    btn=existingBtn;
+    btn.id='cloudBtn';
+    if(!btn.querySelector('#cloudAvatar') && !document.getElementById('cloudAvatar')){
+      btn.innerHTML='<span id="cloudAvatar">☁</span>';
+    }
+    existingBtn.parentNode.insertBefore(wrap, existingBtn);
+    wrap.appendChild(existingBtn);
+  } else {
+    wrap.innerHTML='<button type="button" class="icon-btn cloud-btn" id="cloudBtn" title="Облако"><span id="cloudAvatar">☁</span></button>';
+    top.appendChild(wrap);
+    btn=document.getElementById('cloudBtn');
+  }
+
+  const menu=document.createElement('div');
+  menu.className='cloud-menu'; menu.id='cloudMenu'; menu.hidden=true;
+  menu.innerHTML=
     '<div class="cloud-email" id="cloudEmail">Не вошли</div>'+
     '<div class="cloud-st" id="cloudStatus">Нажми «Войти»</div>'+
     '<button type="button" class="btn bp" id="cloudLogin">Войти в облако</button>'+
-    '<button type="button" class="btn bs" id="cloudSync">Синхронизировать</button>'+
-    '<button type="button" class="btn bg" id="cloudLogout" style="display:none">Выйти</button>'+
-    '</div>';
-  top.appendChild(wrap);
-  document.getElementById('cloudBtn').onclick=e=>{ e.stopPropagation(); const m=document.getElementById('cloudMenu'); m.hidden=!m.hidden; };
-  document.addEventListener('click',()=>{ const m=document.getElementById('cloudMenu'); if(m) m.hidden=true; });
-  document.getElementById('cloudMenu').onclick=e=>e.stopPropagation();
+    '<button type="button" class="btn" id="cloudSync">Синхронизировать</button>'+
+    '<button type="button" class="btn" id="cloudLogout" style="display:none">Выйти</button>';
+  wrap.appendChild(menu);
+
+  btn.onclick=e=>{ e.stopPropagation(); menu.hidden=!menu.hidden; };
+  document.addEventListener('click',()=>{ menu.hidden=true; });
+  menu.onclick=e=>e.stopPropagation();
   document.getElementById('cloudSync').onclick=async()=>{
     if(!currentUser){ showAuth(); return; }
     const ok=await saveToCloud(true);
@@ -194,8 +234,10 @@ function updateAccountUI(){
   const email=currentUser&&currentUser.email;
   const av=document.getElementById('cloudAvatar');
   const em=document.getElementById('cloudEmail');
+  const btn=document.getElementById('cloudBtn')||document.getElementById('btnCloud');
   if(av) av.textContent=email?email[0].toUpperCase():'☁';
   if(em) em.textContent=email||'Не вошли';
+  if(btn) btn.classList.toggle('on', !!email);
   const login=document.getElementById('cloudLogin');
   const logout=document.getElementById('cloudLogout');
   if(login) login.style.display=email?'none':'block';
