@@ -7,7 +7,7 @@ function today(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()
 function fmt(n){n=Math.round(+n||0);return(n<0?'−':'')+Math.abs(n).toLocaleString('ru-RU')+' ₽';}
 function num(v){var n=Number(v);return(!isFinite(n)||n!==n)?0:Math.round(n);}
 function sane(v){var n=num(v);return Math.abs(n)>5e6?0:n;}
-function esc(s){return String(s==null?'':s).replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>').replace(/"/g,'"').replace(/'/g,'&#39;');}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&'+'amp;').replace(/</g,'&'+'lt;').replace(/>/g,'&'+'gt;').replace(/"/g,'&'+'quot;').replace(/'/g,'&#39;');}
 function pd(s){var p=String(s||'').split('-').map(Number);return new Date(p[0],(p[1]||1)-1,p[2]||1);}
 function days(a,b){return Math.round((pd(b)-pd(a))/864e5);}
 function shift(ds,ov){
@@ -33,8 +33,8 @@ function norm(raw){
   o.settings.openingBalance=sane(o.settings.openingBalance);
   o.income=(o.income||[]).filter(function(x){return x&&x.id;}).map(function(x){return Object.assign({},x,{amount:sane(x.amount)});});
   o.expenses=(o.expenses||[]).filter(function(x){return x&&x.id;}).map(function(x){return Object.assign({},x,{amount:sane(x.amount)});});
-  o.reserves=(o.reserves||[]).filter(function(x){return x&&x.id;}).map(function(x){return Object.assign({},x,{saved:sane(x.saved),target:sane(x.target)});});
-  o.debts=(o.debts||[]).filter(function(x){return x&&x.id;}).map(function(x){return Object.assign({},x,{total:sane(x.total),paid:sane(x.paid)});});
+  o.reserves=(o.reserves||[]).filter(function(x){return x&&x.id;}).map(function(x){return Object.assign({},x,{name:String(x.name||'Резерв'),saved:sane(x.saved),target:sane(x.target)});});
+  o.debts=(o.debts||[]).filter(function(x){return x&&x.id;}).map(function(x){return Object.assign({},x,{name:String(x.name||'Долг'),total:sane(x.total),paid:sane(x.paid)});});
   o.reserveOps=(o.reserveOps||[]).filter(function(x){return x&&x.id;}).map(function(x){return Object.assign({},x,{amount:sane(x.amount),type:x.type==='withdraw'?'withdraw':'deposit'});});
   return o;
 }
@@ -56,7 +56,9 @@ function compute(){
   var avail=cash-debt,t=today(),p=t.slice(0,7).split('-').map(Number);
   var last=new Date(p[0],p[1],0).getDate(),left=Math.max(1,last-Number(t.slice(8))+1);
   var daily=avail>0?Math.floor(avail/left):0;
-  return{open:open,cash:cash,available:avail,incomeSum:inc,expenseSum:exp,depSum:dep,debtLeft:debt,reservesTotal:resT,daily:daily,daysLeft:left};
+  var by={};STATE.expenses.forEach(function(e){var c=e.category||'Прочее';by[c]=(by[c]||0)+num(e.amount);});
+  var cats=Object.keys(by).map(function(k){return{name:k,amount:by[k]};}).sort(function(a,b){return b.amount-a.amount;});
+  return{open:open,cash:cash,available:avail,incomeSum:inc,expenseSum:exp,depSum:dep,debtLeft:debt,reservesTotal:resT,daily:daily,daysLeft:left,cats:cats};
 }
 function toast(m){var el=document.getElementById('toast');if(!el)return;el.textContent=m;el.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(function(){el.classList.remove('show');},2400);}
 window.toast=toast;
@@ -75,15 +77,22 @@ function render(){
   STATE.expenses.forEach(function(e){ops.push({t:e.date,type:'ex',a:e.amount,n:e.category||'Расход',id:e.id});});
   ops.sort(function(a,b){return(b.t||'').localeCompare(a.t||'');});
   var opsH=ops.slice(0,12).map(function(o){return '<div class="item" data-id="'+o.id+'" data-k="'+o.type+'"><div class="left"><b>'+esc(o.n)+'</b><span class="muted">'+(o.t||'')+'</span></div><div class="amt '+(o.type==='in'?'plus':'minus')+'">'+(o.type==='in'?'+':'−')+fmt(o.a)+'</div></div>';}).join('')||'<div class="empty">Нет операций</div>';
-  app.innerHTML='<div class="card hero"><div class="row" style="margin-bottom:8px"><div class="card-title" style="margin:0">Сегодня · '+sl+'</div><span class="pill '+sh+'">'+sl+'</span></div><div class="big">'+fmt(c.daily)+'</div><div class="muted">можно потратить сегодня</div></div>'+
+  var catH='';
+  if(c.cats.length){
+    var max=c.cats[0].amount||1;
+    catH=c.cats.map(function(x){var pct=Math.round(x.amount/max*100);return '<div class="cat-row"><div class="cat-top"><span>'+esc(x.name)+'</span><b>'+fmt(x.amount)+'</b></div><div class="progress"><i style="width:'+pct+'%"></i></div></div>';}).join('');
+  }else catH='<div class="empty">Пока нет расходов</div>';
+  app.innerHTML=
+    '<div class="card hero"><div class="row" style="margin-bottom:8px"><div class="card-title" style="margin:0">Сегодня · '+sl+'</div><span class="pill '+sh+'">'+sl+'</span></div><div class="big">'+fmt(c.daily)+'</div><div class="muted">можно потратить сегодня · ещё '+c.daysLeft+' дн.</div></div>'+
     '<div class="card"><div class="grid2"><div class="stat"><b class="'+(c.cash<0?'neg':'')+'">'+fmt(c.cash)+'</b><span>Касса</span></div><div class="stat"><b class="'+(c.available<0?'neg':'')+'">'+fmt(c.available)+'</b><span>Доступно</span></div></div>'+
-    '<div style="margin-top:10px;font-size:13px"><div class="row"><span class="muted">Остаток</span><b>'+fmt(c.open)+'</b></div><div class="row"><span class="muted">Доходы</span><b class="plus">+'+fmt(c.incomeSum)+'</b></div><div class="row"><span class="muted">Расходы</span><b class="minus">−'+fmt(c.expenseSum)+'</b></div>'+
+    '<div style="margin-top:12px;font-size:13px"><div class="row"><span class="muted">Остаток на начало</span><b>'+fmt(c.open)+'</b></div><div class="row"><span class="muted">Доходы</span><b class="plus">+'+fmt(c.incomeSum)+'</b></div><div class="row"><span class="muted">Расходы</span><b class="minus">−'+fmt(c.expenseSum)+'</b></div>'+
     (c.depSum?('<div class="row"><span class="muted">В резервы</span><b class="minus">−'+fmt(c.depSum)+'</b></div>'):'')+
     (c.debtLeft?('<div class="row"><span class="muted">Долги</span><b class="minus">−'+fmt(c.debtLeft)+'</b></div>'):'')+
     '</div></div>'+
+    '<div class="card"><div class="card-title">Куда уходят деньги</div>'+catH+'</div>'+
     '<div class="card"><div class="card-title">Календарь · '+month+'</div>'+cal+'</div>'+
-    '<div class="card"><div class="card-title">Резервы</div><div class="list">'+resH+'</div></div>'+
-    '<div class="card"><div class="card-title">Долги</div><div class="list">'+debH+'</div></div>'+
+    '<div class="card"><div class="card-title">Резервы · '+fmt(c.reservesTotal)+'</div><div class="list">'+resH+'</div></div>'+
+    '<div class="card"><div class="card-title">Долги · '+fmt(c.debtLeft)+'</div><div class="list">'+debH+'</div></div>'+
     '<div class="card"><div class="card-title">Операции</div><div class="list">'+opsH+'</div></div>';
   app.querySelectorAll('.cal-d[data-date]').forEach(function(el){el.onclick=function(){var ds=el.dataset.date,cur=shift(ds,STATE.shiftsOverride),n=cur==='day'?'night':cur==='night'?'off':'day';STATE.shiftsOverride[ds]=n;save();render();toast('Смена: '+(SHIFT_LABEL[n]||n));};});
   app.querySelectorAll('.item[data-id]').forEach(function(el){el.onclick=function(){var id=el.dataset.id,k=el.dataset.k;
@@ -117,9 +126,7 @@ function setup(){
   if(bm)bm.onclick=function(){
     var act=prompt('1 — начальный остаток\n2 — очистить ВСЕ данные\nВведи 1 или 2:','1');
     if(act==='2'){
-      if(confirm('Точно очистить все данные? Это нельзя отменить.')){
-        STATE=def();save();render();toast('Данные очищены');
-      }
+      if(confirm('Точно очистить все данные?')){STATE=def();save();render();toast('Данные очищены');}
     }else{
       var o=prompt('Начальный остаток (сейчас '+num(STATE.settings.openingBalance)+'):',String(num(STATE.settings.openingBalance)));
       if(o===null)return;STATE.settings.openingBalance=num(o);save();render();toast('Остаток: '+fmt(num(o)));
@@ -130,17 +137,15 @@ function boot(){
   try{
     STATE=norm(STATE);
     var c=compute();
-    if(STATE.income.length===0&&STATE.expenses.length===0){
-      if(STATE.reserves.length===0&&STATE.debts.length===0){
-        if(Math.abs(c.cash)>0||Math.abs(c.open)>0||c.depSum>0||STATE.reserveOps.length>0){
-          STATE.settings.openingBalance=0;
-          STATE.reserveOps=[];
-          save();
-        }
-      }
+    if(STATE.income.length===0 && STATE.expenses.length===0 && c.cash < 0){
+      STATE=def();
+      save();
+      toast('Сброшены битые данные');
+    } else if(Math.abs(c.cash)>2e6 || Math.abs(c.open)>2e6){
+      STATE=def();
+      save();
     }
-    if(Math.abs(c.cash)>2e6||Math.abs(c.open)>2e6){STATE=def();save();}
-  }catch(e){}
+  }catch(e){ STATE=def(); }
   setup();render();
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
