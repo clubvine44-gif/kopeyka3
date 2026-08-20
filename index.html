@@ -34,6 +34,9 @@ button,input,select{font:inherit;color:inherit;border:none;outline:none;backgrou
 .item{display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--card2);border-radius:12px;border:1px solid var(--line);gap:10px}
 .item .left{display:flex;flex-direction:column;gap:2px;min-width:0}.item .amt{font-weight:600;white-space:nowrap}
 .plus,.amt.plus{color:var(--green)}.minus,.amt.minus,.neg{color:var(--red)}
+.cat-row{margin-bottom:10px}.cat-row .cat-top{display:flex;justify-content:space-between;margin-bottom:4px;font-size:13px}
+.progress{height:6px;background:var(--line);border-radius:99px;overflow:hidden;margin-top:4px}
+.progress>i{display:block;height:100%;background:linear-gradient(90deg,#E5A75E,#F0C384);border-radius:99px}
 .fab-wrap{position:fixed;right:18px;bottom:calc(18px + var(--safe-b));z-index:60}
 .fab{width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,#F0C384,#E5A75E);color:#1A1208;font-size:28px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 28px rgba(229,167,94,.35);border:none;transition:transform .2s}
 .fab.open{transform:rotate(45deg)}
@@ -44,11 +47,6 @@ button,input,select{font:inherit;color:inherit;border:none;outline:none;backgrou
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:80;display:none;align-items:flex-end;justify-content:center}
 .modal-bg.show{display:flex}
 .modal{width:100%;max-width:520px;max-height:90vh;overflow:auto;background:var(--card);border-radius:20px 20px 0 0;padding:20px 16px calc(20px + var(--safe-b));border:1px solid var(--line);border-bottom:none}
-.modal h2{font-size:18px;margin-bottom:14px}.field{margin-bottom:12px}.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
-.field input,.field select{width:100%;padding:12px 14px;border-radius:12px;background:var(--card2);border:1px solid var(--line)}
-.btns{display:flex;gap:10px;margin-top:16px}.btn{flex:1;padding:13px;border-radius:12px;font-weight:600;text-align:center}
-.btn.primary{background:linear-gradient(135deg,#F0C384,#E5A75E);color:#1A1208}
-.btn.ghost{background:var(--card2);border:1px solid var(--line)}
 .toast{position:fixed;left:50%;bottom:calc(90px + var(--safe-b));transform:translateX(-50%) translateY(20px);background:var(--card2);border:1px solid var(--line);padding:10px 16px;border-radius:12px;z-index:100;opacity:0;pointer-events:none;transition:.25s;white-space:nowrap;font-size:14px}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .empty{text-align:center;padding:20px;color:var(--muted);font-size:14px}
@@ -63,7 +61,7 @@ button,input,select{font:inherit;color:inherit;border:none;outline:none;backgrou
 <button data-act="debt"><span class="ic" style="background:rgba(167,139,250,.15)">📉</span> Долг</button>
 </div><button class="fab" id="fab">+</button></div>
 <div class="modal-bg" id="modalBg"></div><div class="toast" id="toast"></div>
-<script src="app.js"></script>
-<script src="cloud.js"></script>
-<script>if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(function(){});</script>
+<script src="app.js?v=3"></script>
+<script src="cloud.js?v=3"></script>
+<script>if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js?v=3').catch(function(){});</script>
 </body></html>
