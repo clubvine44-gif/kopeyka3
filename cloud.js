@@ -46,8 +46,13 @@ function normalize(raw){
   ['income','expenses','reserves','reserveOps','debts'].forEach(k=>{
     if(!Array.isArray(out[k])) out[k]=Array.isArray(base[k])?base[k].slice():[];
   });
-  out.settings.openingBalance=Number(out.settings.openingBalance)||0;
-  (out.reserves||[]).forEach(r=>{ r.saved=Number(r.saved)||0; r.target=Number(r.target)||0; r.fixedAmount=Number(r.fixedAmount)||0; r.percent=Number(r.percent)||0; if(r.active==null)r.active=true; });
+  function sn(v){ var n=Number(v); if(!isFinite(n)||n!==n) return 0; n=Math.round(n); if(Math.abs(n)>5000000) return 0; return n; }
+  out.settings.openingBalance=sn(out.settings.openingBalance);
+  out.income=(out.income||[]).filter(function(i){return i&&i.id;}).map(function(i){ return Object.assign({},i,{amount:sn(i.amount)}); });
+  out.expenses=(out.expenses||[]).filter(function(e){return e&&e.id;}).map(function(e){ return Object.assign({},e,{amount:sn(e.amount)}); });
+  out.reserveOps=(out.reserveOps||[]).filter(function(o){return o&&o.id;}).map(function(o){ return Object.assign({},o,{amount:sn(o.amount)}); });
+  out.debts=(out.debts||[]).filter(function(d){return d&&d.id;}).map(function(d){ return Object.assign({},d,{total:sn(d.total),paid:sn(d.paid)}); });
+  (out.reserves||[]).forEach(r=>{ r.saved=sn(r.saved); r.target=sn(r.target); r.fixedAmount=sn(r.fixedAmount); r.percent=sn(r.percent); if(r.active==null)r.active=true; });
   if(!out.updatedAt) out.updatedAt=new Date().toISOString();
   return out;
 }
@@ -94,8 +99,28 @@ async function loadFromCloud(){
     const row=Array.isArray(q.data)?q.data[0]:q.data;
     const local=readLocal()||(window.STATE?window.STATE:null);
     if(row&&row.state&&typeof row.state==='object'){
-      const merged=mergeStates(local, row.state);
-      applyState(merged, score(local)>0&&score(row.state)>0?'merge':'cloud');
+      const cloudState=normalize(row.state);
+      function totals(s){
+        let inc=0,exp=0,dep=0;
+        (s.income||[]).forEach(i=>inc+=Number(i.amount)||0);
+        (s.expenses||[]).forEach(e=>exp+=Number(e.amount)||0);
+        (s.reserveOps||[]).forEach(o=>{ if(o.type==='deposit') dep+=Number(o.amount)||0; });
+        (s.reserves||[]).forEach(r=>dep+=Number(r.saved)||0);
+        const open=Number(s.settings&&s.settings.openingBalance)||0;
+        return {inc,exp,dep,open, sum: Math.abs(open)+inc+exp+dep};
+      }
+      const ct=totals(cloudState);
+      const lt=totals(normalize(local||{}));
+      if(ct.sum > 2000000 && lt.sum < 500000){
+        console.warn('cloud rejected insane totals', ct);
+        toast('В облаке старые кривые данные — оставлены локальные');
+        ready=true;
+        setStatus(true,'Локальные данные');
+        if(local && score(local)>0) saveToCloud(true).catch(()=>{});
+        return true;
+      }
+      const merged=mergeStates(local, cloudState);
+      applyState(merged, score(local)>0&&score(cloudState)>0?'merge':'cloud');
       ready=true;
       saveToCloud(true).catch(()=>{});
       setStatus(true,'Синхронизировано');
@@ -161,7 +186,6 @@ function setStatus(ok,text){
 function ensureAccountBtn(){
   if(document.getElementById('cloudAccount')) return;
 
-  // Minimal CSS for cloud UI
   if(!document.getElementById('cloudCss')){
     const st=document.createElement('style'); st.id='cloudCss';
     st.textContent=
@@ -276,7 +300,16 @@ function showAuth(){
       if(signup&&!r.data.session){ msg.textContent='Подтверди email, потом войди'; return; }
       root.remove();
       await onSession(r.data.session);
-    }catch(e){ msg.textContent=e.message||'Ошибка входа'; }
+    }catch(e){
+      var m=(e&&e.message)||'Ошибка входа';
+      if(/invalid login/i.test(m)) m='Неверный email или пароль';
+      else if(/email not confirmed/i.test(m)) m='Подтверди email';
+      else if(/user already/i.test(m)) m='Такой email уже есть — войди';
+      else if(/rate limit|too many/i.test(m)) m='Слишком много попыток, подожди';
+      else if(/network|fetch/i.test(m)) m='Нет сети';
+      else if(/^[A-Za-z0-9 _.,:;!\-]+$/.test(m) && !/[А-Яа-я]/.test(m)) m='Ошибка входа';
+      msg.textContent=m;
+    }
   }
   document.getElementById('cloudSignin').onclick=()=>doAuth(false);
   document.getElementById('cloudSignup').onclick=()=>doAuth(true);
