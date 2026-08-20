@@ -1,11 +1,11 @@
-/* cloud.js v11 — stable auth + per-user data restore */
+/* cloud.js v12 — robust load of account data, no wipe */
 (function(){
 'use strict';
 const URL='https://cqslrfphsjllhltsvvuq.supabase.co';
 const KEY='sb_publishable_cM_XCycYRFLIc6qEqlH83Q_5XY6kPzG';
 const LOCAL_BASE='kopeyka3_state_v1';
 
-let sb=null, ready=false, saving=false, lastSent='', currentUser=null, loading=false;
+let sb=null, ready=false, saving=false, lastSent='', currentUser=null, loading=false, suppressSave=false;
 
 function localKey(){
   return (currentUser&&currentUser.id)?(LOCAL_BASE+'_'+currentUser.id):LOCAL_BASE;
@@ -17,7 +17,7 @@ function loadSDK(){
     var s=document.createElement('script');
     s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
     s.onload=ok;
-    s.onerror=function(){ bad(new Error('Не удалось загрузить SDK')); };
+    s.onerror=function(){ bad(new Error('SDK')); };
     document.head.appendChild(s);
   });
 }
@@ -45,18 +45,21 @@ function toast(msg){
 function score(s){
   if(!s||typeof s!=='object') return 0;
   var n=0;
-  ['income','expenses','reserves','debts','reserveOps','obligations'].forEach(function(k){
+  ['income','expenses','reserves','debts','reserveOps','obligations','obligationPays','notes','recurring'].forEach(function(k){
     if(Array.isArray(s[k])) n+=s[k].length;
   });
-  if(s.shiftsOverride) n+=Object.keys(s.shiftsOverride).length;
-  if(s.settings&&Number(s.settings.openingBalance)) n+=1;
+  if(s.shiftsOverride && typeof s.shiftsOverride==='object') n+=Object.keys(s.shiftsOverride).length;
+  if(s.settings){
+    if(Number(s.settings.openingBalance)) n+=1;
+    if(Number(s.settings.dayRate)||Number(s.settings.nightRate)) n+=1;
+  }
   return n;
 }
 
 function sn(v){
   var n=Number(v);
   if(!isFinite(n)||n!==n) return 0;
-  if(Math.abs(n)>5e6) return 0;
+  if(Math.abs(n)>5e7) return 0;
   return Math.round(n);
 }
 
@@ -77,19 +80,54 @@ function normalize(raw){
   Object.keys(out.shiftsOverride).forEach(function(k){
     var v=out.shiftsOverride[k];
     if(typeof v==='string'&&ok[v]) so[k]=v;
+    else if(v&&typeof v==='object'&&typeof v.type==='string'&&ok[v.type]) so[k]=v.type;
   });
   out.shiftsOverride=so;
   out.settings.openingBalance=sn(out.settings.openingBalance);
   out.settings.dayRate=sn(out.settings.dayRate);
   out.settings.nightRate=sn(out.settings.nightRate);
-  (out.income||[]).forEach(function(x){ x.amount=sn(x.amount); });
-  (out.expenses||[]).forEach(function(x){ x.amount=sn(x.amount); });
-  (out.reserves||[]).forEach(function(r){ r.saved=sn(r.saved); r.target=sn(r.target); });
-  (out.debts||[]).forEach(function(d){ d.total=sn(d.total); d.paid=sn(d.paid); });
-  (out.reserveOps||[]).forEach(function(o){ o.amount=sn(o.amount); });
-  (out.obligations||[]).forEach(function(o){ o.amount=sn(o.amount); });
-  (out.obligationPays||[]).forEach(function(o){ o.amount=sn(o.amount); });
+  (out.income||[]).forEach(function(x){ if(x) x.amount=sn(x.amount); });
+  (out.expenses||[]).forEach(function(x){ if(x) x.amount=sn(x.amount); });
+  (out.reserves||[]).forEach(function(r){
+    if(!r) return;
+    r.saved=sn(r.saved);
+    r.target=sn(r.target);
+    if(!r.name && r.title) r.name=r.title;
+    if(!r.name) r.name='Резерв';
+  });
+  (out.debts||[]).forEach(function(d){
+    if(!d) return;
+    d.total=sn(d.total);
+    d.paid=sn(d.paid);
+    if(!d.name) d.name='Долг';
+  });
+  (out.reserveOps||[]).forEach(function(o){ if(o) o.amount=sn(o.amount); });
+  (out.obligations||[]).forEach(function(o){ if(o) o.amount=sn(o.amount); });
+  (out.obligationPays||[]).forEach(function(o){ if(o) o.amount=sn(o.amount); });
   return out;
+}
+
+function mergeStates(a,b){
+  var A=normalize(a||{}), B=normalize(b||{});
+  var sa=score(A), sb=score(B);
+  var pick, other;
+  if(sb>sa+2){ pick=B; other=A; }
+  else if(sa>sb+2){ pick=A; other=B; }
+  else {
+    var ta=Date.parse(A.updatedAt||0)||0, tb=Date.parse(B.updatedAt||0)||0;
+    if(tb>=ta){ pick=B; other=A; } else { pick=A; other=B; }
+  }
+  var out=normalize(pick);
+  ['income','expenses','reserves','debts','reserveOps','obligations','obligationPays'].forEach(function(k){
+    var m={};
+    (other[k]||[]).forEach(function(x){ if(x&&x.id) m[x.id]=x; });
+    (pick[k]||[]).forEach(function(x){ if(x&&x.id) m[x.id]=x; });
+    out[k]=Object.keys(m).map(function(id){ return m[id]; });
+  });
+  out.shiftsOverride=Object.assign({}, other.shiftsOverride||{}, pick.shiftsOverride||{});
+  out.settings=Object.assign({}, other.settings||{}, pick.settings||{});
+  out.updatedAt=new Date().toISOString();
+  return normalize(out);
 }
 
 function writeLocal(n){
@@ -98,58 +136,99 @@ function writeLocal(n){
 function readLocal(){
   try{
     var b=localStorage.getItem(localKey());
+    if(b) return JSON.parse(b);
+    b=localStorage.getItem(LOCAL_BASE);
     return b?JSON.parse(b):null;
   }catch(_){ return null; }
 }
 
-function applyState(s, label){
+function applyState(s, label, allowUpload){
   var n=normalize(s);
   writeLocal(n);
-  if(typeof window.setAppState==='function'){
-    window.setAppState(n);
-  }else if(window.STATE){
-    try{
+  suppressSave=!allowUpload;
+  try{
+    if(typeof window.setAppState==='function'){
+      window.setAppState(n);
+    }else if(window.STATE){
       Object.keys(n).forEach(function(k){ window.STATE[k]=n[k]; });
-      if(typeof window.saveState==='function') window.saveState();
       if(typeof window.render==='function') window.render();
-    }catch(_){}
+    }
+  }finally{
+    suppressSave=false;
   }
+  lastSent=JSON.stringify(n);
   if(label) toast(label);
+}
+
+function extractState(data){
+  if(!data) return null;
+  if(Array.isArray(data)){
+    if(!data.length) return null;
+    return extractState(data[0]);
+  }
+  if(typeof data!=='object') return null;
+  if(data.state && typeof data.state==='object' && !Array.isArray(data.state)){
+    if(data.state.state && typeof data.state.state==='object') return data.state.state;
+    return data.state;
+  }
+  if(data.income || data.expenses || data.reserves || data.debts || data.settings || data.shiftsOverride || data.obligations){
+    return data;
+  }
+  return null;
 }
 
 async function loadFromCloud(){
   if(!currentUser) return null;
   var c=client();
   if(!c) return null;
+  var errors=[];
+  var state=null;
+
   try{
-    var state=null;
     var q=await c.rpc('load_user_finance_state');
-    if(!q.error && q.data){
-      state = (typeof q.data==='object' && q.data.state)?q.data.state:q.data;
+    if(q.error){
+      errors.push('rpc: '+(q.error.message||q.error.code));
     }else{
-      var t=await c.from('user_finance_state').select('state').eq('user_id',currentUser.id).maybeSingle();
-      if(t.error) console.warn('load table', t.error);
-      if(t.data && t.data.state) state=t.data.state;
-    }
-    if(state && typeof state==='object'){
-      var n=normalize(state);
-      writeLocal(n);
-      return n;
+      state=extractState(q.data);
+      if(!state) errors.push('rpc: empty');
     }
   }catch(e){
-    console.error('cloud load', e);
+    errors.push('rpc: '+(e.message||e));
   }
+
+  if(!state){
+    try{
+      var t=await c.from('user_finance_state').select('state,version,updated_at').eq('user_id',currentUser.id).maybeSingle();
+      if(t.error) errors.push('table: '+(t.error.message||t.error.code));
+      else if(t.data) state=extractState(t.data);
+      else errors.push('table: no row');
+    }catch(e){
+      errors.push('table: '+(e.message||e));
+    }
+  }
+
+  if(state){
+    console.log('[cloud] loaded score=', score(state), state);
+    return normalize(state);
+  }
+  console.warn('[cloud] load failed', errors);
   return null;
 }
 
 async function saveToCloud(force){
   if(!currentUser||!ready) return false;
+  if(suppressSave && !force) return false;
   if(saving && !force) return false;
   saving=true;
   try{
     var st=window.STATE||readLocal()||{};
     var clean=normalize(st);
+    if(!force && score(clean)===0){
+      saving=false;
+      return false;
+    }
     clean.app='kopeyka3';
+    clean.updatedAt=new Date().toISOString();
     var json=JSON.stringify(clean);
     if(!force && json===lastSent){ saving=false; return true; }
     var c=client();
@@ -169,7 +248,7 @@ async function saveToCloud(force){
     return true;
   }catch(e){
     console.error('cloud save', e);
-    toast('Не удалось сохранить в облако');
+    toast('Не удалось сохранить в облако: '+(e.message||''));
     return false;
   }finally{
     saving=false;
@@ -178,8 +257,9 @@ async function saveToCloud(force){
 
 var saveTimer=null;
 function scheduleSave(){
+  if(suppressSave) return;
   clearTimeout(saveTimer);
-  saveTimer=setTimeout(function(){ saveToCloud(false); },1200);
+  saveTimer=setTimeout(function(){ saveToCloud(false); },1500);
 }
 
 function setStatus(on, msg){
@@ -189,7 +269,6 @@ function setStatus(on, msg){
     btn.title=msg||(on?'Облако':'Локально');
   }
 }
-
 function updateAccountUI(){
   setStatus(!!currentUser, currentUser?(currentUser.email||'Облако'):'Локально');
 }
@@ -232,7 +311,7 @@ function showAuth(){
     root.innerHTML=
       '<div class="cloud-auth-card">'+
       '<h2>Облако</h2>'+
-      '<p class="sm">Ты в аккаунте. Данные синхронизируются только с этим аккаунтом.</p>'+
+      '<p class="sm">Аккаунт подключен. Загрузи данные или сохрани текущие.</p>'+
       '<div class="cloud-user">'+(currentUser.email||currentUser.id)+'</div>'+
       '<div class="cloud-auth-msg" id="cloudAuthMsg"></div>'+
       '<button type="button" class="btn bp full" id="cloudSyncBtn">Загрузить мои данные</button>'+
@@ -244,7 +323,7 @@ function showAuth(){
     root.innerHTML=
       '<div class="cloud-auth-card">'+
       '<h2>Вход в облако</h2>'+
-      '<p class="sm">У каждого аккаунта свои данные — они не пересекаются с чужими.</p>'+
+      '<p class="sm">Данные аккаунта не пересекаются с другими.</p>'+
       '<div class="cloud-auth-msg" id="cloudAuthMsg"></div>'+
       '<div class="field"><input type="email" id="cloudEmailIn" placeholder="Email" autocomplete="username" inputmode="email"></div>'+
       '<div class="field"><input type="password" id="cloudPassIn" placeholder="Пароль" autocomplete="current-password"></div>'+
@@ -287,39 +366,32 @@ function showAuth(){
       await loadSDK();
       var c=client();
       if(!c) throw new Error('Клиент не готов');
-
-      var r;
-      if(signup){
-        r=await c.auth.signUp({email:email, password:password});
-      }else{
-        r=await c.auth.signInWithPassword({email:email, password:password});
-      }
+      var r=signup
+        ? await c.auth.signUp({email:email, password:password})
+        : await c.auth.signInWithPassword({email:email, password:password});
       if(r.error) throw r.error;
 
       if(signup){
         if(r.data && r.data.session){
-          setMsg('Аккаунт создан, вход…', true);
+          setMsg('Аккаунт создан', true);
           await onSession(r.data.session);
           closeAuth();
-          toast('Готово — ты в облаке');
+          toast('В облаке');
         }else{
-          setMsg('Проверь почту для подтверждения, потом войди', true);
+          setMsg('Подтверди email из письма, потом войди', true);
         }
       }else{
-        if(!r.data||!r.data.session){
-          throw new Error('Сессия не создана. Проверь email/пароль или подтверждение почты.');
-        }
-        setMsg('Вход… загружаю данные', true);
+        if(!r.data||!r.data.session) throw new Error('Сессия не создана');
+        setMsg('Загружаю данные…', true);
         await onSession(r.data.session);
         closeAuth();
-        toast('Вход выполнен');
       }
     }catch(e){
       var m=e && (e.message||e.error_description||String(e));
       if(/invalid login|invalid credentials/i.test(m)) m='Неверный email или пароль';
       else if(/email not confirmed/i.test(m)) m='Подтверди email по ссылке из письма';
-      else if(/user already/i.test(m)) m='Такой email уже есть — нажми «Войти»';
-      else if(/rate limit|too many/i.test(m)) m='Слишком много попыток, подожди минуту';
+      else if(/user already/i.test(m)) m='Email уже есть — нажми «Войти»';
+      else if(/rate limit|too many/i.test(m)) m='Слишком много попыток';
       setMsg(m);
     }finally{
       if(loginBtn) loginBtn.disabled=false;
@@ -331,11 +403,8 @@ function showAuth(){
   var sb2=document.getElementById('cloudSignBtn');
   if(lb) lb.onclick=function(){ doAuth(false); };
   if(sb2) sb2.onclick=function(){ doAuth(true); };
-
   var pass=document.getElementById('cloudPassIn');
-  if(pass) pass.addEventListener('keydown', function(e){
-    if(e.key==='Enter') doAuth(false);
-  });
+  if(pass) pass.addEventListener('keydown', function(e){ if(e.key==='Enter') doAuth(false); });
 
   var syncBtn=document.getElementById('cloudSyncBtn');
   if(syncBtn) syncBtn.onclick=async function(){
@@ -343,11 +412,15 @@ function showAuth(){
     syncBtn.disabled=true;
     try{
       var cloud=await loadFromCloud();
+      var local=readLocal()||window.STATE;
       if(cloud){
-        applyState(cloud, 'Данные из облака загружены');
-        setMsg('Готово', true);
+        var merged=mergeStates(local, cloud);
+        applyState(merged, 'Загружено: операций ~'+score(merged), true);
+        setMsg('Данные на месте ('+score(merged)+')', true);
+        await saveToCloud(true);
       }else{
-        setMsg('В облаке пока пусто — сохрани текущие данные');
+        setMsg('В облаке пусто для этого аккаунта');
+        toast('В облаке нет сохранённых данных');
       }
     }catch(e){
       setMsg(e.message||'Ошибка загрузки');
@@ -361,36 +434,24 @@ function showAuth(){
     setMsg('Сохранение…');
     saveBtn.disabled=true;
     var ok=await saveToCloud(true);
-    setMsg(ok?'Сохранено':'Ошибка сохранения', ok);
+    setMsg(ok?'Сохранено в облако':'Ошибка сохранения', ok);
     saveBtn.disabled=false;
   };
 
   var lo=document.getElementById('cloudLogout');
   if(lo) lo.onclick=async function(){
     lo.disabled=true;
-    setMsg('Выход…');
-    try{
-      await client().auth.signOut({scope:'local'});
-    }catch(_){}
-    currentUser=null;
-    ready=false;
-    lastSent='';
+    try{ await client().auth.signOut({scope:'local'}); }catch(_){}
+    currentUser=null; ready=false; lastSent='';
     updateAccountUI();
-    try{
-      var empty=typeof window.defaultState==='function'?window.defaultState():{};
-      localStorage.setItem(LOCAL_BASE, JSON.stringify(empty));
-      if(window.setAppState) window.setAppState(empty);
-    }catch(_){}
-    toast('Вышли из облака');
+    toast('Вышли');
     closeAuth();
   };
 }
 
 async function onSession(session){
   if(!session||!session.user){
-    currentUser=null;
-    ready=false;
-    updateAccountUI();
+    currentUser=null; ready=false; updateAccountUI();
     return;
   }
   if(loading) return;
@@ -401,18 +462,19 @@ async function onSession(session){
     updateAccountUI();
 
     var cloud=await loadFromCloud();
+    var local=readLocal()||(window.STATE||null);
+
     if(cloud && score(cloud)>0){
-      applyState(cloud, 'Данные аккаунта загружены');
+      var merged=mergeStates(local, cloud);
+      applyState(merged, 'Данные аккаунта загружены', false);
+      if(score(local)>0) saveToCloud(true).catch(function(){});
+    }else if(local && score(local)>0){
+      applyState(local, 'Локальные данные → облако', true);
+      await saveToCloud(true);
+    }else if(cloud){
+      applyState(cloud, 'Облако подключено', false);
     }else{
-      var local=readLocal();
-      if(local && score(local)>0){
-        applyState(local);
-        await saveToCloud(true);
-        toast('Локальные данные сохранены в облако');
-      }else{
-        var empty=typeof window.defaultState==='function'?window.defaultState():{};
-        applyState(empty);
-      }
+      toast('Вход ок, данных в облаке пока нет');
     }
   }finally{
     loading=false;
@@ -425,18 +487,10 @@ async function bootCloud(){
     var c=client();
     if(!c) throw new Error('no client');
     var res=await c.auth.getSession();
-    if(res.error) console.warn('getSession', res.error);
     await onSession(res.data && res.data.session);
-
     c.auth.onAuthStateChange(function(ev, session){
-      if(ev==='SIGNED_IN' || ev==='TOKEN_REFRESHED' || ev==='INITIAL_SESSION'){
-        onSession(session);
-      }
-      if(ev==='SIGNED_OUT'){
-        currentUser=null;
-        ready=false;
-        updateAccountUI();
-      }
+      if(ev==='SIGNED_IN'||ev==='TOKEN_REFRESHED'||ev==='INITIAL_SESSION') onSession(session);
+      if(ev==='SIGNED_OUT'){ currentUser=null; ready=false; updateAccountUI(); }
     });
   }catch(e){
     console.error('cloud boot', e);
