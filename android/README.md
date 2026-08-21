@@ -1,28 +1,21 @@
 # Фин — Android
 
-Полноценное Android-приложение «Фин» с тем же функционалом, что и веб-Копейка:
+Полноценное приложение «Фин» (логика Копейки 3).
 
-- интерфейс и вся логика
-- ИИ-агент (Groq)
-- голос и wake-word «Привет, Фин / Финн / Фен»
-- долги, расходы, резервы, облако
+## Сборка через GitHub Actions (без Android Studio)
 
-## Как собрать APK
-
-1. Установи [Android Studio](https://developer.android.com/studio)
-2. Открой папку `android` (или скачай репозиторий целиком)
-3. Дождись Gradle Sync
-4. **Build → Build APK(s)**
-5. APK появится в `app/build/outputs/apk/debug/app-debug.apk`
-
-Или из терминала:
-
-```bash
-cd android
-./gradlew assembleDebug
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-```
+1. Открой репозиторий на GitHub → вкладка **Actions**
+2. Слева выбери **Build Fin APK**
+3. **Run workflow** → Run workflow
+4. Дождись зелёной галочки (5–15 мин)
+5. Открой этот запуск → **Artifacts** → скачай **Fin-APK**
+6. Распакуй zip → внутри `Fin-debug.apk`
+7. Установи на телефон (разреши установку из неизвестных источников)
 
 При первом запуске разреши **микрофон**.
 
-Ключ Groq: в приложении ⚙ → Ключ Groq (хранится только на устройстве).
+Ключ Groq: ⚙ в приложении (только на устройстве).
+
+## Локальная сборка (по желанию)
+
+Android Studio → Open папку `android` → Build APK.
