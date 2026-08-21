@@ -48,6 +48,8 @@ public class MainActivity extends AppCompatActivity {
 
     private static final int REQ_MIC = 1001;
     private static final String UPDATE_URL = "https://raw.githubusercontent.com/clubvine44-gif/kopeyka3/main/update.json";
+    private static final String PREFS_NAME = "fin_update_prefs";
+    private static final String PREF_DISMISSED_CODE = "dismissed_version_code";
     private WebView webView;
     private SwipeRefreshLayout refreshLayout;
     private PermissionRequest pendingMicRequest;
@@ -209,7 +211,8 @@ public class MainActivity extends AppCompatActivity {
                 String apkUrl = j.optString("apkUrl", "");
                 String notes = j.optString("notes", "");
                 int localCode = getPackageManager().getPackageInfo(getPackageName(), 0).versionCode;
-                if (remoteCode > localCode && !apkUrl.isEmpty()) {
+                int dismissedCode = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getInt(PREF_DISMISSED_CODE, 0);
+                if (remoteCode > localCode && remoteCode > dismissedCode && !apkUrl.isEmpty()) {
                     runOnUiThread(() -> showUpdateDialog(remoteCode, remoteName, apkUrl, notes));
                 }
             } catch (Exception ignored) { }
@@ -222,8 +225,11 @@ public class MainActivity extends AppCompatActivity {
         new AlertDialog.Builder(this)
                 .setTitle("Доступно обновление")
                 .setMessage(message)
-                .setNegativeButton("Позже", null)
+                .setNegativeButton("Позже", (d, w) ->
+                        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                                .putInt(PREF_DISMISSED_CODE, code).apply())
                 .setPositiveButton("Установить", (d, w) -> downloadUpdate(apkUrl, name))
+                .setCancelable(false)
                 .show();
     }
 
