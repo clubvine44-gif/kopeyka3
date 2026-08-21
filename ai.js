@@ -2,7 +2,7 @@
 'use strict';
 var GROQ_KEY='kopeyka_groq_key';
 var GROQ_URL='https://api.groq.com/openai/v1/chat/completions';
-var MODEL='llama-3.1-8b-instant';
+var MODEL='openai/gpt-oss-20b';
 
 function getKey(){try{return (localStorage.getItem(GROQ_KEY)||'').trim();}catch(e){return '';}}
 function setKey(k){try{k=String(k||'').trim();if(k)localStorage.setItem(GROQ_KEY,k);else localStorage.removeItem(GROQ_KEY);}catch(e){}}
