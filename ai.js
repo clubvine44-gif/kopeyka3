@@ -13,7 +13,6 @@ function debts(){return(window.STATE&&Array.isArray(window.STATE.debts))?window.
 function obligations(){return(window.STATE&&Array.isArray(window.STATE.obligations))?window.STATE.obligations:[];}
 function stem(s){
   var q=norm(s);
-  /* жёстко снимаем падежные окончания, в т.ч. ёжику/ёжика/ёжиком */
   return q.replace(/(иями|ями|ами|ого|ему|ому|ыми|ими|ией|ей|ий|ый|ой|ом|ем|ам|ям|ах|ях|ою|ею|у|ю|а|я|ы|и|е|о)$/,'');
 }
 function resolveDebt(name){
@@ -33,44 +32,97 @@ function resolveDebt(name){
   return null;
 }
 function resolveObligation(name,amount){var arr=obligations(),a=n(amount);if(a>0){var byAmount=arr.filter(function(x){return x.active!==false&&n(x.amount)===a;});if(byAmount.length===1)return byAmount[0];}var q=norm(name);if(!q)return null;return arr.find(function(x){return x.active!==false&&norm(x.name)===q;})||arr.find(function(x){var xn=norm(x.name),xs=stem(xn),qs=stem(q);return xn.indexOf(q)!==-1||q.indexOf(xn)!==-1||xs===qs;})||null;}
-function normalizeActions(result){if(!result||!Array.isArray(result.actions))return result;result.actions=result.actions.map(function(a){if(!a||typeof a!=='object')return a;if(a.type==='add_expense'){var nm=String(a.name||'').trim();var q=norm(nm);if(/зубн.*щет|зубы|щетк/.test(q))nm='Зубная щётка';if(/футбол.*мяч|футбольн.*мяч/.test(q))nm='Футбольный мяч';a.name=nm;if(window.kopeykaEngine&&window.kopeykaEngine.classifyName)a.category=/зубн.*щет/.test(q)?'Хозтовары':/футбол.*мяч|футбольн.*мяч/.test(q)?'Развлечения':window.kopeykaEngine.classifyName(nm,a.category);}if(a.type==='increase_debt'||a.type==='pay_debt'||a.type==='delete_debt'){var d=resolveDebt(a.name);if(d)a.name=d.name;}if(a.type==='delete_obligation'){var o=resolveObligation(a.name,a.amount);if(o){a.name=o.name;a.amount=n(o.amount);a.id=o.id;}}return a;});return result;}
+function inferType(a,summary){
+  if(!a||typeof a!=='object')return a;
+  if(a.type)return a;
+  var s=norm(summary||a.summary||a.text||'');
+  var t=norm(a.action||a.op||a.command||'');
+  if(t)a.type=t;
+  else if(/удал.*долг|delete.?debt/.test(s)||(/долг/.test(s)&&/удал/.test(s)))a.type='delete_debt';
+  else if(/плат[её]ж.*долг|pay.?debt|погас/.test(s))a.type='pay_debt';
+  else if(/увелич.*долг|increase.?debt/.test(s))a.type='increase_debt';
+  else if(/новый долг|add.?debt/.test(s))a.type='add_debt';
+  else if(/удал.*расход|delete.?expense/.test(s))a.type='delete_expense';
+  else if(/удал.*доход|delete.?income/.test(s))a.type='delete_income';
+  else if(/удал.*резерв|delete.?reserve/.test(s))a.type='delete_reserve';
+  else if(/удал.*обязат|delete.?obligation/.test(s))a.type='delete_obligation';
+  else if(/расход|add.?expense|купил/.test(s))a.type='add_expense';
+  else if(/доход|add.?income|зарплат/.test(s))a.type='add_income';
+  else if(/резерв.*полож|deposit/.test(s))a.type='reserve_deposit';
+  else if(/резерв.*сня|withdraw/.test(s))a.type='reserve_withdraw';
+  return a;
+}
+function normalizeActions(result){
+  if(!result||!Array.isArray(result.actions))return result;
+  var summary=result.summary||result.text||'';
+  result.actions=result.actions.map(function(a){
+    if(!a||typeof a!=='object')return a;
+    a=inferType(a,summary);
+    if(a.type==='add_expense'){
+      var nm=String(a.name||'').trim();var q=norm(nm);
+      if(/зубн.*щет|зубы|щетк/.test(q))nm='Зубная щётка';
+      if(/футбол.*мяч|футбольн.*мяч/.test(q))nm='Футбольный мяч';
+      a.name=nm;
+      if(window.kopeykaEngine&&window.kopeykaEngine.classifyName)
+        a.category=/зубн.*щет/.test(q)?'Хозтовары':/футбол.*мяч|футбольн.*мяч/.test(q)?'Развлечения':window.kopeykaEngine.classifyName(nm,a.category);
+    }
+    if(a.type==='increase_debt'||a.type==='pay_debt'||a.type==='delete_debt'){
+      var d=resolveDebt(a.name||a.debt||a.target);
+      if(d)a.name=d.name;
+    }
+    if(a.type==='delete_obligation'){
+      var o=resolveObligation(a.name,a.amount);
+      if(o){a.name=o.name;a.amount=n(o.amount);a.id=o.id;}
+    }
+    return a;
+  }).filter(function(a){return a&&a.type;});
+  if(result.mode==='action'&&!result.actions.length){
+    result.mode='answer';
+    result.text=result.text||result.summary||'Не понял действие. Повтори, например: «удали долг ёжику».';
+  }
+  return result;
+}
+/* Без \b — в JS граница слова не работает с кириллицей */
 function localIntent(text){
   var t=norm(text),m,amount,name;
-  /* Удалить долг — любые формулировки */
-  if(/\b(удали|удалить|убери|убрать|снеси|сотри)\b/.test(t)&&/\bдолг/.test(t)){
-    name=t.replace(/\b(удали|удалить|убери|убрать|снеси|сотри)\b/g,'')
-           .replace(/\bдолг(?:а|у|ом|е|и)?\b/g,'')
-           .replace(/\bна\s+\d[\d\s]*/g,'')
+  t=t.replace(/^(привет\s+)?(финн?|фенн?|фынн?|fin+n?)\s*/i,'').trim();
+  if(!t)return null;
+
+  if(/(удали|удалить|убери|убрать|снеси|сотри)/.test(t)&&/долг/.test(t)){
+    name=t.replace(/(удали|удалить|убери|убрать|снеси|сотри)/g,'')
+           .replace(/долг(а|у|ом|е|и)?/g,'')
+           .replace(/на\s+\d[\d\s]*/g,'')
            .trim();
     var dd=resolveDebt(name);
     if(dd)return{mode:'action',text:null,summary:'Удалить долг «'+dd.name+'»',actions:[{type:'delete_debt',name:dd.name}]};
     var list=debts().map(function(d){return d.name;}).join(', ');
-    return{mode:'answer',text:list?'Не нашла долг «'+(name||'')+'». Есть: '+list+'.':'В Копейке нет долгов.',summary:null,actions:[]};
+    return{mode:'answer',text:list?'Не нашёл долг «'+(name||'')+'». Есть: '+list+'.':'В Копейке нет долгов.',summary:null,actions:[]};
   }
-  /* Платёж по долгу: дай к долгу / внеси в долг / отдал */
-  m=t.match(/(?:дай|дать|дал|дала|отдал|отдала|внеси|внести|внесла|кинь|кинул|погаси|погасить|заплати|заплатил)\s+(?:к\s+|по\s+|на\s+|в\s+)?(?:долг(?:у|а|е)?\s+)?(.+?)\s+(\d[\d\s]*(?:[.,]\d+)?)/);
-  if(m&&(/долг/.test(t)||resolveDebt(m[1]))){
-    var dPay=resolveDebt(m[1]);
-    amount=n(String(m[2]).replace(/\s/g,'').replace(',','.'));
+
+  m=t.match(/(дай|дать|дал|дала|отдал|отдала|внеси|внести|внесла|кинь|кинул|погаси|погасить|заплати|заплатил)\s+(к\s+|по\s+|на\s+|в\s+)?(долг(у|а|е)?\s+)?(.+?)\s+(\d[\d\s]*(?:[.,]\d+)?)/);
+  if(m&&(/долг/.test(t)||resolveDebt(m[5]||m[4]))){
+    var who=m[5]||m[4];
+    var dPay=resolveDebt(who);
+    amount=n(String(m[6]||m[m.length-1]).replace(/\s/g,'').replace(',','.'));
     if(dPay&&amount>0)return{mode:'action',text:null,summary:'Платёж по долгу «'+dPay.name+'»: '+fmt(amount),actions:[{type:'pay_debt',name:dPay.name,amount:amount}]};
   }
-  /* Увеличить долг */
-  m=t.match(/(?:увеличь|увеличить|добавь\s+к\s+сумме)\s+(?:долг\s+)?(.+?)\s+(?:на|на сумму)\s+(\d[\d\s]*)/);
+
+  m=t.match(/(увеличь|увеличить|добавь к сумме)\s+(долг\s+)?(.+?)\s+(на|на сумму)\s+(\d[\d\s]*)/);
   if(m&&/долг/.test(t)){
-    var dInc=resolveDebt(m[1]);amount=n(m[2].replace(/\s/g,''));
+    var dInc=resolveDebt(m[3]);amount=n(m[5].replace(/\s/g,''));
     if(dInc&&amount>0)return{mode:'action',text:null,summary:'Увеличить долг «'+dInc.name+'» на '+fmt(amount),actions:[{type:'increase_debt',name:dInc.name,amount:amount}]};
   }
-  /* Удалить обязательный */
-  m=t.match(/(?:удали|удалить|убери)\s+(?:обязательный\s+)?(?:платеж|платёж)\s*(?:на|в размере)?\s*(\d[\d\s]*)/);
+
+  m=t.match(/(удали|удалить|убери)\s+(обязательный\s+)?(платеж|платёж)\s*(на|в размере)?\s*(\d[\d\s]*)/);
   if(m){
-    amount=n(m[1].replace(/\s/g,''));
+    amount=n(m[5].replace(/\s/g,''));
     var o=resolveObligation('',amount);
     if(o)return{mode:'action',text:null,summary:'Удалить обязательный «'+o.name+'»',actions:[{type:'delete_obligation',name:o.name,amount:n(o.amount),id:o.id}]};
   }
-  /* Расход */
-  m=t.match(/(?:купил|купила|потратил|потратила|куплено|расход)\s+(.+?)\s+(?:за|на)\s+(\d[\d\s]*(?:[.,]\d+)?)/);
+
+  m=t.match(/(купил|купила|потратил|потратила|куплено|расход)\s+(.+?)\s+(за|на)\s+(\d[\d\s]*(?:[.,]\d+)?)/);
   if(m){
-    name=m[1].trim();amount=n(String(m[2]).replace(/\s/g,'').replace(',','.'));
+    name=m[2].trim();amount=n(String(m[4]).replace(/\s/g,'').replace(',','.'));
     if(amount>0)return{mode:'action',text:null,summary:'Добавить расход',actions:[{type:'add_expense',amount:amount,name:name,category:window.kopeykaEngine&&window.kopeykaEngine.classifyName?window.kopeykaEngine.classifyName(name,'Прочее'):'Прочее',date:new Date().toISOString().slice(0,10)}]};
   }
   return null;
@@ -84,17 +136,16 @@ function askConversation(history,userText){
     var debtNames=debts().map(function(d){return d.name;}).join(', ')||'нет';
     var system=[
       'Ты — Фин, финансовый ассистент Копейки. Отвечай только по-русски.',
-      'АКТУАЛЬНОЕ СОСТОЯНИЕ содержит income, expenses, debts, reserves, obligations.',
       'Долги сейчас: '+debtNames+'.',
-      'Имена долгов сопоставляй без регистра, ё/е и падежа: «Ёжик», «ёжику», «Ежика», «ежиком» — один долг.',
-      '«удали долг ёжику» / «убери долг ёжик» → delete_debt с точным именем из списка debts.',
-      '«дай к долгу X N» / «внеси в долг X N» → pay_debt.',
+      'Каждый объект в actions ОБЯЗАН иметь поле type (строка). Без type действие не выполнится.',
+      'Пример delete: {"type":"delete_debt","name":"Ёжик"}',
+      'Пример pay: {"type":"pay_debt","name":"Ёжик","amount":189}',
+      'Имена долгов: Ёжик/ёжику/ежика — один объект. Бери точное name из списка долгов.',
       'Никогда не удаляй доход вместо долга.',
-      'Если просят изменить данные — mode action. Подтверждение делает интерфейс.',
-      'Ответ строго JSON: {"mode":"answer","text":"...","summary":null,"actions":[]} или {"mode":"action","text":null,"summary":"...","actions":[...]}.',
-      'Действия: add_expense, add_income, add_debt, pay_debt, increase_debt, reserve_deposit, reserve_withdraw, add_obligation, delete_debt, delete_income, delete_expense, delete_reserve, delete_obligation, delete_last, change_last, set_opening_balance, set_day_rate, set_night_rate, change_shift.'
+      'JSON только: {"mode":"answer","text":"...","summary":null,"actions":[]} или {"mode":"action","text":null,"summary":"...","actions":[{"type":"..."}]}.',
+      'type: add_expense, add_income, add_debt, pay_debt, increase_debt, reserve_deposit, reserve_withdraw, add_obligation, delete_debt, delete_income, delete_expense, delete_reserve, delete_obligation, delete_last, change_last, set_opening_balance, set_day_rate, set_night_rate, change_shift.'
     ].join('\n');
-    var messages=[{role:'system',content:system+'\n\nПОЛНЫЙ КОНТЕКСТ:\n'+getContext()}];
+    var messages=[{role:'system',content:system+'\n\nКОНТЕКСТ:\n'+getContext()}];
     (history||[]).slice(-12).forEach(function(item){messages.push({role:item.role==='assistant'?'assistant':'user',content:String(item.content||'')});});
     messages.push({role:'user',content:String(userText||'')});
     var controller=typeof AbortController!=='undefined'?new AbortController():null;
