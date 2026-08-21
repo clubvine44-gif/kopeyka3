@@ -44,25 +44,10 @@ function exact(st,month){
   var last=new Date(t.getFullYear(),t.getMonth()+1,0).getDate();
   var left=Math.max(1,last-t.getDate()+1);
   var daily=available>0?Math.floor(available/left):0;
-  var reserves=(st.reserves||[]).map(function(r){
-    return {name:r.name,saved:n(r.saved),target:n(r.target)};
-  });
-  var debts=(st.debts||[]).map(function(d){
-    return {name:d.name,left:Math.max(0,n(d.total)-n(d.paid)),total:n(d.total)};
-  });
   return {
-    month:month,
-    cash:cash,
-    available:available,
-    daily:daily,
-    daysLeft:left,
-    income:inc,
-    expense:exp,
-    reserves:reserves,
-    debts:debts,
-    openingBalance:open,
-    dayRate:n(s.dayRate),
-    nightRate:n(s.nightRate)
+    month:month,cash:cash,available:available,daily:daily,daysLeft:left,
+    income:inc,expense:exp,debtTotal:debt,obligDue:obligDue,
+    openingBalance:open,dayRate:n(s.dayRate),nightRate:n(s.nightRate)
   };
 }
 
@@ -72,30 +57,52 @@ function buildContext(){
   var calc=exact(st,month);
   var recent=[];
   (st.expenses||[]).slice(-5).forEach(function(e){
-    recent.push('−'+n(e.amount)+' '+(e.note||e.category||''));
+    recent.push('расход −'+n(e.amount)+' '+(e.note||e.category||''));
   });
   (st.income||[]).slice(-3).forEach(function(i){
-    recent.push('+'+n(i.amount)+' '+(i.note||'доход'));
+    recent.push('доход +'+n(i.amount)+' '+(i.note||'доход'));
+  });
+  var debts=(st.debts||[]).map(function(d){
+    return d.name+': осталось '+Math.max(0,n(d.total)-n(d.paid))+' из '+n(d.total);
+  });
+  var reserves=(st.reserves||[]).map(function(r){
+    return r.name+': '+n(r.saved)+(r.target?'/'+n(r.target):'');
   });
   return [
-    'CURRENT STATE (точные цифры):',
+    'CURRENT STATE:',
     JSON.stringify(calc),
-    'Недавние операции: '+(recent.join('; ')||'нет')
+    'Долги: '+(debts.join('; ')||'нет'),
+    'Резервы: '+(reserves.join('; ')||'нет'),
+    'Недавние: '+(recent.join('; ')||'нет')
   ].join('\n');
 }
 
 function systemPrompt(){
   return [
-    'Ты — Копейка, голосовой финансовый помощник в приложении учёта денег.',
-    'Отвечай ТОЛЬКО одним JSON-объектом без markdown и без текста вокруг.',
+    'Ты — Копейка, финансовый ассистент. Отвечай ТОЛЬКО одним JSON без markdown.',
     'Форматы:',
-    '{"mode":"answer","text":"ответ на русском","summary":null,"actions":[]}',
-    '{"mode":"action","text":"что сделаю","summary":"кратко","actions":[{"type":"add_expense","amount":100,"name":"сигареты","category":"Сигареты","reserve":null,"day":null,"date":null,"shift":null}]}',
-    'Типы actions: add_expense, add_income, reserve_deposit, reserve_withdraw, add_debt, pay_debt, add_obligation, delete_last, change_last, set_opening_balance, set_day_rate, set_night_rate.',
-    'Для add_expense указывай category из: Продукты, Алкоголь, Сигареты, Хозтовары, Бытовая химия, Кафе, Связь, Проезд, Жильё, Здоровье, Красота, Одежда, Развлечения, Подписки, Техника, Дети, Животные, Прочее.',
-    'amount — число в рублях. Не выдумывай цифры: бери только из CURRENT STATE.',
-    'На вопросы — mode answer. На команды добавить/удалить/изменить — mode action.',
-    'Пиши коротко и по делу, по-русски.'
+    '{"mode":"answer","text":"ответ","summary":null,"actions":[]}',
+    '{"mode":"action","text":"что сделаю","summary":"кратко","actions":[{...}]}',
+    'Типы actions:',
+    'add_expense {amount, name, category}',
+    'add_income {amount, name}',
+    'reserve_deposit {amount, reserve}',
+    'reserve_withdraw {amount, reserve}',
+    'add_debt {amount, name}',
+    'pay_debt {amount, name}',
+    'delete_debt {name} — УДАЛИТЬ ДОЛГ по имени. НЕ доход и НЕ расход!',
+    'delete_income {name} — удалить доход',
+    'delete_expense {name} — удалить расход',
+    'delete_reserve {name}',
+    'delete_obligation {name}',
+    'delete_last {target} — target: expense|income|debt|any',
+    'change_last {amount, target}',
+    'add_obligation {amount, name, day}',
+    'set_opening_balance {amount}',
+    'КРИТИЧНО: «удали долг X» → type delete_debt, name X. Никогда не delete_last и не delete_income вместо долга.',
+    '«удали доход» → delete_income. «удали расход» → delete_expense.',
+    'Суммы — числа. Категории: Продукты, Алкоголь, Сигареты, Хозтовары, Бытовая химия, Кафе, Связь, Проезд, Жильё, Здоровье, Красота, Одежда, Развлечения, Подписки, Техника, Дети, Животные, Прочее.',
+    'Цифры только из CURRENT STATE. Коротко, по-русски.'
   ].join('\n');
 }
 
@@ -130,17 +137,8 @@ function askConversation(history,userText){
       try{if(ctrl)ctrl.abort();}catch(e){}
       reject(new Error('Groq не ответил за 20 секунд'));
     },20000);
-    var body={
-      model:MODEL,
-      temperature:0.1,
-      max_tokens:800,
-      messages:messages
-    };
-    var opts={
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-      body:JSON.stringify(body)
-    };
+    var body={model:MODEL,temperature:0.05,max_tokens:800,messages:messages};
+    var opts={method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify(body)};
     if(ctrl)opts.signal=ctrl.signal;
     fetch(GROQ_URL,opts).then(function(r){
       return r.text().then(function(txt){
@@ -194,13 +192,8 @@ function testKey(){
 }
 
 window.kopeykaAI={
-  getKey:getKey,
-  setKey:setKey,
-  hasKey:hasKey,
-  ask:ask,
-  askAgent:askAgent,
-  askConversation:askConversation,
-  testKey:testKey,
-  buildContext:buildContext
+  getKey:getKey,setKey:setKey,hasKey:hasKey,
+  ask:ask,askAgent:askAgent,askConversation:askConversation,
+  testKey:testKey,buildContext:buildContext
 };
 })();
