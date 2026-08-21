@@ -56,53 +56,81 @@ function buildContext(){
   var month=(st.settings&&st.settings.month)||new Date().toISOString().slice(0,7);
   var calc=exact(st,month);
   var recent=[];
-  (st.expenses||[]).slice(-5).forEach(function(e){
-    recent.push('расход −'+n(e.amount)+' '+(e.note||e.category||''));
+  (st.expenses||[]).slice(-8).forEach(function(e){
+    recent.push('расход −'+n(e.amount)+' «'+(e.note||e.category||'')+'»');
   });
-  (st.income||[]).slice(-3).forEach(function(i){
-    recent.push('доход +'+n(i.amount)+' '+(i.note||'доход'));
+  (st.income||[]).slice(-5).forEach(function(i){
+    recent.push('доход +'+n(i.amount)+' «'+(i.note||'доход')+'»');
   });
   var debts=(st.debts||[]).map(function(d){
-    return d.name+': осталось '+Math.max(0,n(d.total)-n(d.paid))+' из '+n(d.total);
+    return '«'+d.name+'»: осталось '+Math.max(0,n(d.total)-n(d.paid))+' из '+n(d.total);
   });
   var reserves=(st.reserves||[]).map(function(r){
-    return r.name+': '+n(r.saved)+(r.target?'/'+n(r.target):'');
+    return '«'+r.name+'»: '+n(r.saved)+(r.target?'/'+n(r.target):'');
+  });
+  var oblig=(st.obligations||[]).filter(function(o){return o.active!==false;}).map(function(o){
+    return '«'+o.name+'»: '+n(o.amount)+'/мес день '+n(o.day);
   });
   return [
-    'CURRENT STATE:',
+    'CURRENT STATE (точные цифры):',
     JSON.stringify(calc),
-    'Долги: '+(debts.join('; ')||'нет'),
+    'Долги в системе: '+(debts.join('; ')||'нет'),
     'Резервы: '+(reserves.join('; ')||'нет'),
-    'Недавние: '+(recent.join('; ')||'нет')
+    'Обязательные: '+(oblig.join('; ')||'нет'),
+    'Недавние операции: '+(recent.join('; ')||'нет'),
+    'Имена долгов/резервов/операций бери ТОЧНО из списков выше.'
   ].join('\n');
 }
 
 function systemPrompt(){
   return [
-    'Ты — Копейка, финансовый ассистент. Отвечай ТОЛЬКО одним JSON без markdown.',
-    'Форматы:',
-    '{"mode":"answer","text":"ответ","summary":null,"actions":[]}',
-    '{"mode":"action","text":"что сделаю","summary":"кратко","actions":[{...}]}',
-    'Типы actions:',
-    'add_expense {amount, name, category}',
-    'add_income {amount, name}',
-    'reserve_deposit {amount, reserve}',
-    'reserve_withdraw {amount, reserve}',
-    'add_debt {amount, name}',
-    'pay_debt {amount, name}',
-    'delete_debt {name} — УДАЛИТЬ ДОЛГ по имени. НЕ доход и НЕ расход!',
-    'delete_income {name} — удалить доход',
-    'delete_expense {name} — удалить расход',
-    'delete_reserve {name}',
-    'delete_obligation {name}',
-    'delete_last {target} — target: expense|income|debt|any',
-    'change_last {amount, target}',
-    'add_obligation {amount, name, day}',
-    'set_opening_balance {amount}',
-    'КРИТИЧНО: «удали долг X» → type delete_debt, name X. Никогда не delete_last и не delete_income вместо долга.',
-    '«удали доход» → delete_income. «удали расход» → delete_expense.',
-    'Суммы — числа. Категории: Продукты, Алкоголь, Сигареты, Хозтовары, Бытовая химия, Кафе, Связь, Проезд, Жильё, Здоровье, Красота, Одежда, Развлечения, Подписки, Техника, Дети, Животные, Прочее.',
-    'Цифры только из CURRENT STATE. Коротко, по-русски.'
+    'Ты — Копейка, встроенный финансовый ассистент. Понимаешь ЛЮБЫЕ формулировки на русском, даже сленг и с опечатками.',
+    'Отвечай ТОЛЬКО одним JSON-объектом, без markdown и без текста вокруг.',
+    '',
+    'Форматы ответа:',
+    '{"mode":"answer","text":"краткий ответ","summary":null,"actions":[]}',
+    '{"mode":"action","text":"что сделаю","summary":"коротко для кнопки","actions":[{"type":"...","amount":123,"name":"...","category":null,"reserve":null,"day":null,"date":null,"shift":null,"target":null}]}',
+    '',
+    '=== ТИПЫ ДЕЙСТВИЙ ===',
+    'add_expense — расход/покупка (купил, потратил, заплатил за товар, расход)',
+    'add_income — доход (получил, зарплата, аванс, премия, подработка, доход)',
+    'add_debt — НОВЫЙ долг (новый долг, должен, занял у меня)',
+    'pay_debt — ПЛАТЁЖ ПО СУЩЕСТВУЮЩЕМУ долгу: уменьшить остаток (дал, отдал, внёс в долг, дал к долгу, погасил часть, заплатил по долгу, кинул на долг, добавь к погашению)',
+    'increase_debt — увеличить СУММУ долга (должен ещё, долг вырос, добавь к сумме долга) — НЕ путать с pay_debt',
+    'reserve_deposit — положить в резерв (в резерв, отложи, накопи, пополни резерв, внеси в подушку)',
+    'reserve_withdraw — снять с резерва',
+    'add_obligation — обязательный платёж каждый месяц',
+    'delete_debt — удалить долг по имени',
+    'delete_income — удалить доход по названию/комментарию',
+    'delete_expense — удалить расход по названию',
+    'delete_reserve — удалить резерв',
+    'delete_obligation — удалить обязательный',
+    'delete_last — удалить последнюю операцию (target: expense|income|debt|any)',
+    'change_last — изменить сумму последней операции',
+    'set_opening_balance — выставить начальный остаток/кассу',
+    '',
+    '=== ПРИМЕРЫ ПОНИМАНИЯ ===',
+    '«дай к долгу папе 189» / «дать к долгу папе 189 рублей» / «внеси в долг папа 189» / «отдал папе 189» → pay_debt amount=189 name="папа" (или точное имя из списка Долги)',
+    '«добавь долг папе 5000» / «новый долг папа 5000» → add_debt amount=5000 name="папа"',
+    '«долг папе ещё плюс 500» / «увеличь долг папа на 500» → increase_debt amount=500 name="папа"',
+    '«в резерв подушка 1000» / «отложи 1000 на подушку» → reserve_deposit amount=1000 reserve="Подушка безопасности" (или как в списке)',
+    '«купил сигареты 100» / «сигареты сто» / «расход 100 сигареты» → add_expense amount=100 name="сигареты" category="Сигареты"',
+    '«зарплата 4800» / «получил 4800» → add_income amount=4800 name="зарплата"',
+    '«удали долг папа» / «убери долг папе» → delete_debt name="папа"',
+    '«удали расход сигареты» / «удали сигареты» (если это была операция) → delete_expense name="сигареты"',
+    '«удали доход зарплата» → delete_income name="зарплата"',
+    '«удали последнюю» → delete_last target="any"',
+    '«сколько в кассе» / «что с долгами» → mode answer',
+    '',
+    '=== ЖЁСТКИЕ ПРАВИЛА ===',
+    '1) «дать/внести/отдать/кинуть К долгу / ПО долгу / НА долг» = pay_debt, НЕ add_expense и НЕ add_debt.',
+    '2) Имя долга/резерва ищи в CURRENT STATE (списки Долги и Резервы). Бери ближайшее совпадение (папа ≈ Папа ≈ папе).',
+    '3) «удали X» — смотри, что такое X: долг → delete_debt, доход → delete_income, расход → delete_expense. Не путай.',
+    '4) amount всегда число в рублях без текста.',
+    '5) Не выдумывай суммы и имена — только из STATE или из фразы пользователя.',
+    '6) Категории расходов: Продукты, Алкоголь, Сигареты, Хозтовары, Бытовая химия, Кафе, Связь, Проезд, Жильё, Здоровье, Красота, Одежда, Развлечения, Подписки, Техника, Дети, Животные, Прочее.',
+    '7) Перед сомнением лучше mode answer с уточнением, чем неверное действие.',
+    '8) Коротко, по-русски, по делу.'
   ].join('\n');
 }
 
@@ -137,7 +165,7 @@ function askConversation(history,userText){
       try{if(ctrl)ctrl.abort();}catch(e){}
       reject(new Error('Groq не ответил за 20 секунд'));
     },20000);
-    var body={model:MODEL,temperature:0.05,max_tokens:800,messages:messages};
+    var body={model:MODEL,temperature:0.05,max_tokens:900,messages:messages};
     var opts={method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify(body)};
     if(ctrl)opts.signal=ctrl.signal;
     fetch(GROQ_URL,opts).then(function(r){
