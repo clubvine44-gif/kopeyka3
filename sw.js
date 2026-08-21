@@ -1,5 +1,5 @@
-const CACHE='kopeyka3-v29';
-const APP_SHELL=['./','./index.html','./app.js?v=16','./cloud.js?v=16','./onboard.js?v=13','./voice.js?v=13','./ai.js?v=4','./products.js?v=6','./voice2.js?v=13','./widget.html','./manifest.json','./icon.svg'];
+const CACHE='kopeyka3-v30';
+const APP_SHELL=['./','./index.html','./app.js?v=17','./cloud.js?v=16','./onboard.js?v=13','./voice.js?v=14','./ai.js?v=5','./products.js?v=6','./voice2.js?v=14','./widget.html','./manifest.json','./icon.svg'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(APP_SHELL)).then(()=>self.skipWaiting()));});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim()));});
 self.addEventListener('fetch',event=>{
