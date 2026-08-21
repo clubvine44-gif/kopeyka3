@@ -7,7 +7,6 @@ var MODEL='llama-3.1-8b-instant';
 function getKey(){try{return (localStorage.getItem(GROQ_KEY)||'').trim();}catch(e){return '';}}
 function setKey(k){try{k=String(k||'').trim();if(k)localStorage.setItem(GROQ_KEY,k);else localStorage.removeItem(GROQ_KEY);}catch(e){}}
 function hasKey(){return !!getKey();}
-function fmtN(n){return Math.round(+n||0).toLocaleString('ru-RU');}
 
 function buildContext(){
   var st=window.STATE||{};
@@ -29,123 +28,116 @@ function buildContext(){
   var t=new Date(),dayNum=t.getDate(),last=new Date(t.getFullYear(),t.getMonth()+1,0).getDate();
   var leftDays=Math.max(1,last-dayNum+1),daily=available>0?Math.floor(available/leftDays):0;
   var res=(st.reserves||[]).map(function(r){
-    return r.name+'|saved:'+Math.round(Number(r.saved||0))+'|target:'+Math.round(Number(r.target||0));
+    return r.name+' saved='+Math.round(Number(r.saved||0))+' target='+Math.round(Number(r.target||0));
   }).join('; ')||'нет';
   var debts=(st.debts||[]).map(function(d){
-    return d.name+'|left:'+Math.max(0,Math.round(Number(d.total||0)-Number(d.paid||0)))+'|total:'+Math.round(Number(d.total||0));
+    return d.name+' left='+Math.max(0,Math.round(Number(d.total||0)-Number(d.paid||0)));
   }).join('; ')||'нет';
-  var obligs=(st.obligations||[]).filter(function(o){return o.active!==false;}).map(function(ob){
-    return ob.name+'|amount:'+Math.round(Number(ob.amount||0))+'|day:'+ob.day;
-  }).join('; ')||'нет';
-  var lastOps=[];
-  (st.expenses||[]).slice(-3).forEach(function(e){lastOps.push('ex:'+(e.note||e.category)+' -'+Math.round(e.amount));});
-  (st.income||[]).slice(-2).forEach(function(i){lastOps.push('in:'+(i.note||'доход')+' +'+Math.round(i.amount));});
+  var recent=[];
+  (st.expenses||[]).slice(-3).forEach(function(e){recent.push((e.note||e.category)+' -'+Math.round(e.amount));});
+  (st.income||[]).slice(-2).forEach(function(i){recent.push((i.note||'доход')+' +'+Math.round(i.amount));});
   return [
-    'month='+month,
-    'cash='+Math.round(cash),
-    'available='+Math.round(available),
-    'daily='+daily,
-    'daysLeft='+leftDays,
-    'incomeMonth='+Math.round(inc),
-    'expenseMonth='+Math.round(exp),
-    'reserves=['+res+']',
-    'debts=['+debts+']',
-    'obligations=['+obligs+']',
-    'recent=['+lastOps.join(', ')+']',
-    'dayRate='+Math.round(Number(st.settings&&st.settings.dayRate||0)),
-    'nightRate='+Math.round(Number(st.settings&&st.settings.nightRate||0))
+    'месяц='+month,
+    'касса='+Math.round(cash),
+    'доступно='+Math.round(available),
+    'лимит_на_день='+daily,
+    'дней_осталось='+leftDays,
+    'доходы_месяц='+Math.round(inc),
+    'расходы_месяц='+Math.round(exp),
+    'резервы: '+res,
+    'долги: '+debts,
+    'недавние: '+(recent.join(', ')||'нет')
   ].join('\n');
 }
 
 function systemPrompt(){
   return [
-    'Ты — Копейка, полный голосовой управляющий приложением учёта денег.',
-    'Пользователь говорит по-русски как угодно. Твоя задача: понять намерение и ответить СТРОГО одним JSON-объектом без markdown и без текста вокруг.',
-    '',
-    'Форматы ответа (выбери один):',
-    '1) Только информация: {"mode":"answer","text":"краткий ответ на русском"}',
-    '2) Действие(я): {"mode":"action","summary":"что будет сделано","actions":[...]}',
-    'Можно несколько actions в массиве.',
-    '',
-    'Типы actions:',
-    '{"type":"add_expense","amount":100,"note":"сигареты","category":"Сигареты"}',
-    '{"type":"add_income","amount":5000,"note":"Зарплата"}',
-    '{"type":"add_reserve","name":"Подушка безопасности","target":100000,"deposit":5000}',
-    '{"type":"reserve_deposit","name":"Подушка безопасности","amount":1000}',
-    '{"type":"reserve_withdraw","name":"Подушка безопасности","amount":500}',
-    '{"type":"add_debt","name":"Вася","amount":10000}',
-    '{"type":"pay_debt","name":"Вася","amount":500}',
-    '{"type":"add_obligation","name":"Алименты","amount":15000,"day":25}',
-    '{"type":"delete_last"}',
-    '{"type":"change_last","amount":120}',
-    '',
-    'Категории расходов (выбери ближайшую): Продукты, Алкоголь, Сигареты, Хозтовары, Бытовая химия, Кафе, Связь, Проезд, Жильё, Здоровье, Красота, Одежда, Развлечения, Подписки, Техника, Дети, Животные, Обязательные, Долг, Прочее.',
-    'Если товар знаком (ром→Алкоголь, сигареты→Сигареты, зубочистка→Хозтовары) — ставь правильную category.',
-    'amount всегда число в рублях. «сто тысяч»=100000, «полторы тысячи»=1500.',
-    'Если неясна сумма для операции — mode answer, спроси сумму.',
-    'Если спрашивают цифры/как работает приложение — mode answer, опираясь на STATE.',
-    'Не выдумывай суммы. STATE ниже — единственный источник цифр.',
-    'summary — короткая фраза для экрана подтверждения на русском.'
+    'Ты голосовой управляющий приложения Копейка (учёт денег). Ответь ТОЛЬКО JSON без markdown.',
+    'Вариант 1 — ответ: {"mode":"answer","text":"текст на русском"}',
+    'Вариант 2 — действие: {"mode":"action","summary":"кратко что сделать","actions":[...]}',
+    'actions types:',
+    'add_expense: amount, note, category (Продукты|Алкоголь|Сигареты|Хозтовары|Бытовая химия|Кафе|Связь|Проезд|Жильё|Здоровье|Красота|Одежда|Развлечения|Подписки|Техника|Дети|Животные|Прочее)',
+    'add_income: amount, note',
+    'add_reserve: name, target, deposit',
+    'reserve_deposit: name, amount',
+    'reserve_withdraw: name, amount',
+    'add_debt: name, amount',
+    'pay_debt: name, amount',
+    'add_obligation: name, amount, day',
+    'delete_last',
+    'change_last: amount',
+    'Суммы — числа. сто тысяч=100000. Не выдумывай цифры из STATE.',
+    'На вопросы про цифры/как работает — mode answer.'
   ].join('\n');
 }
 
 function parseAgentJson(raw){
   var t=String(raw||'').trim();
-  t=t.replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/\s*```$/,'').trim();
-  var start=t.indexOf('{'), end=t.lastIndexOf('}');
-  if(start>=0&&end>start)t=t.slice(start,end+1);
+  t=t.replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
+  var a=t.indexOf('{'), b=t.lastIndexOf('}');
+  if(a>=0&&b>a)t=t.slice(a,b+1);
   var obj=JSON.parse(t);
-  if(!obj||typeof obj!=='object')throw new Error('Неверный ответ ИИ');
+  if(!obj||typeof obj!=='object')throw new Error('bad json');
   if(obj.mode!=='answer'&&obj.mode!=='action'){
-    if(obj.text)obj.mode='answer';
-    else if(obj.actions)obj.mode='action';
-    else throw new Error('Непонятный ответ ИИ');
+    if(typeof obj.text==='string')obj.mode='answer';
+    else if(Array.isArray(obj.actions))obj.mode='action';
+    else if(obj.type){obj.mode='action';obj.actions=[obj];obj.summary=obj.summary||obj.type;}
+    else throw new Error('unknown mode');
   }
+  if(obj.mode==='action'&&!Array.isArray(obj.actions))obj.actions=[];
   return obj;
 }
 
 function askAgent(userText){
   return new Promise(function(resolve,reject){
     var key=getKey();
-    if(!key){reject(new Error('Нет ключа Groq'));return;}
+    if(!key){reject(new Error('Нет ключа Groq в настройках'));return;}
+    var ctrl=typeof AbortController!=='undefined'?new AbortController():null;
+    var timer=setTimeout(function(){try{if(ctrl)ctrl.abort();}catch(e){}reject(new Error('Таймаут ИИ (15с)'));},15000);
     var body={
       model:MODEL,
-      temperature:0.2,
-      max_tokens:500,
-      response_format:{type:'json_object'},
+      temperature:0.15,
+      max_tokens:400,
       messages:[
         {role:'system',content:systemPrompt()},
-        {role:'user',content:'STATE:\n'+buildContext()+'\n\nUSER:\n'+String(userText||'')}
+        {role:'user',content:'STATE:\n'+buildContext()+'\n\nUSER: '+String(userText||'')}
       ]
     };
-    fetch(GROQ_URL,{
+    var opts={
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
       body:JSON.stringify(body)
-    }).then(function(r){
-      return r.json().then(function(j){
-        if(!r.ok)throw new Error((j&&j.error&&j.error.message)||('HTTP '+r.status));
-        var txt=j&&j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content;
-        if(!txt)throw new Error('Пустой ответ');
-        resolve(parseAgentJson(txt));
+    };
+    if(ctrl)opts.signal=ctrl.signal;
+    fetch(GROQ_URL,opts).then(function(r){
+      return r.text().then(function(txt){
+        clearTimeout(timer);
+        var j=null;
+        try{j=JSON.parse(txt);}catch(e){throw new Error('Ответ API не JSON');}
+        if(!r.ok){
+          var msg=(j&&j.error&&j.error.message)||('HTTP '+r.status);
+          if(r.status===401)msg='Неверный ключ Groq — обнови в ⚙';
+          if(r.status===429)msg='Лимит Groq, подожди минуту';
+          throw new Error(msg);
+        }
+        var content=j&&j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content;
+        if(!content)throw new Error('Пустой ответ модели');
+        resolve(parseAgentJson(content));
       });
-    }).catch(reject);
+    }).catch(function(e){
+      clearTimeout(timer);
+      if(e&&e.name==='AbortError')reject(new Error('Таймаут ИИ'));
+      else reject(e);
+    });
   });
 }
 
 function ask(userText){
   return askAgent(userText).then(function(obj){
     if(obj.mode==='answer')return obj.text||'';
-    return obj.summary||'Готово к выполнению';
+    return obj.summary||'Готово';
   });
 }
 
-window.kopeykaAI={
-  getKey:getKey,
-  setKey:setKey,
-  hasKey:hasKey,
-  ask:ask,
-  askAgent:askAgent,
-  buildContext:buildContext
-};
+window.kopeykaAI={getKey:getKey,setKey:setKey,hasKey:hasKey,ask:ask,askAgent:askAgent,buildContext:buildContext};
 })();
