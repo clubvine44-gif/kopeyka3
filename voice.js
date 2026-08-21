@@ -2,7 +2,6 @@
 'use strict';
 if(window.__kopeykaVoiceLoader)return;
 window.__kopeykaVoiceLoader=true;
-function muteSpeech(){try{if(!window.speechSynthesis)return;window.speechSynthesis.cancel();}catch(e){}}
 function load(src,done){
   var s=document.createElement('script');
   s.src=src;
@@ -12,7 +11,6 @@ function load(src,done){
   document.head.appendChild(s);
 }
 function addButton(){
-  muteSpeech();
   if(document.getElementById('kopeykaAiFab'))return;
   var st=document.createElement('style');
   st.textContent='#kopeykaAiFab{position:fixed;right:20px;bottom:calc(82px + env(safe-area-inset-bottom,0px));z-index:90;width:46px;height:46px;border-radius:50%;border:1px solid rgba(229,167,94,.45);background:#16181F;color:#F0C384;box-shadow:0 6px 20px rgba(0,0,0,.35);font-size:21px;display:flex;align-items:center;justify-content:center}#kopeykaAiFab:active{transform:scale(.94)}#btnVoice{display:none!important}';
@@ -24,14 +22,12 @@ function addButton(){
   b.textContent='◉';
   b.onclick=function(){
     if(window.kopeykaAssistant&&window.kopeykaAssistant.open)window.kopeykaAssistant.open();
-    else alert('Ассистент ещё загружается. Подожди секунду и нажми снова.');
+    else alert('Ассистент ещё загружается. Подожди секунду.');
   };
   document.body.appendChild(b);
-  if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js?v=36').catch(function(){});
 }
 load('ai.js?v=10',function(){
-  load('assistant.js?v=4',function(){
-    muteSpeech();
+  load('assistant.js?v=5',function(){
     if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',addButton);
     else addButton();
   });
