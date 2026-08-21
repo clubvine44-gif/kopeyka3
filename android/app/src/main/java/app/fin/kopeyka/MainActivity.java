@@ -30,7 +30,7 @@ public class MainActivity extends AppCompatActivity {
     private PermissionRequest pendingMicRequest;
 
     @Override
-    protected void onCreate(Bundle savedInstanceedInstanceState) {
+    protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         FrameLayout root = new FrameLayout(this);
