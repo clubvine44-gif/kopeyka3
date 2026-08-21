@@ -1,7 +1,6 @@
 package com.kopeyka.ttsbridge
 
 import android.app.Activity
-import android.graphics.Color
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.view.Gravity
@@ -10,57 +9,54 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import java.util.Locale
 
-class MainActivity : Activity(), TextToSpeech.OnInitListener {
+class MainActivity : Activity() {
     private var tts: TextToSpeech? = null
-    private lateinit var statusView: TextView
+    private lateinit var status: TextView
+    private lateinit var engines: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.TOP
             setPadding(32, 48, 32, 32)
-            setBackgroundColor(Color.WHITE)
         }
-        val title = TextView(this).apply {
-            text = "Копейка — тест голоса"
+        root.addView(TextView(this).apply {
+            text = "TTS-движки Android"
             textSize = 24f
-            setTextColor(Color.BLACK)
-            setPadding(0, 0, 0, 24)
-        }
-        root.addView(title, LinearLayout.LayoutParams(-1, -2))
-        statusView = TextView(this).apply {
-            text = "Инициализация TTS…"
+        })
+        status = TextView(this).apply {
+            text = "Проверяю установленные движки…"
             textSize = 16f
-            setTextColor(Color.DKGRAY)
-            setPadding(0, 0, 0, 24)
+            setPadding(0, 24, 0, 24)
         }
-        root.addView(statusView, LinearLayout.LayoutParams(-1, -2))
-        val button = Button(this).apply {
-            text = "Проверить голос SherpaTTS"
-            textSize = 16f
-            setOnClickListener { speak("Привет, Никита. Это тест голоса Копейки.") }
-        }
-        root.addView(button, LinearLayout.LayoutParams(-1, -2))
+        root.addView(status)
+        engines = TextView(this).apply { textSize = 15f }
+        root.addView(engines)
+        root.addView(Button(this).apply {
+            text = "Проверить текущий голос"
+            setOnClickListener { tts?.speak("Привет, Никита. Это тест выбранного голосового движка.", TextToSpeech.QUEUE_FLUSH, null, "test") }
+        })
         setContentView(root)
-        tts = TextToSpeech(this, this)
-    }
 
-    override fun onInit(status: Int) {
-        if (status == TextToSpeech.SUCCESS) {
-            val result = tts?.setLanguage(Locale("ru", "RU")) ?: TextToSpeech.ERROR
-            statusView.text = if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                "TTS запущен, но русский язык недоступен"
-            } else {
-                "TTS готов. Выбранный системный движок будет использоваться Android."
-            }
-        } else {
-            statusView.text = "Не удалось запустить TTS"
+        val manager = getSystemService(TextToSpeech.Engine::class.java)
+        val installed = manager?.voices?.map { it.name }?.distinct()?.sorted() ?: emptyList()
+        val defaultEngine = TextToSpeech(this) { init ->
+            status.text = if (init == TextToSpeech.SUCCESS) {
+                "Системный TTS успешно запущен"
+            } else "Не удалось запустить системный TTS"
         }
-    }
+        tts = defaultEngine
 
-    private fun speak(text: String) {
-        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "kopeyka-test")
+        val enginePackages = packageManager.queryIntentServices(
+            android.content.Intent(TextToSpeech.Engine.INTENT_ACTION_TTS_SERVICE), 0
+        ).map { it.serviceInfo.packageName }.distinct()
+        engines.text = if (enginePackages.isEmpty()) {
+            "Установленные TTS-движки не найдены"
+        } else {
+            "Найденные TTS-движки:\n\n" + enginePackages.joinToString("\n")
+        }
     }
 
     override fun onDestroy() {
