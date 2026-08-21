@@ -18,42 +18,52 @@ var ONES={ноль:0,один:1,одна:1,одну:1,два:2,две:2,три:3
 var TENS={двадцать:20,тридцать:30,сорок:40,пятьдесят:50,шестьдесят:60,семьдесят:70,восемьдесят:80,девяносто:90};
 var HUND={сто:100,двести:200,триста:300,четыреста:400,пятьсот:500,шестьсот:600,семьсот:700,восемьсот:800,девятьсот:900};
 
+function cleanForAmount(s){
+  s=String(s||'').toLowerCase().replace(/ё/g,'е');
+  s=s.replace(/([а-яa-z])[.,]+([а-яa-z])/gi,'$1 $2');
+  s=s.replace(/([а-яa-z])[.,]+/gi,'$1 ');
+  s=s.replace(/[.,]+([а-яa-z])/gi,' $1');
+  s=s.replace(/(\d)[.,\s](\d{3})(?!\d)/g,'$1$2');
+  s=s.replace(/[^a-zа-я0-9\s-]+/gi,' ');
+  return s.replace(/\s+/g,' ').trim();
+}
 function wordsNumber(s){
-  var a=norm(s).replace(/руб(лей|ля|ль)?/g,'').split(' ').filter(Boolean);
+  var a=cleanForAmount(s).replace(/руб(лей|ля|ль)?/g,'').split(' ').filter(Boolean);
   var total=0,cur=0,seen=false;
   for(var i=0;i<a.length;i++){
-    var w=a[i];
+    var w=a[i].replace(/^[.,]+|[.,]+$/g,'');
+    if(!w)continue;
     if(/^\d+$/.test(w)){cur+=Number(w);seen=true;continue;}
     if(ONES[w]!==undefined){cur+=ONES[w];seen=true;continue;}
     if(TENS[w]!==undefined){cur+=TENS[w];seen=true;continue;}
     if(HUND[w]!==undefined){cur+=HUND[w];seen=true;continue;}
-    if(w==='тысяча'||w==='тысячи'||w==='тысяч'||w==='тыс'){total+=(cur||1)*1000;cur=0;seen=true;continue;}
+    if(w==='тысяча'||w==='тысячи'||w==='тысяч'||w==='тыс'||w==='тыща'||w==='тыщи'){total+=(cur||1)*1000;cur=0;seen=true;continue;}
     if(w==='миллион'||w==='миллиона'||w==='миллионов'){total+=(cur||1)*1000000;cur=0;seen=true;continue;}
   }
   return seen?total+cur:0;
 }
-
 function extractAmount(text){
-  var s=norm(text);
-  var mix=s.match(/(\d+(?:[.,]\d+)?)\s*(тыс(?:яч(?:а|и)?)?|миллион(?:а|ов)?)/);
-  if(mix){
-    var base=Number(String(mix[1]).replace(',','.'));
-    if(isFinite(base)&&base>0){
-      if(mix[2].indexOf('миллион')===0)return Math.round(base*1000000);
-      return Math.round(base*1000);
+  var s=cleanForAmount(text);
+  if(/тысяч|тыс\b|тыща|тыщи|миллион/.test(s)){
+    var mix=s.match(/(\d+)\s*(тыс(?:яч(?:а|и)?)?|тыща|тыщи|миллион(?:а|ов)?)/);
+    if(mix){
+      var base=Number(mix[1]);
+      if(isFinite(base)&&base>0){
+        if(String(mix[2]).indexOf('миллион')===0)return Math.round(base*1000000);
+        return Math.round(base*1000);
+      }
     }
-  }
-  if(/тысяч|тыс\b|миллион/.test(s)||hasAny(s,['сто','двести','триста','четыреста','пятьсот','тысяча','тысячи'])){
     var w=wordsNumber(s);
     if(w>0)return w;
   }
-  var m=s.match(/(?:^|\s)(\d{1,3}(?:[\s\u00a0]\d{3})+|\d{4,7}|\d{1,3})(?:[.,](\d+))?(?:\s*(?:руб(?:лей|ля|ль)?|р|₽))?(?=\s|$)/);
+  var onlyWords=wordsNumber(s);
+  if(onlyWords>0 && !/\d/.test(s))return onlyWords;
+  var m=s.match(/(?:^|\s)(\d{1,9})(?:\s*(?:руб(?:лей|ля|ль)?|р))?(?=\s|$)/);
   if(m){
-    var intPart=String(m[1]).replace(/[\s\u00a0]/g,'');
-    var n=Number(intPart+(m[2]?'.'+m[2]:''));
-    if(isFinite(n)&&n>0)return Math.round(n);
+    var n=Number(m[1]);
+    if(isFinite(n)&&n>0&&n<1e9)return Math.round(n);
   }
-  return wordsNumber(s);
+  return onlyWords||0;
 }
 
 var PRODUCT_RULES=window.KOPEYKA_PRODUCTS||[];
@@ -120,7 +130,7 @@ function startReserveFlow(nameHint,amountHint,isWd){var name=nameHint||'';functi
 
 function processCommand(text){
   var s=norm(text);
-  var amount=extractAmount(s);
+  var amount=extractAmount(text);
   var type=typeFromText(s);
   var cat=categoryFromText(s);
   var item=itemFromText(s);
