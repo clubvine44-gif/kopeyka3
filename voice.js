@@ -13,7 +13,7 @@ function load(src,done){
 function addButton(){
   if(document.getElementById('kopeykaAiFab'))return;
   var st=document.createElement('style');
-  st.textContent='#kopeykaAiFab{position:fixed;right:20px;bottom:calc(82px + env(safe-area-inset-bottom,0px));z-index:90;width:46px;height:46px;border-radius:50%;border:1px solid rgba(229,167,94,.45);background:#16181F;color:#F0C384;box-shadow:0 6px 20px rgba(0,0,0,.35);font-size:21px;display:flex;align-items:center;justify-content:center}#kopeykaAiFab:active{transform:scale(.94)}#btnVoice{display:none!important}';
+  st.textContent='#kopeykaAiFab{position:fixed;right:20px;bottom:calc(82px + env(safe-area-inset-bottom,0px));z-index:90;width:46px;height:46px;border-radius:50%;border:1px solid rgba(229,167,94,.45);background:#16181F;color:#F0C384;box-shadow:0 6px 20px rgba(0,0,0,.35);font-size:21px;display:flex;align-items:center;justify-content:center}#kopeykaAiFab:active{transform:scale(.94)}#btnVoice{display:none!important}#onboard:not([style*=flex]){display:none!important}';
   document.head.appendChild(st);
   var b=document.createElement('button');
   b.id='kopeykaAiFab';
@@ -26,8 +26,8 @@ function addButton(){
   };
   document.body.appendChild(b);
 }
-load('ai.js?v=10',function(){
-  load('assistant.js?v=5',function(){
+load('ai.js?v=11',function(){
+  load('assistant.js?v=6',function(){
     if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',addButton);
     else addButton();
   });
