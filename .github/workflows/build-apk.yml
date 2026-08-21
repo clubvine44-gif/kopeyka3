@@ -55,77 +55,28 @@ jobs:
           for f in index.html app.js ai.js assistant-v2.js assistant.js cloud.js engine.js finn-wake.js voice.js onboard.js products.js sw.js manifest.json icon.svg widget.html ai-bootstrap.js; do
             if [ -f "$f" ]; then cp -f "$f" "$WWW/"; fi
           done
-          # native: без service worker
           if [ -f "$WWW/index.html" ]; then
-            sed -i "s/if('serviceWorker' in navigator)[^<]*/window.__FIN_NATIVE=true;/g" "$WWW/index.html" || true
+            python3 - <<'PY'
+          from pathlib import Path
+          p = Path('android/app/src/main/assets/www/index.html')
+          t = p.read_text(encoding='utf-8')
+          t = t.replace("if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js?v=46').catch(function(){});", 'window.__FIN_NATIVE=true;')
+          if 'window.__FIN_NATIVE' not in t:
+              t = t.replace('<script>', '<script>window.__FIN_NATIVE=true;', 1)
+          p.write_text(t, encoding='utf-8')
+          print('index patched')
+          PY
           fi
           echo "Assets:"
           ls -la "$WWW"
 
-      - name: Ensure Android resources
+      - name: PNG launcher icons
         run: |
-          set -e
-          RES="android/app/src/main/res"
-          mkdir -p "$RES/values" "$RES/drawable" "$RES/mipmap-anydpi-v26" "$RES/xml"
-
-          cat > "$RES/values/strings.xml" << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <string name="app_name">Фин</string>
-          </resources>
-          EOF
-
-          cat > "$RES/values/colors.xml" << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="ic_launcher_background">#0A0B0E</color>
-          </resources>
-          EOF
-
-          cat > "$RES/values/themes.xml" << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="Theme.Fin" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-                  <item name="android:statusBarColor">#0A0B0E</item>
-                  <item name="android:navigationBarColor">#0A0B0E</item>
-                  <item name="android:windowBackground">#0A0B0E</item>
-                  <item name="colorPrimary">#E5A75E</item>
-                  <item name="colorPrimaryVariant">#E5A75E</item>
-                  <item name="colorOnPrimary">#1A1208</item>
-                  <item name="android:windowLightStatusBar">false</item>
-              </style>
-          </resources>
-          EOF
-
-          cat > "$RES/drawable/ic_launcher_foreground.xml" << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="108dp"
-              android:height="108dp"
-              android:viewportWidth="108"
-              android:viewportHeight="108">
-              <path
-                  android:fillColor="#E5A75E"
-                  android:pathData="M54,28c-14.4,0 -26,11.6 -26,26s11.6,26 26,26 26,-11.6 26,-26 -11.6,-26 -26,-26z"/>
-              <path
-                  android:fillColor="#1A1208"
-                  android:pathData="M42,50h8v20h-8zM50,42h8v28h-8zM58,46h8v24h-8z"/>
-          </vector>
-          EOF
-
-          cat > "$RES/mipmap-anydpi-v26/ic_launcher.xml" << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-              <background android:drawable="@color/ic_launcher_background"/>
-              <foreground android:drawable="@drawable/ic_launcher_foreground"/>
-          </adaptive-icon>
-          EOF
-
-          # PNG fallback launcher (solid) for density folders
-          python3 - << 'PY'
+          python3 - <<'PY'
           from pathlib import Path
           from struct import pack
           import zlib
+
           def write_png(path, w, h, rgba):
               def chunk(tag, data):
                   return pack('>I', len(data)) + tag + data + pack('>I', zlib.crc32(tag + data) & 0xffffffff)
@@ -136,8 +87,9 @@ jobs:
               data += chunk(b'IDAT', zlib.compress(raw, 9))
               data += chunk(b'IEND', b'')
               Path(path).write_bytes(b'\x89PNG\r\n\x1a\n' + data)
+
           base = Path('android/app/src/main/res')
-          for dens, size in [('mdpi',48),('hdpi',72),('xhdpi',96),('xxhdpi',144),('xxxhdpi',192)]:
+          for dens, size in [('mdpi', 48), ('hdpi', 72), ('xhdpi', 96), ('xxhdpi', 144), ('xxxhdpi', 192)]:
               d = base / f'mipmap-{dens}'
               d.mkdir(parents=True, exist_ok=True)
               write_png(d / 'ic_launcher.png', size, size, (229, 167, 94, 255))
@@ -151,16 +103,15 @@ jobs:
 
       - name: Build Debug APK
         working-directory: android
-        run: |
-          gradle assembleDebug --no-daemon --stacktrace
+        run: gradle assembleDebug --no-daemon --stacktrace
 
       - name: Locate APK
-        id: apk
         run: |
-          APK=$(find android/app/build/outputs/apk -name "*.apk" | head -n 1)
-          echo "path=$APK" >> "$GITHUB_OUTPUT"
+          set -e
+          APK=$(find android/app/build/outputs/apk -name '*.apk' | head -n 1)
+          echo "Found: $APK"
           ls -lh "$APK"
-          cp "$APK" "Fin-debug.apk"
+          cp "$APK" Fin-debug.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
