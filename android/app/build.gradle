@@ -14,9 +14,28 @@ android {
         versionName "1.1.0"
     }
 
+    signingConfigs {
+        release {
+            def ks = System.getenv('FIN_KEYSTORE_PATH')
+            def kp = System.getenv('FIN_KEYSTORE_PASSWORD')
+            def ka = System.getenv('FIN_KEY_ALIAS')
+            def kpp = System.getenv('FIN_KEY_PASSWORD')
+            if (ks && kp && ka && kpp) {
+                storeFile = file(ks)
+                storePassword = kp
+                keyAlias = ka
+                keyPassword = kpp
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            versionNameSuffix "-debug"
+        }
         release {
             minifyEnabled false
+            signingConfig signingConfigs.release
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
