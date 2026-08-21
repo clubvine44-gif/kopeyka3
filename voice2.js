@@ -55,7 +55,69 @@ function startListening(){if(!SR){say('Голосовой ввод недост�
 function btnStyle(primary,danger){var base='flex:1;min-width:100px;min-height:52px;padding:14px 12px;border-radius:14px;font-weight:700;font-size:16px;';if(primary)return base+'background:linear-gradient(135deg,#F0C384,#E5A75E);color:#1A1208;border:none;';if(danger)return base+'background:rgba(248,113,113,.18);color:#F87171;border:1px solid rgba(248,113,113,.4);';return base+'background:#1C1F28;color:#F2F3F7;border:1px solid rgba(255,255,255,.14);'}
 function actionsBar(html){return '<div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">'+html+'</div>';}
 function confirmBox(title,details,onYes){var card=document.querySelector('#voiceModal .voice-card');if(!card)return;pendingStep=null;speak(String(title||''));card.innerHTML='<div style="display:flex;justify-content:space-between;text-align:left"><div><div style="font-size:11px;color:#9AA0B0">Проверь</div><div style="font-size:19px;font-weight:700">'+esc(title)+'</div></div><button type="button" id="voiceClose" style="width:36px;height:36px;border-radius:10px;background:#1C1F28;border:none;color:#F2F3F7;font-size:24px">×</button></div><div style="padding:18px 8px;font-size:16px;line-height:1.7">'+details+'</div>'+actionsBar('<button type="button" id="voiceYes" style="'+btnStyle(true)+'">Подтвердить</button><button type="button" id="voiceNo" style="'+btnStyle()+'">Ещё раз</button><button type="button" id="voiceCancel" style="'+btnStyle(false,true)+'">Отменить</button>');document.getElementById('voiceClose').onclick=closeUI;document.getElementById('voiceCancel').onclick=closeUI;document.getElementById('voiceNo').onclick=function(){renderVoice();startListening();};document.getElementById('voiceYes').onclick=function(){try{onYes();say('Готово','Сделано');setTimeout(closeUI,900);}catch(e){say('Ошибка',e.message||'');}};}
-function runAgent(text){var card=document.querySelector('#voiceModal .voice-card');function paintAnswer(ans){say('Ответ',ans);if(!card)return;card.innerHTML='<div style="display:flex;justify-content:space-between;text-align:left"><div><div style="font-size:11px;color:#9AA0B0">ИИ</div><div style="font-size:19px;font-weight:700">Копейка</div></div><button type="button" id="voiceClose" style="width:36px;height:36px;border-radius:10px;background:#1C1F28;border:none;color:#F2F3F7;font-size:24px">×</button></div><div style="padding:20px 8px;font-size:17px;line-height:1.6">'+esc(ans)+'</div>'+actionsBar('<button type="button" id="voiceAgain" style="'+btnStyle(true)+'">Ещё</button><button type="button" id="voiceCancel" style="'+btnStyle(false,true)+'">Закрыть</button>');document.getElementById('voiceClose').onclick=closeUI;document.getElementById('voiceCancel').onclick=closeUI;document.getElementById('voiceAgain').onclick=function(){renderVoice();startListening();};}function execActions(actions){(actions||[]).forEach(function(a){if(!a||!a.type)return;if(a.type==='add_expense')addExpense(Number(a.amount)||0,a.category||'Прочее',a.note||a.item||'');else if(a.type==='add_income')addIncome(Number(a.amount)||0,a.note||'Доход');else if(a.type==='add_reserve')createOrTopupReserve(a.name||'Резерв',Number(a.target)||0,Number(a.deposit)||0,false);else if(a.type==='reserve_deposit')createOrTopupReserve(a.name||'',0,Number(a.amount)||0,false);else if(a.type==='reserve_withdraw')createOrTopupReserve(a.name||'',0,Number(a.amount)||0,true);else if(a.type==='add_debt')addDebt(Number(a.amount)||0,a.name||'Долг');else if(a.type==='pay_debt')payDebt(Number(a.amount)||0,a.name||'');else if(a.type==='add_obligation')addObligation(Number(a.amount)||0,a.name||'Платёж',Number(a.day)||25);else if(a.type==='delete_last')deleteLastOp();else if(a.type==='change_last')changeLastAmount(Number(a.amount)||0);});}setUI('Думаю…','');if(card)card.innerHTML='<div style="padding:28px;color:#9AA0B0">Думаю…</div>';window.kopeykaAI.askAgent(text).then(function(obj){if(!obj||obj.mode==='answer'){paintAnswer((obj&&obj.text)||'Готово');return;}var acts=obj.actions||[];if(!acts.length){paintAnswer(obj.summary||'Нечего выполнять');return;}var summary=obj.summary||('Действий: '+acts.length);var details=acts.map(function(a){if(a.type==='add_expense')return 'Расход −'+fmt(a.amount)+' · '+(a.note||'')+' ['+(a.category||'')+']';if(a.type==='add_income')return 'Доход +'+fmt(a.amount)+' · '+(a.note||'');if(a.type==='add_reserve')return 'Резерв «'+(a.name||'')+'»';if(a.type==='reserve_deposit')return 'Пополнить «'+(a.name||'')+'» +'+fmt(a.amount);if(a.type==='reserve_withdraw')return 'Снять «'+(a.name||'')+'» −'+fmt(a.amount);if(a.type==='add_debt')return 'Долг «'+(a.name||'')+'» '+fmt(a.amount);if(a.type==='pay_debt')return 'Платёж долга '+fmt(a.amount);if(a.type==='add_obligation')return 'Обязательный «'+(a.name||'')+'» '+fmt(a.amount);if(a.type==='delete_last')return 'Удалить последнюю';if(a.type==='change_last')return 'Сумму → '+fmt(a.amount);return a.type;}).join('<br>');confirmBox(summary,details,function(){execActions(acts);});}).catch(function(e){processCommandRules(text);});}
+function runAgent(text){
+  var card=document.querySelector('#voiceModal .voice-card');
+  function paintAnswer(ans){
+    say('Ответ',ans);
+    if(!card){if(window.toast)toast(ans);return;}
+    card.innerHTML='<div style="display:flex;justify-content:space-between;text-align:left"><div><div style="font-size:11px;color:#9AA0B0">Копейка</div><div style="font-size:19px;font-weight:700">Ответ</div></div><button type="button" id="voiceClose" style="width:36px;height:36px;border-radius:10px;background:#1C1F28;border:none;color:#F2F3F7;font-size:24px">×</button></div><div style="padding:20px 8px;font-size:17px;line-height:1.6;text-align:left">'+esc(ans)+'</div>'+actionsBar('<button type="button" id="voiceAgain" style="'+btnStyle(true)+'">Ещё</button><button type="button" id="voiceCancel" style="'+btnStyle(false,true)+'">Закрыть</button>');
+    var c=document.getElementById('voiceClose'),x=document.getElementById('voiceCancel'),a=document.getElementById('voiceAgain');
+    if(c)c.onclick=closeUI;if(x)x.onclick=closeUI;if(a)a.onclick=function(){renderVoice();startListening();};
+  }
+  function execActions(actions){
+    (actions||[]).forEach(function(a){
+      if(!a||!a.type)return;
+      if(a.type==='add_expense')addExpense(Number(a.amount)||0,a.category||'Прочее',a.note||a.item||'');
+      else if(a.type==='add_income')addIncome(Number(a.amount)||0,a.note||'Доход');
+      else if(a.type==='add_reserve')createOrTopupReserve(a.name||'Резерв',Number(a.target)||0,Number(a.deposit)||0,false);
+      else if(a.type==='reserve_deposit')createOrTopupReserve(a.name||'',0,Number(a.amount)||0,false);
+      else if(a.type==='reserve_withdraw')createOrTopupReserve(a.name||'',0,Number(a.amount)||0,true);
+      else if(a.type==='add_debt')addDebt(Number(a.amount)||0,a.name||'Долг');
+      else if(a.type==='pay_debt')payDebt(Number(a.amount)||0,a.name||'');
+      else if(a.type==='add_obligation')addObligation(Number(a.amount)||0,a.name||'Платёж',Number(a.day)||25);
+      else if(a.type==='delete_last')deleteLastOp();
+      else if(a.type==='change_last')changeLastAmount(Number(a.amount)||0);
+    });
+  }
+  if(!window.kopeykaAI||!window.kopeykaAI.askAgent){
+    paintAnswer('ИИ не загрузился. Обнови страницу с очисткой кэша.');
+    return;
+  }
+  if(card)card.innerHTML='<div style="padding:28px;color:#9AA0B0">Думаю…</div>';
+  window.kopeykaAI.askAgent(text).then(function(obj){
+    if(!obj||obj.mode==='answer'){
+      paintAnswer((obj&&obj.text)||answerQuery(text));
+      return;
+    }
+    var acts=obj.actions||[];
+    if(!acts.length){paintAnswer(obj.summary||answerQuery(text));return;}
+    var summary=obj.summary||('Действий: '+acts.length);
+    var details=acts.map(function(a){
+      if(a.type==='add_expense')return 'Расход −'+fmt(a.amount)+' ₽ · '+(a.note||a.item||'')+' ['+(a.category||'Прочее')+']';
+      if(a.type==='add_income')return 'Доход +'+fmt(a.amount)+' ₽ · '+(a.note||'Доход');
+      if(a.type==='add_reserve')return 'Резерв «'+(a.name||'')+'», цель '+(a.target||0)+', взнос '+(a.deposit||0);
+      if(a.type==='reserve_deposit')return 'Пополнить «'+(a.name||'')+'» +'+fmt(a.amount)+' ₽';
+      if(a.type==='reserve_withdraw')return 'Снять с «'+(a.name||'')+'» −'+fmt(a.amount)+' ₽';
+      if(a.type==='add_debt')return 'Долг «'+(a.name||'')+'» '+fmt(a.amount)+' ₽';
+      if(a.type==='pay_debt')return 'Платёж долга «'+(a.name||'')+'» '+fmt(a.amount)+' ₽';
+      if(a.type==='add_obligation')return 'Обязательный «'+(a.name||'')+'» '+fmt(a.amount)+' ₽';
+      if(a.type==='delete_last')return 'Удалить последнюю операцию';
+      if(a.type==='change_last')return 'Изменить сумму последней на '+fmt(a.amount)+' ₽';
+      return String(a.type||'?');
+    }).join('<br>');
+    confirmBox(summary,details,function(){execActions(acts);});
+  }).catch(function(e){
+    var msg=(e&&e.message)?e.message:String(e||'ошибка');
+    try{
+      var s=norm(text),amount=extractAmount(text),type=typeFromText(s);
+      if(amount>0||isDeleteLast(s)||isChangeLast(s)||isReserveCmd(s)||isDebtCmd(s)||isObligCmd(s)||type){
+        processCommandRules(text);
+        return;
+      }
+    }catch(e2){}
+    paintAnswer('Не удалось связаться с ИИ: '+msg+'. Попробуй ещё раз или проверь ключ в ⚙.');
+  });
+}
 function processCommand(text){if(window.kopeykaAI&&window.kopeykaAI.hasKey()){runAgent(text);return;}processCommandRules(text);}
 function processCommandRules(text){var s=norm(text);var amount=extractAmount(text);var type=typeFromText(s);var cat=categoryFromText(s);var item=itemFromText(s);if(isQuery(s)||(!amount&&!type&&s.length>2)){say('Ответ',answerQuery(text));return;}if(isChangeLast(s)){if(!amount){say('Какая сумма?','измени последнюю на 120');return;}try{say('Готово',changeLastAmount(amount));setTimeout(closeUI,1200);}catch(e){say('Ошибка',e.message);}return;}if(isDeleteLast(s)){try{say('Готово',deleteLastOp());setTimeout(closeUI,1200);}catch(e){say('Ошибка',e.message);}return;}if(isReserveCmd(s)){var name=matchReserveName(s)||'Резерв';if(amount>0){confirmBox((isWithdraw(s)?'Снять ':'Пополнить ')+fmt(amount),esc(name),function(){createOrTopupReserve(name,0,amount,isWithdraw(s));});}else say('Скажи сумму','резерв подушка 5000');return;}if(type==='income'){if(!amount){say('Сумма?','зарплата 4800');return;}confirmBox('Доход +'+fmt(amount),esc(item||'Доход'),function(){addIncome(amount,item||'Доход');});return;}if(isDebtCmd(s)){if(!amount){say('Сумма?','');return;}var dn=capitalize(stripNoise(s).trim()||'Долг');confirmBox((isPayDebt(s)?'Платёж ':'Долг ')+fmt(amount),esc(dn),function(){isPayDebt(s)?payDebt(amount,dn):addDebt(amount,dn);});return;}if(isObligCmd(s)){if(!amount){say('Сумма?','');return;}var on=capitalize(stripNoise(s).trim()||'Платёж');confirmBox('Обязательный '+fmt(amount),esc(on),function(){addObligation(amount,on,25);});return;}if(!amount){say('Не поняла','сигареты 100 или сколько в кассе');return;}if(!item)item='Расход';if(!cat)cat='Прочее';confirmBox('Расход −'+fmt(amount),esc(item)+' · '+esc(cat),function(){addExpense(amount,cat,item);});}
 function ttsToggleBtn(){var on=ttsOn();return '<button type="button" id="voiceTtsToggle" style="margin-top:12px;width:100%;padding:12px;border-radius:12px;background:'+(on?'rgba(229,167,94,.22)':'#1C1F28')+';border:1px solid rgba(255,255,255,.14);color:#F2F3F7;font-weight:700">'+(on?'Голос: ВКЛ':'Голос: ВЫКЛ')+'</button>';}
