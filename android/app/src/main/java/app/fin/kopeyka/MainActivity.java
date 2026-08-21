@@ -16,6 +16,7 @@ import android.os.Environment;
 import android.provider.Settings;
 import android.view.ViewGroup;
 import android.webkit.PermissionRequest;
+import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -47,12 +48,14 @@ import java.util.concurrent.Executors;
 public class MainActivity extends AppCompatActivity {
 
     private static final int REQ_MIC = 1001;
+    private static final int REQ_FILE_CHOOSER = 2002;
     private static final String UPDATE_URL = "https://raw.githubusercontent.com/clubvine44-gif/kopeyka3/main/update.json";
     private static final String PREFS_NAME = "fin_update_prefs";
     private static final String PREF_DISMISSED_CODE = "dismissed_version_code";
     private WebView webView;
     private SwipeRefreshLayout refreshLayout;
     private PermissionRequest pendingMicRequest;
+    private ValueCallback<Uri[]> filePathCallback;
     private long lastResumeAt = 0L;
     private long updateDownloadId = -1L;
     private final ExecutorService updateExecutor = Executors.newSingleThreadExecutor();
@@ -113,6 +116,7 @@ public class MainActivity extends AppCompatActivity {
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) s.setSafeBrowsingEnabled(false);
         s.setUserAgentString(s.getUserAgentString() + " FinApp/1.1");
+        webView.addJavascriptInterface(new FinBridge(this), "FinBridge");
 
         final WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
@@ -136,6 +140,21 @@ public class MainActivity extends AppCompatActivity {
         });
 
         webView.setWebChromeClient(new WebChromeClient() {
+            @Override public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
+                if (filePathCallback != null) filePathCallback.onReceiveValue(null);
+                filePathCallback = callback;
+                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                intent.setType("*/*");
+                try {
+                    startActivityForResult(Intent.createChooser(intent, "Выбери файл бэкапа"), REQ_FILE_CHOOSER);
+                } catch (Exception e) {
+                    filePathCallback = null;
+                    return false;
+                }
+                return true;
+            }
+
             @Override public void onPermissionRequest(final PermissionRequest request) {
                 boolean needsAudio = false;
                 for (String r : request.getResources()) {
@@ -156,11 +175,30 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void ensureMicPermission() {
+        java.util.List<String> needed = new java.util.ArrayList<>();
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this,
-                    new String[]{Manifest.permission.RECORD_AUDIO}, REQ_MIC);
+            needed.add(Manifest.permission.RECORD_AUDIO);
         }
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+            needed.add(Manifest.permission.POST_NOTIFICATIONS);
+        }
+        if (!needed.isEmpty()) {
+            ActivityCompat.requestPermissions(this, needed.toArray(new String[0]), REQ_MIC);
+        }
+    }
+
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQ_FILE_CHOOSER) return;
+        if (filePathCallback == null) return;
+        Uri[] results = null;
+        if (resultCode == RESULT_OK && data != null && data.getData() != null) {
+            results = new Uri[]{data.getData()};
+        }
+        filePathCallback.onReceiveValue(results);
+        filePathCallback = null;
     }
 
     @Override public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
