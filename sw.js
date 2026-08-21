@@ -1,5 +1,5 @@
-const CACHE='kopeyka3-v20';
-const APP_SHELL=['./','./index.html','./app.js?v=14','./cloud.js?v=16','./onboard.js?v=13','./voice.js?v=4','./voice2.js?v=4','./manifest.json','./icon.svg'];
+const CACHE='kopeyka3-v21';
+const APP_SHELL=['./','./index.html','./app.js?v=14','./cloud.js?v=16','./onboard.js?v=13','./voice.js?v=5','./voice2.js?v=5','./manifest.json','./icon.svg'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(APP_SHELL)).then(()=>self.skipWaiting()));
