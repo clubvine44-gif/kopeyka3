@@ -1,7 +1,7 @@
 (function(){
 'use strict';
 var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-var CATS=['Продукты','Связь','Проезд','Жильё','Здоровье','Развлечения','Одежда','Кафе','Подписки','Обязательные','Долг','Прочее'];
+var CATS=['Продукты','Алкоголь','Сигареты','Хозтовары','Бытовая химия','Кафе','Связь','Проезд','Жильё','Здоровье','Красота','Одежда','Развлечения','Подписки','Техника','Дети','Животные','Обязательные','Долг','Прочее'];
 var RES_PRESETS=['Подушка безопасности','Права','Отпуск','Ремонт','Налог','Больница'];
 var recognition=null,listening=false,pendingStep=null;
 
@@ -14,15 +14,59 @@ function capitalize(s){s=String(s||'').trim();if(!s)return'';return s.charAt(0).
 function fmt(n){return Math.round(+n||0).toLocaleString('ru-RU');}
 function hasAny(s,words){for(var i=0;i<words.length;i++){if(s.indexOf(words[i])!==-1)return true;}return false;}
 
-var ONES={ноль:0,один:1,одна:1,два:2,две:2,три:3,четыре:4,пять:5,шесть:6,семь:7,восемь:8,девять:9,десять:10,одиннадцать:11,двенадцать:12,тринадцать:13,четырнадцать:14,пятнадцать:15,шестнадцать:16,семнадцать:17,восемнадцать:18,девятнадцать:19};
+var ONES={ноль:0,один:1,одна:1,одну:1,два:2,две:2,три:3,четыре:4,пять:5,шесть:6,семь:7,восемь:8,девять:9,десять:10,одиннадцать:11,двенадцать:12,тринадцать:13,четырнадцать:14,пятнадцать:15,шестнадцать:16,семнадцать:17,восемнадцать:18,девятнадцать:19};
 var TENS={двадцать:20,тридцать:30,сорок:40,пятьдесят:50,шестьдесят:60,семьдесят:70,восемьдесят:80,девяносто:90};
 var HUND={сто:100,двести:200,триста:300,четыреста:400,пятьсот:500,шестьсот:600,семьсот:700,восемьсот:800,девятьсот:900};
-function wordsNumber(s){var a=norm(s).replace(/руб(лей|ля)?/g,'').split(' ').filter(Boolean),total=0,cur=0,seen=false;a.forEach(function(w){if(ONES[w]!==undefined){cur+=ONES[w];seen=true;return;}if(TENS[w]!==undefined){cur+=TENS[w];seen=true;return;}if(HUND[w]!==undefined){cur+=HUND[w];seen=true;return;}if(w==='тысяча'||w==='тысячи'||w==='тысяч'){total+=(cur||1)*1000;cur=0;seen=true;return;}if(w==='миллион'||w==='миллиона'||w==='миллионов'){total+=(cur||1)*1000000;cur=0;seen=true;}});return seen?total+cur:0;}
-function extractAmount(text){var s=norm(text);var m=s.match(/(?:^|\s)(\d{1,3}(?:[\s]\d{3})*(?:[.,]\d+)?|\d+(?:[.,]\d+)?)(?:\s*(?:руб(?:лей|ля)?|р|₽))?(?=\s|$)/i);if(m){var n=Number(String(m[1]).replace(/\s/g,'').replace(',','.'));if(isFinite(n)&&n>0)return Math.round(n);}m=s.match(/(?:^|\s)(\d{1,7})(?:\s|$)/);if(m){var n2=Number(m[1]);if(isFinite(n2)&&n2>0&&n2<10000000)return Math.round(n2);}return wordsNumber(s);}
 
-var CATEGORY_RULES=[['Продукты',['майонез','хлеб','булк','батон','молок','кефир','йогурт','сыр','колбас','мяс','куриц','сосиск','рыб','яйц','масл','макарон','лапш','круп','рис','греч','картош','овощ','фрукт','яблок','банан','сахар','соль','мук','продукт','еда','магазин','продовольств','супермаркет','соус','кетчуп','консер','чай','кофе','пакет','салфетк']],['Связь',['телефон','мобильн','связь','интернет','сим карт','симкарт','тариф','пополн телефон','мегафон','мтс','билайн','теле2']],['Проезд',['проезд','автобус','маршрут','метро','троллейбус','такси','билет','бензин','топливо','заправк','парковк','машин','авто']],['Жильё',['аренд','квартир','жиль','коммунал','квартплат','свет','газ','вода','отоплен','электрич']],['Здоровье',['аптек','лекарств','таблет','витамин','врач','стоматолог','анализ','клиник','здоров','лечен']],['Развлечения',['кино','игр','развлечен','концерт','театр','бар','клуб','боулинг','бильярд']],['Одежда',['одежд','обув','куртк','футболк','штаны','джинс','рубашк','носк','белье','кроссовк','ботинк']],['Кафе',['кафе','ресторан','пицц','бургер','шаверм','шаурм','кофейн','столов','доставка еды','ролл','суши']],['Подписки',['подписк','spotify','ютуб','youtube','netflix','vpn','сервис']],['Обязательные',['алименты','обязательн','ежемесячн']],['Долг',['долг','должен','долгов']],['Прочее',['сигарет','табак','вейп','электронн сигарет','зажигалк','ручка','прочее','другое']]];
-function categoryFromText(text){var s=norm(text),best='',score=0;CATEGORY_RULES.forEach(function(rule){var local=0;rule[1].forEach(function(k){if(s.indexOf(k)!==-1)local+=k.length;});if(local>score){score=local;best=rule[0];}});return best;}
+function wordsNumber(s){
+  var a=norm(s).replace(/руб(лей|ля|ль)?/g,'').split(' ').filter(Boolean);
+  var total=0,cur=0,seen=false;
+  for(var i=0;i<a.length;i++){
+    var w=a[i];
+    if(/^\d+$/.test(w)){cur+=Number(w);seen=true;continue;}
+    if(ONES[w]!==undefined){cur+=ONES[w];seen=true;continue;}
+    if(TENS[w]!==undefined){cur+=TENS[w];seen=true;continue;}
+    if(HUND[w]!==undefined){cur+=HUND[w];seen=true;continue;}
+    if(w==='тысяча'||w==='тысячи'||w==='тысяч'||w==='тыс'){total+=(cur||1)*1000;cur=0;seen=true;continue;}
+    if(w==='миллион'||w==='миллиона'||w==='миллионов'){total+=(cur||1)*1000000;cur=0;seen=true;continue;}
+  }
+  return seen?total+cur:0;
+}
 
+function extractAmount(text){
+  var s=norm(text);
+  var mix=s.match(/(\d+(?:[.,]\d+)?)\s*(тыс(?:яч(?:а|и)?)?|миллион(?:а|ов)?)/);
+  if(mix){
+    var base=Number(String(mix[1]).replace(',','.'));
+    if(isFinite(base)&&base>0){
+      if(mix[2].indexOf('миллион')===0)return Math.round(base*1000000);
+      return Math.round(base*1000);
+    }
+  }
+  if(/тысяч|тыс\b|миллион/.test(s)||hasAny(s,['сто','двести','триста','четыреста','пятьсот','тысяча','тысячи'])){
+    var w=wordsNumber(s);
+    if(w>0)return w;
+  }
+  var m=s.match(/(?:^|\s)(\d{1,3}(?:[\s\u00a0]\d{3})+|\d{4,7}|\d{1,3})(?:[.,](\d+))?(?:\s*(?:руб(?:лей|ля|ль)?|р|₽))?(?=\s|$)/);
+  if(m){
+    var intPart=String(m[1]).replace(/[\s\u00a0]/g,'');
+    var n=Number(intPart+(m[2]?'.'+m[2]:''));
+    if(isFinite(n)&&n>0)return Math.round(n);
+  }
+  return wordsNumber(s);
+}
+
+var PRODUCT_RULES=window.KOPEYKA_PRODUCTS||[];
+
+function categoryFromText(text){
+  var s=norm(text),best='',score=0;
+  PRODUCT_RULES.forEach(function(rule){
+    var local=0;
+    rule[1].forEach(function(k){if(s.indexOf(k)!==-1)local+=k.length;});
+    if(local>score){score=local;best=rule[0];}
+  });
+  return best;
+}
 function typeFromText(text){
   var s=norm(text);
   if(hasAny(s,['доход','получил','получила','получить','получено','зарплат','заработал','заработала','начисл','пришли деньги','пришел доход','выдали','аванс','преми','получка','подработк','фриланс','гонорар']))return 'income';
@@ -38,16 +82,17 @@ function isPayDebt(s){return hasAny(s,['верни','вернуть','погас
 
 function stripNoise(text){
   var s=norm(text);
-  s=s.replace(/\b\d+(?:[.,]\d+)?\b/g,' ');
-  s=s.replace(/\b(ноль|один|одна|два|две|три|четыре|пять|шесть|семь|восемь|девять|десять|одиннадцать|двенадцать|тринадцать|четырнадцать|пятнадцать|шестнадцать|семнадцать|восемнадцать|девятнадцать|двадцать|тридцать|сорок|пятьдесят|шестьдесят|семьдесят|восемьдесят|девяносто|сто|двести|триста|четыреста|пятьсот|шестьсот|семьсот|восемьсот|девятьсот|тысяча|тысячи|тысяч|миллион|миллиона|миллионов)\b/g,' ');
-  s=s.replace(/\b(руб(?:лей|ля)?|р|рубл|руб|₽)\b/g,' ');
-  var noise=['добавь','добавить','запиши','записать','внеси','внести','создай','сделай','учти','покажи','мне','пожалуйста','расход','доход','потратил','потратила','потратить','купил','купила','купить','покупал','покупала','оплатил','оплатила','оплатить','заплатил','заплатила','заплатить','получил','получила','получить','заработал','заработала','заработать','зарплата','зарплатой','приобрел','приобрела','приобрести','взял','взяла','подработка','подработкой','аванс','премия','резерв','резерва','отложить','отложи','пополнить','пополни','накопить','цель','сумма','сумму','долг','должен','должна','обязательный','обязательные','алименты'];
+  s=s.replace(/\d+(?:[.,]\d+)?/g,' ');
+  var numWords='ноль один одна одну два две три четыре пять шесть семь восемь девять десять одиннадцать двенадцать тринадцать четырнадцать пятнадцать шестнадцать семнадцать восемнадцать девятнадцать двадцать тридцать сорок пятьдесят шестьдесят семьдесят восемьдесят девяносто сто двести триста четыреста пятьсот шестьсот семьсот восемьсот девятьсот тысяча тысячи тысяч тыс миллион миллиона миллионов'.split(' ');
+  numWords.forEach(function(w){s=s.split(w).join(' ');});
+  s=s.replace(/\b(руб(?:лей|ля|ль)?|р|₽)\b/g,' ');
+  var noise='добавь добавить запиши записать внеси внести создай сделай учти покажи мне пожалуйста расход доход потратил потратила потратить купил купила купить покупал покупала оплатил оплатила оплатить заплатил заплатила заплатить получил получила получить заработал заработала заработать зарплата зарплатой приобрел приобрела приобрести взял взяла подработка подработкой аванс премия резерв резерва отложить отложи пополнить пополни накопить цель сумма сумму долг должен должна обязательный обязательные алименты'.split(' ');
   noise.forEach(function(w){s=s.split(w).join(' ');});
   s=s.replace(/\b(на|за|в|во|из|от|с|со|мне|это|стоил|стоит|рублей|рубля|сегодня|вчера)\b/g,' ');
   s=s.replace(/\s+/g,' ').trim();
   return s;
 }
-function itemFromText(text){var item=stripNoise(text);var cat=categoryFromText(text);if(cat==='Продукты'&&/^(продукт|продукты|еда|покупки|магазин|продовольствие)$/i.test(item))return 'Продукты';return capitalize(item)||'';}
+function itemFromText(text){var item=stripNoise(text);if(!item)return'';return capitalize(item);}
 function matchReserveName(text){var s=norm(text);for(var i=0;i<RES_PRESETS.length;i++){var p=norm(RES_PRESETS[i]);if(s.indexOf(p)!==-1)return RES_PRESETS[i];var short=p.split(' ')[0];if(short.length>3&&s.indexOf(short)!==-1)return RES_PRESETS[i];}var cleaned=stripNoise(text).trim();if(cleaned)return capitalize(cleaned);return '';}
 
 function addExpense(amount,category,note){var s=cloneState();s.expenses=Array.isArray(s.expenses)?s.expenses:[];s.expenses.push({id:id(),amount:amount,category:category||'Прочее',note:note||'',date:new Date().toISOString().slice(0,10)});applyState(s);}
@@ -69,9 +114,9 @@ function confirmBox(title,details,onYes){var card=document.querySelector('#voice
 
 function askStep(title,hint,onSpeech){var card=document.querySelector('#voiceModal .voice-card');if(!card)return;pendingStep={onSpeech:onSpeech};card.innerHTML='<div style="display:flex;justify-content:space-between;align-items:flex-start;text-align:left"><div><div style="font-size:11px;color:#9AA0B0;text-transform:uppercase;letter-spacing:.06em">Голосовой ввод</div><div style="font-size:19px;font-weight:700;margin-top:3px">'+esc(title)+'</div></div><button type="button" id="voiceClose" style="width:36px;height:36px;border-radius:10px;background:#1C1F28;font-size:24px;border:none;color:#F2F3F7">×</button></div><button type="button" id="voiceOrb" style="width:82px;height:82px;border-radius:50%;margin:18px auto 12px;background:linear-gradient(135deg,#F0C384,#E5A75E);display:flex;align-items:center;justify-content:center;font-size:36px;border:0">🎙️</button><div id="voiceStatus" style="font-size:13px;color:#9AA0B0;min-height:20px">Слушаю…</div><div id="voiceText" style="min-height:34px;margin:8px 0;font-size:16px"></div><div style="font-size:12px;color:#9AA0B0;line-height:1.5;padding:8px">'+esc(hint)+'</div>'+actionsBar('<button type="button" id="voiceAgain" style="'+btnStyle(true)+'">Говорить</button><button type="button" id="voiceCancel" style="'+btnStyle(false,true)+'">Отменить</button>');document.getElementById('voiceClose').onclick=closeUI;document.getElementById('voiceCancel').onclick=closeUI;document.getElementById('voiceAgain').onclick=startListening;document.getElementById('voiceOrb').onclick=startListening;startListening();}
 
-function categoryPicker(amount,note){var card=document.querySelector('#voiceModal .voice-card');if(!card)return;pendingStep=null;card.innerHTML='<div style="display:flex;justify-content:space-between;align-items:flex-start;text-align:left"><div><div style="font-size:11px;color:#9AA0B0;text-transform:uppercase;letter-spacing:.06em">Расход</div><div style="font-size:19px;font-weight:700;margin-top:3px">Выбери категорию</div></div><button type="button" id="voiceClose" style="width:36px;height:36px;border-radius:10px;background:#1C1F28;font-size:24px;border:none;color:#F2F3F7">×</button></div><div style="padding:14px 8px"><b style="font-size:26px">−'+fmt(amount)+' ₽</b><br>'+esc(note||'Без названия')+'</div><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin:8px 0">'+CATS.map(function(c){return '<button type="button" data-cat="'+esc(c)+'" style="padding:12px 8px;border-radius:11px;background:#1C1F28;border:1px solid rgba(255,255,255,.12);font-weight:600;font-size:13px;color:#F2F3F7">'+esc(c)+'</button>';}).join('')+'</div>'+actionsBar('<button type="button" id="voiceCancelCat" style="'+btnStyle(false,true)+'">Отменить</button>');document.getElementById('voiceClose').onclick=closeUI;document.getElementById('voiceCancelCat').onclick=closeUI;card.querySelectorAll('[data-cat]').forEach(function(b){b.onclick=function(){var cat=b.getAttribute('data-cat');confirmBox('Расход −'+fmt(amount)+' ₽','Название: <b>'+esc(note||'Расход')+'</b><br>Категория: <b>'+esc(cat)+'</b>',function(){addExpense(amount,cat,note);});};});}
+function categoryPicker(amount,note){var card=document.querySelector('#voiceModal .voice-card');if(!card)return;pendingStep=null;card.innerHTML='<div style="display:flex;justify-content:space-between;align-items:flex-start;text-align:left"><div><div style="font-size:11px;color:#9AA0B0;text-transform:uppercase;letter-spacing:.06em">Расход</div><div style="font-size:19px;font-weight:700;margin-top:3px">Выбери категорию</div></div><button type="button" id="voiceClose" style="width:36px;height:36px;border-radius:10px;background:#1C1F28;font-size:24px;border:none;color:#F2F3F7">×</button></div><div style="padding:14px 8px"><b style="font-size:26px">−'+fmt(amount)+' ₽</b><br>'+esc(note||'Без названия')+'</div><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin:8px 0;max-height:40vh;overflow:auto">'+CATS.map(function(c){return '<button type="button" data-cat="'+esc(c)+'" style="padding:12px 8px;border-radius:11px;background:#1C1F28;border:1px solid rgba(255,255,255,.12);font-weight:600;font-size:13px;color:#F2F3F7">'+esc(c)+'</button>';}).join('')+'</div>'+actionsBar('<button type="button" id="voiceCancelCat" style="'+btnStyle(false,true)+'">Отменить</button>');document.getElementById('voiceClose').onclick=closeUI;document.getElementById('voiceCancelCat').onclick=closeUI;card.querySelectorAll('[data-cat]').forEach(function(b){b.onclick=function(){var cat=b.getAttribute('data-cat');confirmBox('Расход −'+fmt(amount)+' ₽','Название: <b>'+esc(note||'Расход')+'</b><br>Категория: <b>'+esc(cat)+'</b>',function(){addExpense(amount,cat,note);});};});}
 
-function startReserveFlow(nameHint,amountHint,isWd){var name=nameHint||'';function afterName(nm){name=nm;if(amountHint>0){confirmBox((isWd?'Снять из резерва ':'Пополнить резерв ')+fmt(amountHint)+' ₽','Резерв: <b>'+esc(name)+'</b>',function(){createOrTopupReserve(name,0,amountHint,isWd);});return;}askStep('Сколько накопить?','Скажи цель, например: «пятьдесят тысяч» или «ноль» если без цели',function(speech){var target=extractAmount(speech)||0;askStep('Сколько положить сейчас?','Скажи сумму пополнения или «ноль»',function(speech2){var dep=extractAmount(speech2)||0;confirmBox('Резерв «'+name+'»','Цель: <b>'+(target?fmt(target)+' ₽':'без цели')+'</b><br>Сейчас: <b>'+fmt(dep)+' ₽</b>',function(){createOrTopupReserve(name,target,dep,false);});});});}if(name){afterName(name);}else{askStep('Какой резерв?','Скажи: «подушка безопасности», «отпуск», «на больницу»…',function(speech){var nm=matchReserveName(speech)||capitalize(stripNoise(speech))||'Свой вариант';afterName(nm);});}}
+function startReserveFlow(nameHint,amountHint,isWd){var name=nameHint||'';function afterName(nm){name=nm;if(amountHint>0){confirmBox((isWd?'Снять из резерва ':'Пополнить резерв ')+fmt(amountHint)+' ₽','Резерв: <b>'+esc(name)+'</b>',function(){createOrTopupReserve(name,0,amountHint,isWd);});return;}askStep('Сколько накопить?','Скажи цель: «пятьдесят тысяч», «сто тысяч», «4000» или «ноль»',function(speech){var target=extractAmount(speech)||0;askStep('Сколько положить сейчас?','Скажи сумму или «ноль»',function(speech2){var dep=extractAmount(speech2)||0;confirmBox('Резерв «'+name+'»','Цель: <b>'+(target?fmt(target)+' ₽':'без цели')+'</b><br>Сейчас: <b>'+fmt(dep)+' ₽</b>',function(){createOrTopupReserve(name,target,dep,false);});});});}if(name){afterName(name);}else{askStep('Какой резерв?','Скажи: «подушка безопасности», «отпуск», «на больницу»…',function(speech){var nm=matchReserveName(speech)||capitalize(stripNoise(speech))||'Свой вариант';afterName(nm);});}}
 
 function processCommand(text){
   var s=norm(text);
@@ -79,72 +124,19 @@ function processCommand(text){
   var type=typeFromText(s);
   var cat=categoryFromText(s);
   var item=itemFromText(s);
-
-  if(isReserveCmd(s)){
-    var name=matchReserveName(s);
-    if(!name){var raw=stripNoise(s).trim();name=raw?capitalize(raw):'';}
-    startReserveFlow(name,amount,isWithdraw(s));
-    return;
-  }
-  if(type==='income'){
-    if(!amount){setUI('Не нашла сумму','Скажи, например: «зарплата 4800» или «подработка две тысячи»');return;}
-    if(!item||item==='Расход')item='Доход';
-    if(/^доход$/i.test(item))item='Доход';
-    confirmBox('Доход +'+fmt(amount)+' ₽','Название: <b>'+esc(item)+'</b>',function(){addIncome(amount,item);});
-    return;
-  }
-  if(isDebtCmd(s)){
-    if(!amount){setUI('Не нашла сумму','Скажи сумму долга, например: «долг Вася 5000»');return;}
-    var dn=stripNoise(s).trim()||'Долг';
-    dn=capitalize(dn);
-    confirmBox((isPayDebt(s)?'Платёж по долгу ':'Новый долг ')+fmt(amount)+' ₽','Имя: <b>'+esc(dn)+'</b>',function(){return isPayDebt(s)?payDebt(amount,dn):addDebt(amount,dn);});
-    return;
-  }
-  if(isObligCmd(s)){
-    if(!amount){setUI('Не нашла сумму','Скажи сумму, например: «алименты 15000»');return;}
-    var on=stripNoise(s).trim()||'Платёж';
-    on=capitalize(on);
-    confirmBox('Обязательный платёж '+fmt(amount)+' ₽','Название: <b>'+esc(on)+'</b>',function(){addObligation(amount,on,25);});
-    return;
-  }
-  if(!amount){setUI('Не нашла сумму','Скажи, например: «сигареты 100», «зарплата 4800», «резерв подушка»');return;}
+  if(isReserveCmd(s)){var name=matchReserveName(s);if(!name){var raw=stripNoise(s).trim();name=raw?capitalize(raw):'';}startReserveFlow(name,amount,isWithdraw(s));return;}
+  if(type==='income'){if(!amount){setUI('Не нашла сумму','Скажи: «зарплата 4800» или «подработка две тысячи»');return;}if(!item||item==='Расход')item='Доход';if(/^доход$/i.test(item))item='Доход';confirmBox('Доход +'+fmt(amount)+' ₽','Название: <b>'+esc(item)+'</b>',function(){addIncome(amount,item);});return;}
+  if(isDebtCmd(s)){if(!amount){setUI('Не нашла сумму','Скажи сумму долга');return;}var dn=stripNoise(s).trim()||'Долг';dn=capitalize(dn);confirmBox((isPayDebt(s)?'Платёж по долгу ':'Новый долг ')+fmt(amount)+' ₽','Имя: <b>'+esc(dn)+'</b>',function(){return isPayDebt(s)?payDebt(amount,dn):addDebt(amount,dn);});return;}
+  if(isObligCmd(s)){if(!amount){setUI('Не нашла сумму','Скажи сумму');return;}var on=stripNoise(s).trim()||'Платёж';on=capitalize(on);confirmBox('Обязательный платёж '+fmt(amount)+' ₽','Название: <b>'+esc(on)+'</b>',function(){addObligation(amount,on,25);});return;}
+  if(!amount){setUI('Не нашла сумму','Скажи: «сигареты 100», «ром 500», «зарплата 4800»');return;}
   if(!item)item='Расход';
   if(!cat){categoryPicker(amount,item);return;}
   confirmBox('Расход −'+fmt(amount)+' ₽','Название: <b>'+esc(item)+'</b><br>Категория: <b>'+esc(cat)+'</b>',function(){addExpense(amount,cat,item);});
 }
 
-function renderVoice(){pendingStep=null;var old=document.getElementById('voiceModal');if(old)old.remove();var bg=document.createElement('div');bg.id='voiceModal';bg.style.cssText='position:fixed;inset:0;z-index:120;background:rgba(0,0,0,.62);display:flex;align-items:flex-end;justify-content:center';bg.innerHTML='<div class="voice-card" style="width:100%;max-width:520px;background:#16181F;border:1px solid rgba(255,255,255,.09);border-bottom:none;border-radius:22px 22px 0 0;padding:20px 16px calc(20px + env(safe-area-inset-bottom,0px));box-shadow:0 -8px 30px rgba(0,0,0,.45);text-align:center"><div style="display:flex;justify-content:space-between;align-items:flex-start;text-align:left"><div><div style="font-size:11px;color:#9AA0B0;text-transform:uppercase;letter-spacing:.06em">Копейка · голос</div><div style="font-size:19px;font-weight:700;margin-top:3px">Говори как удобно</div></div><button type="button" id="voiceClose" style="width:36px;height:36px;border-radius:10px;background:#1C1F28;font-size:24px;border:none;color:#F2F3F7">×</button></div><button type="button" id="voiceOrb" style="width:82px;height:82px;border-radius:50%;margin:18px auto 12px;background:linear-gradient(135deg,#F0C384,#E5A75E);display:flex;align-items:center;justify-content:center;font-size:36px;border:0;box-shadow:0 8px 28px rgba(229,167,94,.32)">🎙️</button><div id="voiceStatus" style="font-size:13px;color:#9AA0B0;min-height:20px">Слушаю…</div><div id="voiceText" style="min-height:34px;margin:8px 0;font-size:16px"></div><div style="font-size:12px;color:#9AA0B0;line-height:1.5;padding:8px">«Сигареты 100» · «зарплата 4800» · «резерв подушка» · «подработка 2000»</div>'+actionsBar('<button type="button" id="voiceAgain" style="'+btnStyle(true)+'">Говорить ещё</button><button type="button" id="voiceCancel" style="'+btnStyle(false,true)+'">Отмена</button>')+'</div>';document.body.appendChild(bg);document.getElementById('voiceClose').onclick=closeUI;document.getElementById('voiceCancel').onclick=closeUI;document.getElementById('voiceAgain').onclick=startListening;document.getElementById('voiceOrb').onclick=startListening;bg.addEventListener('click',function(e){if(e.target===bg)closeUI();});}
-
+function renderVoice(){pendingStep=null;var old=document.getElementById('voiceModal');if(old)old.remove();var bg=document.createElement('div');bg.id='voiceModal';bg.style.cssText='position:fixed;inset:0;z-index:120;background:rgba(0,0,0,.62);display:flex;align-items:flex-end;justify-content:center';bg.innerHTML='<div class="voice-card" style="width:100%;max-width:520px;background:#16181F;border:1px solid rgba(255,255,255,.09);border-bottom:none;border-radius:22px 22px 0 0;padding:20px 16px calc(20px + env(safe-area-inset-bottom,0px));box-shadow:0 -8px 30px rgba(0,0,0,.45);text-align:center"><div style="display:flex;justify-content:space-between;align-items:flex-start;text-align:left"><div><div style="font-size:11px;color:#9AA0B0;text-transform:uppercase;letter-spacing:.06em">Копейка · голос</div><div style="font-size:19px;font-weight:700;margin-top:3px">Говори как удобно</div></div><button type="button" id="voiceClose" style="width:36px;height:36px;border-radius:10px;background:#1C1F28;font-size:24px;border:none;color:#F2F3F7">×</button></div><button type="button" id="voiceOrb" style="width:82px;height:82px;border-radius:50%;margin:18px auto 12px;background:linear-gradient(135deg,#F0C384,#E5A75E);display:flex;align-items:center;justify-content:center;font-size:36px;border:0;box-shadow:0 8px 28px rgba(229,167,94,.32)">🎙️</button><div id="voiceStatus" style="font-size:13px;color:#9AA0B0;min-height:20px">Слушаю…</div><div id="voiceText" style="min-height:34px;margin:8px 0;font-size:16px"></div><div style="font-size:12px;color:#9AA0B0;line-height:1.5;padding:8px">«Ром 500» · «сигареты сто» · «зубочистки 50» · «зарплата 4800»</div>'+actionsBar('<button type="button" id="voiceAgain" style="'+btnStyle(true)+'">Говорить ещё</button><button type="button" id="voiceCancel" style="'+btnStyle(false,true)+'">Отмена</button>')+'</div>';document.body.appendChild(bg);document.getElementById('voiceClose').onclick=closeUI;document.getElementById('voiceCancel').onclick=closeUI;document.getElementById('voiceAgain').onclick=startListening;document.getElementById('voiceOrb').onclick=startListening;bg.addEventListener('click',function(e){if(e.target===bg)closeUI();});}
 function openUI(){renderVoice();startListening();}
-
-function installMicFab(){
-  var headerBtn=document.getElementById('btnVoice');
-  if(headerBtn){headerBtn.style.display='none';}
-  var old=document.getElementById('voiceMicFab');
-  if(old)old.remove();
-  var b=document.createElement('button');
-  b.id='voiceMicFab';
-  b.type='button';
-  b.title='Голосовой ввод';
-  b.setAttribute('aria-label','Голосовой ввод');
-  b.textContent='🎙️';
-  b.style.cssText='position:fixed;right:20px;bottom:calc(80px + env(safe-area-inset-bottom,0px));z-index:61;width:44px;height:44px;border-radius:50%;background:rgba(22,24,31,.35);border:1px solid rgba(229,167,94,.35);color:rgba(242,243,247,.75);font-size:20px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);box-shadow:0 4px 14px rgba(0,0,0,.2);padding:0;cursor:pointer;';
-  b.onmouseenter=function(){b.style.background='rgba(22,24,31,.55)';b.style.color='rgba(242,243,247,.95)';};
-  b.onmouseleave=function(){b.style.background='rgba(22,24,31,.35)';b.style.color='rgba(242,243,247,.75)';};
-  b.onclick=function(e){e.preventDefault();e.stopPropagation();openUI();};
-  document.body.appendChild(b);
-}
-
-function boot(){
-  if(!document.getElementById('voiceCSS2')){
-    var st=document.createElement('style');st.id='voiceCSS2';
-    st.textContent='#voiceOrb.listening{animation:voicePulse2 1.1s infinite}@keyframes voicePulse2{50%{transform:scale(1.06);box-shadow:0 0 0 12px rgba(229,167,94,.12)}}#btnVoice{display:none!important}';
-    document.head.appendChild(st);
-  }
-  window.kopeykaVoice={open:openUI};
-  installMicFab();
-  setTimeout(installMicFab,300);
-  setTimeout(installMicFab,1000);
-}
+function installMicFab(){var headerBtn=document.getElementById('btnVoice');if(headerBtn)headerBtn.style.display='none';var old=document.getElementById('voiceMicFab');if(old)old.remove();var b=document.createElement('button');b.id='voiceMicFab';b.type='button';b.title='Голосовой ввод';b.setAttribute('aria-label','Голосовой ввод');b.textContent='🎙️';b.style.cssText='position:fixed;right:20px;bottom:calc(80px + env(safe-area-inset-bottom,0px));z-index:61;width:44px;height:44px;border-radius:50%;background:rgba(22,24,31,.35);border:1px solid rgba(229,167,94,.35);color:rgba(242,243,247,.75);font-size:20px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);box-shadow:0 4px 14px rgba(0,0,0,.2);padding:0;cursor:pointer;';b.onclick=function(e){e.preventDefault();e.stopPropagation();openUI();};document.body.appendChild(b);}
+function boot(){if(!document.getElementById('voiceCSS2')){var st=document.createElement('style');st.id='voiceCSS2';st.textContent='#voiceOrb.listening{animation:voicePulse2 1.1s infinite}@keyframes voicePulse2{50%{transform:scale(1.06);box-shadow:0 0 0 12px rgba(229,167,94,.12)}}#btnVoice{display:none!important}';document.head.appendChild(st);}window.kopeykaVoice={open:openUI};installMicFab();setTimeout(installMicFab,300);setTimeout(installMicFab,1000);}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
 })();
