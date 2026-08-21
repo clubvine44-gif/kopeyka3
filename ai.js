@@ -3,111 +3,39 @@
 var GROQ_KEY='kopeyka_groq_key';
 var GROQ_URL='https://api.groq.com/openai/v1/chat/completions';
 var MODEL='openai/gpt-oss-20b';
-
-function getKey(){try{return (localStorage.getItem(GROQ_KEY)||'').trim();}catch(e){return '';}}
+var CATS=['Продукты','Алкоголь','Сигареты','Хозтовары','Бытовая химия','Кафе','Связь','Проезд','Жильё','Здоровье','Красота','Одежда','Развлечения','Подписки','Техника','Дети','Животные','Обязательные','Долг','Прочее'];
+function getKey(){try{return(localStorage.getItem(GROQ_KEY)||'').trim();}catch(e){return'';}}
 function setKey(k){try{k=String(k||'').trim();if(k)localStorage.setItem(GROQ_KEY,k);else localStorage.removeItem(GROQ_KEY);}catch(e){}}
-function hasKey(){return !!getKey();}
-
+function hasKey(){return!!getKey();}
+function n(v){var x=Number(v);return isFinite(x)?Math.round(x):0;}
+function monthOf(d){return String(d||'').slice(0,7);}
+function exact(st,month){
+  st=st||{};var s=st.settings||{},open=n(s.openingBalance),inc=0,exp=0,dep=0,wd=0,debt=0,obligDue=0,obligPaid=0;
+  (st.income||[]).forEach(function(x){if(monthOf(x.date)===month)inc+=n(x.amount);});
+  (st.expenses||[]).forEach(function(x){if(monthOf(x.date)===month)exp+=n(x.amount);});
+  (st.reserveOps||[]).forEach(function(x){if(monthOf(x.date)!==month)return;var a=n(x.amount);if(x.type==='deposit')dep+=a;else wd+=a;});
+  (st.debts||[]).forEach(function(x){debt+=Math.max(0,n(x.total)-n(x.paid));});
+  (st.obligations||[]).forEach(function(o){if(o.active===false)return;var paid=0;(st.obligationPays||[]).forEach(function(p){if(p.obligId===o.id&&p.month===month)paid+=n(p.amount);});obligPaid+=paid;obligDue+=Math.max(0,n(o.amount)-paid);});
+  var cash=open+inc-exp-dep+wd,available=cash-debt-obligDue;
+  var now=new Date(),ym=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0'),last=new Date(now.getFullYear(),now.getMonth()+1,0).getDate(),day=now.getDate();
+  var daysLeft=month===ym?Math.max(1,last-day+1):new Date(Number(month.slice(0,4)),Number(month.slice(5,7)),0).getDate();
+  var daily=available>0?Math.floor(available/daysLeft):0;
+  var cats={};(st.expenses||[]).forEach(function(x){if(monthOf(x.date)!==month)return;var c=x.category||'Прочее';if(c==='Долг'&&x.note)c=x.note;cats[c]=(cats[c]||0)+n(x.amount);});
+  return{month:month,openingBalance:open,cash:cash,available:available,dailyBudget:daily,daysLeft:daysLeft,income:inc,expenses:exp,reserveDeposits:dep,reserveWithdrawals:wd,debtRemaining:debt,obligationsRemaining:obligDue,obligationsPaid:obligPaid,reserves:(st.reserves||[]).map(function(r){return{name:r.name,saved:n(r.saved),target:n(r.target)};}),expenseByCategory:cats};
+}
 function buildContext(){
-  var st=window.STATE||{};
-  var month=(st.settings&&st.settings.month)||new Date().toISOString().slice(0,7);
-  function inMonth(d){return String(d||'').slice(0,7)===month;}
-  var open=Number(st.settings&&st.settings.openingBalance||0),inc=0,exp=0,dep=0,wd=0;
-  (st.income||[]).forEach(function(i){if(inMonth(i.date))inc+=Number(i.amount||0);});
-  (st.expenses||[]).forEach(function(e){if(inMonth(e.date))exp+=Number(e.amount||0);});
-  (st.reserveOps||[]).forEach(function(o){if(!inMonth(o.date))return;var a=Number(o.amount||0);if(o.type==='deposit')dep+=a;else wd+=a;});
-  var cash=open+inc-exp-dep+wd;
-  var debt=0;(st.debts||[]).forEach(function(d){debt+=Math.max(0,Number(d.total||0)-Number(d.paid||0));});
-  var available=cash-debt;
-  var t=new Date(),dayNum=t.getDate(),last=new Date(t.getFullYear(),t.getMonth()+1,0).getDate();
-  var leftDays=Math.max(1,last-dayNum+1),daily=available>0?Math.floor(available/leftDays):0;
-  var res=(st.reserves||[]).map(function(r){return r.name+'='+Math.round(Number(r.saved||0));}).join(', ')||'нет';
-  return 'месяц='+month+'\nкасса='+Math.round(cash)+'\nдоступно='+Math.round(available)+'\nлимит_день='+daily+'\nдоходы='+Math.round(inc)+'\nрасходы='+Math.round(exp)+'\nрезервы: '+res;
+  var st=window.STATE||{},month=(st.settings&&st.settings.month)||new Date().toISOString().slice(0,7),calc=exact(st,month);
+  return 'ТОЧНЫЕ РАСЧЁТЫ КОПЕЙКИ:\n'+JSON.stringify(calc)+'\n\nПОЛНОЕ ТЕКУЩЕЕ СОСТОЯНИЕ:\n'+JSON.stringify(st);
 }
-
 function systemPrompt(){
-  return 'Ты управляешь приложением Копейка. Ответь ТОЛЬКО JSON.\n'+
-    '{"mode":"answer","text":"..."} — ответ на вопрос.\n'+
-    '{"mode":"action","summary":"...","actions":[{"type":"add_expense","amount":100,"note":"сигареты","category":"Сигареты"}]} — действие.\n'+
-    'types: add_expense, add_income, add_reserve, reserve_deposit, reserve_withdraw, add_debt, pay_debt, add_obligation, delete_last, change_last.\n'+
-    'Суммы числами. Русский язык. Не выдумывай цифры — бери из STATE.';
+ return 'Ты — встроенный интеллектуальный управляющий приложением «Копейка». Ты должен отвечать только на основании переданного CURRENT STATE и EXACT CALCULATIONS. НИКОГДА не выдумывай суммы, даты, операции, долги, резервы или настройки. Если данных недостаточно — прямо скажи, чего не хватает. Для финансовых вопросов используй EXACT CALCULATIONS, а не собственную арифметику. Особенно важно: вопрос «сколько я могу потратить сегодня» означает точный dailyBudget из расчётов Копейки. Не меняй месячную модель и не придумывай другую формулу.\n\nТы знаешь все разделы: касса, доходы, расходы, категории, резервы, долги, обязательные платежи, смены, ставки и настройки. Можешь отвечать на вопросы по истории и объяснять расчёты.\n\nДля действий возвращай JSON: {"mode":"action","summary":"краткое описание","actions":[{"type":"add_expense|add_income|reserve_deposit|reserve_withdraw|add_debt|pay_debt|add_obligation|delete_last|change_last","amount":500,"name":"Сигареты","category":"Сигареты","reserve":"Права","day":25}]} . Для обычного ответа: {"mode":"answer","text":"ответ"}.\n\nДля расхода: amount — сумма, name — КОРОТКОЕ НАЗВАНИЕ ПОКУПКИ (например «Сигареты», «Майонез»), category — одна из: '+CATS.join(', ')+'. Не записывай всю исходную фразу в name. Для «купил майонез 500» name=«Майонез», amount=500, category=«Продукты». Для «купил сигареты 500» name=«Сигареты», category=«Сигареты». Для дохода name — короткое назначение.\n\nЕсли пользователь просит изменить или удалить данные, создай action и дождись подтверждения интерфейса. Не выполняй действие сам. Если пользователь отвечает «да/подтверждаю/сделай» на предыдущий запрос подтверждения, продолжай только если предыдущий контекст содержит конкретное действие.\n\nОтвечай по-русски, кратко и понятно.';
 }
-
-function parseAgentJson(raw){
-  var t=String(raw||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
-  var a=t.indexOf('{'),b=t.lastIndexOf('}');
-  if(a>=0&&b>a)t=t.slice(a,b+1);
-  var obj=JSON.parse(t);
-  if(!obj||typeof obj!=='object')throw new Error('Не JSON от модели');
-  if(obj.mode!=='answer'&&obj.mode!=='action'){
-    if(typeof obj.text==='string')obj.mode='answer';
-    else if(Array.isArray(obj.actions))obj.mode='action';
-    else if(obj.type){obj.mode='action';obj.actions=[obj];}
-    else throw new Error('Неизвестный формат ответа');
-  }
-  return obj;
+function parse(raw){var t=String(raw||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');var a=t.indexOf('{'),b=t.lastIndexOf('}');if(a>=0&&b>a)t=t.slice(a,b+1);var o=JSON.parse(t);if(!o||typeof o!=='object')throw new Error('Модель вернула неверный ответ');if(o.mode!=='answer'&&o.mode!=='action'){if(o.text)o.mode='answer';else if(o.actions)o.mode='action';else throw new Error('Модель вернула неизвестный формат');}return o;}
+function askConversation(history,userText){
+ return new Promise(function(resolve,reject){var key=getKey();if(!key){reject(new Error('Нет ключа Groq. Открой ⚙ → Ключ Groq.'));return;}var messages=[{role:'system',content:systemPrompt()+'\n\n'+buildContext()}];(history||[]).slice(-12).forEach(function(m){messages.push({role:m.role==='assistant'?'assistant':'user',content:String(m.content||'')});});messages.push({role:'user',content:String(userText||'')});var ctrl=typeof AbortController!=='undefined'?new AbortController():null,timer=setTimeout(function(){try{ctrl&&ctrl.abort();}catch(e){}reject(new Error('Groq не ответил за 20 секунд'));},20000);var body={model:MODEL,temperature:0.05,max_tokens:900,messages:messages};fetch(GROQ_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify(body),signal:ctrl?ctrl.signal:undefined}).then(function(r){return r.text().then(function(txt){clearTimeout(timer);var j;try{j=JSON.parse(txt);}catch(e){throw new Error('Groq вернул не JSON ('+r.status+')');}if(!r.ok){var msg=j&&j.error&&j.error.message||('HTTP '+r.status);if(r.status===401)msg='Неверный ключ Groq';if(r.status===429)msg='Лимит Groq временно исчерпан';throw new Error(msg);}var c=j&&j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content;if(!c)throw new Error('Пустой ответ Groq');resolve(parse(c));});}).catch(function(e){clearTimeout(timer);reject(e&&e.name==='AbortError'?new Error('Таймаут'):e);});});
 }
-
-function askAgent(userText){
-  return new Promise(function(resolve,reject){
-    var key=getKey();
-    if(!key){reject(new Error('Нет ключа. ⚙ → Ключ Groq'));return;}
-    if(key.indexOf('gsk_')!==0){reject(new Error('Ключ должен начинаться с gsk_'));return;}
-    var ctrl=typeof AbortController!=='undefined'?new AbortController():null;
-    var timer=setTimeout(function(){try{if(ctrl)ctrl.abort();}catch(e){}reject(new Error('Таймаут 15с — нет ответа от Groq'));},15000);
-    var body={model:MODEL,temperature:0.1,max_tokens:350,messages:[
-      {role:'system',content:systemPrompt()},
-      {role:'user',content:'STATE:\n'+buildContext()+'\n\nUSER: '+String(userText||'')}
-    ]};
-    var opts={method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify(body)};
-    if(ctrl)opts.signal=ctrl.signal;
-    fetch(GROQ_URL,opts).then(function(r){
-      return r.text().then(function(txt){
-        clearTimeout(timer);
-        var j=null;try{j=JSON.parse(txt);}catch(e){throw new Error('API вернул не JSON ('+r.status+')');}
-        if(!r.ok){
-          var msg=(j&&j.error&&j.error.message)||('Ошибка '+r.status);
-          if(r.status===401||/invalid api key/i.test(msg))msg='Неверный или отозванный ключ Groq. Создай новый на console.groq.com и вставь в ⚙';
-          if(r.status===429)msg='Лимит запросов Groq. Подожди минуту';
-          if(r.status===403)msg='Доступ запрещён Groq (403)';
-          throw new Error(msg);
-        }
-        var content=j&&j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content;
-        if(!content)throw new Error('Пустой ответ модели');
-        resolve(parseAgentJson(content));
-      });
-    }).catch(function(e){
-      clearTimeout(timer);
-      if(e&&e.name==='AbortError')reject(new Error('Таймаут'));
-      else if(e&&e.message&&e.message.indexOf('Failed to fetch')!==-1)reject(new Error('Нет сети или блокировка запросов к api.groq.com'));
-      else reject(e);
-    });
-  });
-}
-
-function testKey(){
-  return new Promise(function(resolve,reject){
-    var key=getKey();
-    if(!key){reject(new Error('Ключ не задан'));return;}
-    fetch(GROQ_URL,{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-      body:JSON.stringify({model:MODEL,max_tokens:5,messages:[{role:'user',content:'ok'}]})
-    }).then(function(r){
-      return r.json().then(function(j){
-        if(!r.ok){
-          var msg=(j&&j.error&&j.error.message)||('HTTP '+r.status);
-          if(r.status===401)msg='Неверный ключ';
-          reject(new Error(msg));
-        }else resolve('Ключ работает ✓');
-      });
-    }).catch(function(e){reject(new Error(e.message||'Нет сети'));});
-  });
-}
-
-function ask(userText){
-  return askAgent(userText).then(function(obj){return obj.mode==='answer'?(obj.text||''):(obj.summary||'');});
-}
-
-window.kopeykaAI={getKey:getKey,setKey:setKey,hasKey:hasKey,ask:ask,askAgent:askAgent,testKey:testKey,buildContext:buildContext};
+function askAgent(text){return askConversation([],text);}
+function ask(text){return askAgent(text).then(function(o){return o.mode==='answer'?o.text:o.summary||'';});}
+function testKey(){return askAgent('Ответь одним словом: готово').then(function(){return'Ключ работает ✓';});}
+window.kopeykaAI={getKey:getKey,setKey:setKey,hasKey:hasKey,ask:ask,askAgent:askAgent,askConversation:askConversation,testKey:testKey,buildContext:buildContext};
 })();
