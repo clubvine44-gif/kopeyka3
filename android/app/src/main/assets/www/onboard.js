@@ -1,59 +1,25 @@
 (function(){
 'use strict';
-var ONBOARD_KEY='kopeyka3_onboarded_v1';
+var ONBOARD_KEY='kopeyka3_onboarded_v2';
 var onboardStep=0;
 var STEPS=[
-  {t:'Добро пожаловать в Копейку',b:'Личные финансы без лишней сложности. За минуту покажу главное.'},
-  {t:'Главные цифры',b:'Сверху — лимит на сегодня, касса и доступно. Доступно = касса − долги − неоплаченные обязательные.'},
-  {t:'Календарь и +',b:'Тап по дню меняет смену. Кнопка + внизу: доход, расход, резерв, долг, обязательный.'},
-  {t:'ИИ-помощник',b:'Кнопка ◉ — говори или пиши: «сигареты 100», «удали долг Иван», «сколько в кассе». Перед изменением всегда подтверждение.'},
-  {t:'Облако и установка',b:'☁ — синхронизация. Можно установить как приложение из меню браузера.'}
+  {t:'Добро пожаловать в Финн',b:'Я Фина — твой персональный ИИ-агент по финансовому планированию. Здесь доходы, расходы, цели, долги и резерв собраны в одной системе.'},
+  {t:'Главный экран',b:'Здесь сразу видны баланс, касса, доступно, лимит на сегодня и текущая смена. Главное — перед глазами без лишних таблиц.'},
+  {t:'Доходы и расходы',b:'Через кнопку + быстро добавляй доход, расход, резерв, долг или обязательный платёж. История операций помогает видеть, куда уходят деньги.'},
+  {t:'Планирование и календарь',b:'Календарь показывает твой график смен. Планируй деньги заранее и учитывай будущие обязательные расходы, чтобы понимать реальную картину.'},
+  {t:'Резерв и цели',b:'Откладывай деньги отдельно: подушка безопасности, права, отпуск, ремонт или любая твоя цель. Фина помогает видеть прогресс и не смешивать накопления с доступными деньгами.'},
+  {t:'Долги и обязательства',b:'Добавляй долги, выплаты и обязательные платежи, отмечай погашение и всегда понимай, сколько ещё нужно заплатить.'},
+  {t:'Аналитика',b:'Смотри доходы, расходы, категории и динамику. Так становится понятно, какие траты забирают больше всего денег и как меняется твоя финансовая ситуация.'},
+  {t:'Твой ИИ-агент Фина',b:'Пиши или говори обычными словами: «сигареты 100», «сколько у меня в кассе?» или «удали долг Иван». Перед изменением данных Фина просит подтверждение.'},
+  {t:'Облако и безопасность',b:'☁ синхронизирует данные. Перед важными изменениями сохраняй резервную копию. Основные данные остаются под твоим контролем.'},
+  {t:'Готово',b:'Теперь ты знаешь главное. Остальное можно изучить прямо в приложении. Я рядом, когда понадобится разобраться с деньгами.'}
 ];
 function done(){try{return localStorage.getItem(ONBOARD_KEY)==='1';}catch(e){return false;}}
 function mark(){try{localStorage.setItem(ONBOARD_KEY,'1');}catch(e){}}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function injectStyle(){
-  if(document.getElementById('onboardStyle'))return;
-  var s=document.createElement('style');
-  s.id='onboardStyle';
-  s.textContent=[
-    '.onboard{position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.82);display:none;align-items:center;justify-content:center;padding:20px;box-sizing:border-box}',
-    '.onboard-card{width:100%;max-width:420px;background:#16181F;border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:22px 18px;color:#F2F3F7;box-shadow:0 16px 48px rgba(0,0,0,.45)}',
-    '.onboard-step{font-size:11px;color:#9AA0B0;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}',
-    '.onboard-card h2{font-size:20px;margin:0 0 10px;font-weight:700}',
-    '.onboard-card p{font-size:14px;line-height:1.5;color:#C5C9D3;margin:0 0 18px}',
-    '.onboard-actions{display:flex;gap:10px}',
-    '.ob-skip,.ob-next{flex:1;padding:12px;border-radius:12px;font-weight:700;border:0;cursor:pointer;font-size:14px}',
-    '.ob-skip{background:#1C1F28;color:#F2F3F7;border:1px solid rgba(255,255,255,.12)}',
-    '.ob-next{background:linear-gradient(135deg,#F0C384,#E5A75E);color:#1A1208}'
-  ].join('');
-  document.head.appendChild(s);
-}
-function show(step){
-  onboardStep=step|0;
-  if(onboardStep>=STEPS.length){finish();return;}
-  injectStyle();
-  var s=STEPS[onboardStep];
-  var root=document.getElementById('onboard');
-  if(!root){root=document.createElement('div');root.id='onboard';root.className='onboard';document.body.appendChild(root);}
-  var last=onboardStep===STEPS.length-1;
-  root.innerHTML='<div class="onboard-card"><div class="onboard-step">Шаг '+(onboardStep+1)+' из '+STEPS.length+'</div><h2>'+esc(s.t)+'</h2><p>'+esc(s.b)+'</p><div class="onboard-actions">'+(onboardStep>0?'<button type="button" class="ob-skip" id="obBack">Назад</button>':'<button type="button" class="ob-skip" id="obSkip">Пропустить</button>')+'<button type="button" class="ob-next" id="obNext">'+(last?'Начать':'Далее')+'</button></div></div>';
-  root.style.display='flex';
-  var nb=document.getElementById('obNext'),sk=document.getElementById('obSkip'),bk=document.getElementById('obBack');
-  if(nb)nb.onclick=function(){show(onboardStep+1);};
-  if(sk)sk.onclick=finish;
-  if(bk)bk.onclick=function(){show(onboardStep-1);};
-}
-function finish(){
-  mark();
-  var root=document.getElementById('onboard');
-  if(root)root.remove();
-}
-function start(){
-  if(done())return;
-  injectStyle();
-  show(0);
-}
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);
-else start();
+function injectStyle(){if(document.getElementById('onboardStyle'))return;var s=document.createElement('style');s.id='onboardStyle';s.textContent='.onboard{position:fixed;inset:0;z-index:2000;background:rgba(5,6,9,.88);display:none;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}.onboard-card{width:100%;max-width:440px;background:linear-gradient(160deg,#191C24,#121419);border:1px solid rgba(229,167,94,.2);border-radius:24px;padding:24px 20px;color:#F2F3F7;box-shadow:0 20px 70px rgba(0,0,0,.55)}.onboard-brand{display:flex;align-items:center;gap:9px;color:#E5A75E;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;margin-bottom:18px}.onboard-dot{width:8px;height:8px;border-radius:50%;background:#E5A75E;box-shadow:0 0 16px rgba(229,167,94,.7)}.onboard-step{font-size:11px;color:#8F96A7;text-transform:uppercase;letter-spacing:.07em;margin-bottom:9px}.onboard-card h2{font-size:23px;line-height:1.15;margin:0 0 11px;font-weight:750;letter-spacing:-.02em}.onboard-card p{font-size:14px;line-height:1.58;color:#C8CCD6;margin:0 0 20px}.onboard-progress{height:4px;background:#272B35;border-radius:99px;overflow:hidden;margin-bottom:18px}.onboard-progress i{display:block;height:100%;background:linear-gradient(90deg,#F0C384,#E5A75E);border-radius:99px;transition:width .2s}.onboard-actions{display:flex;gap:9px}.ob-skip,.ob-next{flex:1;padding:13px;border-radius:13px;font-weight:700;border:0;cursor:pointer;font-size:14px}.ob-skip{background:#20232C;color:#F2F3F7;border:1px solid rgba(255,255,255,.1)}.ob-next{background:linear-gradient(135deg,#F0C384,#E5A75E);color:#1A1208;box-shadow:0 7px 22px rgba(229,167,94,.2)}';document.head.appendChild(s);}
+function show(step){onboardStep=step|0;if(onboardStep>=STEPS.length){finish();return;}injectStyle();var s=STEPS[onboardStep],root=document.getElementById('onboard');if(!root){root=document.createElement('div');root.id='onboard';root.className='onboard';document.body.appendChild(root);}var last=onboardStep===STEPS.length-1,pct=Math.round(((onboardStep+1)/STEPS.length)*100);root.innerHTML='<div class="onboard-card"><div class="onboard-brand"><span class="onboard-dot"></span>ФИНН</div><div class="onboard-step">Шаг '+(onboardStep+1)+' из '+STEPS.length+'</div><div class="onboard-progress"><i style="width:'+pct+'%"></i></div><h2>'+esc(s.t)+'</h2><p>'+esc(s.b)+'</p><div class="onboard-actions">'+(onboardStep>0?'<button type="button" class="ob-skip" id="obBack">Назад</button>':'<button type="button" class="ob-skip" id="obSkip">Пропустить</button>')+'<button type="button" class="ob-next" id="obNext">'+(last?'Начать пользоваться':'Далее')+'</button></div></div>';root.style.display='flex';var nb=document.getElementById('obNext'),sk=document.getElementById('obSkip'),bk=document.getElementById('obBack');if(nb)nb.onclick=function(){show(onboardStep+1);};if(sk)sk.onclick=finish;if(bk)bk.onclick=function(){show(onboardStep-1);};}
+function finish(){mark();var root=document.getElementById('onboard');if(root)root.remove();}
+function start(){if(done())return;injectStyle();show(0);}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
 })();
