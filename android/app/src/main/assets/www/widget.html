@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0A0B0E">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Копейка · виджет</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,Roboto,sans-serif;background:#0A0B0E;color:#F2F3F7;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+.card{width:100%;max-width:320px;background:#16181F;border:1px solid rgba(255,255,255,.09);border-radius:20px;padding:20px;box-shadow:0 12px 40px rgba(0,0,0,.4)}
+.label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#9AA0B0;font-weight:600}
+.big{font-size:28px;font-weight:700;margin:6px 0 4px;letter-spacing:-.02em}
+.row{display:flex;justify-content:space-between;margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.08)}
+.row div{text-align:center;flex:1}
+.row b{display:block;font-size:15px}
+.row span{font-size:11px;color:#9AA0B0}
+.mic{width:100%;margin-top:16px;padding:14px;border-radius:14px;border:none;background:linear-gradient(135deg,#F0C384,#E5A75E);color:#1A1208;font-weight:700;font-size:16px;cursor:pointer}
+.muted{font-size:12px;color:#9AA0B0;margin-top:10px;line-height:1.4;text-align:center}
+a.open{display:block;text-align:center;margin-top:10px;color:#E5A75E;font-size:13px;text-decoration:none}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="label">Копейка · сейчас</div>
+  <div class="big" id="cash">—</div>
+  <div class="label" id="sub">Касса</div>
+  <div class="row">
+    <div><b id="inc">—</b><span>доходы</span></div>
+    <div><b id="exp">—</b><span>расходы</span></div>
+    <div><b id="res">—</b><span>резервы</span></div>
+  </div>
+  <button class="mic" id="mic" type="button">🎙️ Голос</button>
+  <a class="open" href="./">Открыть приложение</a>
+  <p class="muted">Добавь эту страницу на рабочий стол — получится быстрый виджет. Данные берутся из того же хранилища, что и в Копейке.</p>
+</div>
+<script>
+(function(){
+  function fmt(n){n=Math.round(+n||0);return (n<0?'−':'')+Math.abs(n).toLocaleString('ru-RU')+' ₽';}
+  function load(){
+    try{
+      var raw=localStorage.getItem('kopeyka3_state_v1');
+      if(!raw)return null;
+      return JSON.parse(raw);
+    }catch(e){return null;}
+  }
+  function monthOf(d){return String(d||'').slice(0,7);}
+  function refresh(){
+    var st=load();
+    if(!st){document.getElementById('cash').textContent='Нет данных';return;}
+    var month=(st.settings&&st.settings.month)||new Date().toISOString().slice(0,7);
+    var open=Number(st.settings&&st.settings.openingBalance||0),inc=0,exp=0,dep=0,wd=0,resT=0;
+    (st.income||[]).forEach(function(i){if(monthOf(i.date)===month)inc+=Number(i.amount||0);});
+    (st.expenses||[]).forEach(function(e){if(monthOf(e.date)===month)exp+=Number(e.amount||0);});
+    (st.reserveOps||[]).forEach(function(o){if(monthOf(o.date)!==month)return;var a=Number(o.amount||0);if(o.type==='deposit')dep+=a;else wd+=a;});
+    (st.reserves||[]).forEach(function(r){resT+=Number(r.saved||0);});
+    var cash=open+inc-exp-dep+wd;
+    document.getElementById('cash').textContent=fmt(cash);
+    document.getElementById('inc').textContent='+'+fmt(inc);
+    document.getElementById('exp').textContent='−'+fmt(exp);
+    document.getElementById('res').textContent=fmt(resT);
+  }
+  document.getElementById('mic').onclick=function(){location.href='./?voice=1';};
+  refresh();
+  setInterval(refresh,4000);
+})();
+</script>
+</body>
+</html>

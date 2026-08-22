@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="14dp"
+    android:background="@drawable/widget_bg">
+
+    <TextView
+        android:id="@+id/widget_shift"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Финн"
+        android:textColor="#9AA0B0"
+        android:textSize="11sp"
+        android:textAllCaps="true"
+        android:letterSpacing="0.04" />
+
+    <TextView
+        android:id="@+id/widget_daily"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="—"
+        android:textColor="#F2F3F7"
+        android:textSize="22sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="на день"
+        android:textColor="#9AA0B0"
+        android:textSize="11sp" />
+
+    <TextView
+        android:id="@+id/widget_cash"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text="—"
+        android:textColor="#E5A75E"
+        android:textSize="13sp" />
+</LinearLayout>
