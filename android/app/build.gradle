@@ -10,9 +10,8 @@ android {
         applicationId "app.fin.kopeyka"
         minSdk 26
         targetSdk 34
-        // Должен совпадать с update.json, иначе приложение снова и снова предложит обновиться
-        versionCode 9
-        versionName "2.1.0"
+        versionCode 10
+        versionName "2.2.0"
     }
 
     signingConfigs {
