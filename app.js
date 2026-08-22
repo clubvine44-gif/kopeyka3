@@ -168,7 +168,7 @@ var htmlOut = '';
 if(currentView==='home'){
   htmlOut = homeHtml;
 } else {
-  htmlOut = '<div class="view-header"><button type="button" class="back-btn" id="btnBackView" aria-label="Назад">‹</button><h2>'+viewTitle+'</h2></div><div class="card"><div class="list">'+ (viewBody||'<div class="empty">Пусто</div>') +'</div></div>';
+  htmlOut = '<div class="view-header"><button type="button" class="back-btn" id="btnBackView" aria-label="Назад"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><h2>'+viewTitle+'</h2></div><div class="card"><div class="list">'+ (viewBody||'<div class="empty">Пусто</div>') +'</div></div>';
 }
 app.innerHTML = htmlOut;
 
