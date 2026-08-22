@@ -1,89 +1,329 @@
-(function(){
-'use strict';
+(function () {
+  'use strict';
 
-/* Finn 3D v3: self-contained visual assistant. No Three.js/CDN dependency. */
-var root,avatar,float,card,spot,shade,targetEl=null,step=0,steps=[];
-var css=''+
-'#finn3d{position:fixed;inset:0;z-index:210;display:none;pointer-events:none;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif}'+
-'#finn3d.show{display:block}'+
-'#finnShade{position:absolute;inset:0;background:rgba(5,7,11,.52);opacity:0;transition:opacity .22s;pointer-events:none}'+
-'#finnShade.on{opacity:1}'+
-'#finnSpot{position:fixed;z-index:212;display:none;border-radius:16px;box-shadow:0 0 0 9999px rgba(5,7,11,.52),0 0 0 3px rgba(240,195,132,.9),0 0 34px rgba(229,167,94,.58);pointer-events:none;transition:left .28s,top .28s,width .28s,height .28s}'+
-'#finnAvatar{position:fixed;z-index:214;right:18px;top:50%;width:150px;height:300px;transform:translateY(-50%);pointer-events:none;filter:drop-shadow(0 18px 25px rgba(0,0,0,.38));perspective:900px}'+
-'#finnAvatar .body3d{position:absolute;left:35px;top:88px;width:82px;height:155px;transform-style:preserve-3d;animation:finnFloat 2.8s ease-in-out infinite}'+
-'#finnAvatar .torso{position:absolute;left:10px;top:40px;width:62px;height:94px;border-radius:22px 22px 15px 15px;background:linear-gradient(105deg,#243550 0%,#344b70 42%,#172237 100%);transform:rotateY(-12deg);box-shadow:inset 8px 0 10px #ffffff18,inset -10px 0 14px #0005}'+
-'#finnAvatar .shirt{position:absolute;left:25px;top:42px;width:30px;height:48px;background:linear-gradient(135deg,#f7f7fa,#c9ced8);clip-path:polygon(0 0,100% 0,78% 100%,22% 100%);transform:translateZ(8px)}'+
-'#finnAvatar .head{position:absolute;left:20px;top:0;width:68px;height:78px;border-radius:45% 45% 48% 48%;background:radial-gradient(circle at 35% 30%,#ffd8b8,#e8ae87 60%,#b97558 100%);transform:translateZ(22px);box-shadow:inset -8px -5px 12px #8e543d55}'+
-'#finnAvatar .hair{position:absolute;left:15px;top:-8px;width:78px;height:67px;border-radius:48% 52% 38% 42%;background:linear-gradient(120deg,#211a19,#5b3c31 52%,#241a19);transform:translateZ(27px);box-shadow:inset 7px 4px 9px #ffffff15}'+
-'#finnAvatar .hair:after{content:"";position:absolute;right:-5px;top:38px;width:22px;height:60px;border-radius:0 18px 20px 0;background:linear-gradient(100deg,#493027,#1d1717);transform:rotate(10deg)}'+
-'#finnAvatar .eye{position:absolute;top:34px;width:8px;height:5px;border-radius:50%;background:#1a1d27;transform:translateZ(34px)}'+
-'#finnAvatar .eye.l{left:37px}.eye.r{left:63px}'+
-'#finnAvatar .mouth{position:absolute;left:48px;top:53px;width:18px;height:8px;border-bottom:2px solid #9b554e;border-radius:50%;transform:translateZ(34px)}'+
-'#finnAvatar .neck{position:absolute;left:46px;top:68px;width:18px;height:20px;border-radius:5px;background:#d89570;transform:translateZ(18px)}'+
-'#finnAvatar .leg{position:absolute;top:132px;width:25px;height:76px;border-radius:9px;background:linear-gradient(90deg,#111927,#26344d);transform-origin:top center}'+
-'#finnAvatar .leg.l{left:16px;transform:rotate(-2deg)}.leg.r{left:47px;transform:rotate(2deg)}'+
-'#finnAvatar .shoe{position:absolute;top:199px;width:35px;height:16px;border-radius:12px 16px 8px 8px;background:#11151d;box-shadow:inset 0 3px 5px #ffffff18}'+
-'#finnAvatar .shoe.l{left:7px}.shoe.r{left:43px}'+
-'#finnAvatar .arm{position:absolute;top:49px;width:18px;height:92px;border-radius:12px;background:linear-gradient(90deg,#1b293f,#3a5278,#172238);transform-origin:9px 8px;z-index:2}'+
-'#finnAvatar .arm.left{left:-2px;transform:rotate(12deg)}'+
-'#finnAvatar .arm.right{left:68px;transform:rotate(18deg);transition:transform .28s ease}'+
-'#finnAvatar .forearm{position:absolute;left:3px;top:73px;width:13px;height:74px;border-radius:10px;background:linear-gradient(90deg,#d58f6b,#f1bd96,#c57b5d);transform-origin:6px 5px;transform:rotate(-10deg);transition:transform .28s ease}'+
-'#finnAvatar .hand{position:absolute;left:-4px;top:138px;width:22px;height:25px;border-radius:45% 45% 50% 50%;background:linear-gradient(135deg,#ffd2ae,#d88e69);transform:rotate(-4deg);box-shadow:inset -3px -3px 5px #8c4e3b33}'+
-'#finnAvatar .finger{position:absolute;left:15px;top:142px;width:10px;height:29px;border-radius:7px;background:#e9aa84;transform:rotate(-3deg);transform-origin:5px 2px}'+
-'#finnAvatar .badge{position:absolute;left:65px;top:69px;width:12px;height:12px;border-radius:50%;background:#e5a75e;box-shadow:0 0 10px #e5a75e99;transform:translateZ(25px)}'+
-'#finnAvatar .hello{position:absolute;left:38px;top:235px;color:#f0c384;font-weight:800;font-size:11px;letter-spacing:.08em;text-shadow:0 2px 8px #000;opacity:.9}'+
-'@keyframes finnFloat{0%,100%{transform:translateY(0) rotateY(-4deg)}50%{transform:translateY(-7px) rotateY(4deg)}}'+
-'#finnCard{position:fixed;z-index:215;left:14px;right:182px;bottom:18px;max-width:430px;background:rgba(20,23,31,.97);border:1px solid rgba(229,167,94,.35);border-radius:18px;padding:15px 16px;color:#f2f3f7;pointer-events:auto;box-shadow:0 20px 55px #0009;backdrop-filter:blur(14px)}'+
-'#finnCard .name{font-size:11px;font-weight:900;letter-spacing:.1em;color:#f0c384}'+
-'#finnCard .text{font-size:14px;line-height:1.42;margin-top:5px}'+
-'#finnCard .actions{display:flex;gap:8px;margin-top:12px}'+
-'#finnCard button{flex:1;padding:10px;border-radius:11px;background:#1c2029;color:#fff;border:1px solid #ffffff14;font-weight:700}'+
-'#finnCard .primary{background:linear-gradient(135deg,#f0c384,#e5a75e);color:#1a1208;border:0}'+
-'#finnCard .skip{position:absolute;right:8px;top:6px;width:auto;padding:4px 7px;background:transparent;border:0;color:#8f96a5}'+
-'#finnFloat{position:fixed;right:14px;bottom:calc(86px + env(safe-area-inset-bottom,0px));z-index:205;width:82px;height:82px;border-radius:24px;border:1px solid rgba(229,167,94,.5);background:linear-gradient(145deg,#252c3c,#10131a);box-shadow:0 12px 30px rgba(0,0,0,.5),0 0 0 1px #ffffff0b;display:flex;align-items:center;justify-content:center;overflow:hidden;pointer-events:auto;padding:0}'+
-'#finnFloat .mini3d{position:relative;width:60px;height:70px;transform:scale(.56);transform-origin:center;pointer-events:none}'+
-'#finnFloat .mini3d .body3d{position:absolute;left:0;top:0;width:82px;height:155px;transform-style:preserve-3d}'+
-'#finnFloat .online{position:absolute;right:7px;top:7px;width:9px;height:9px;border-radius:50%;background:#4ade80;box-shadow:0 0 9px #4ade80;animation:finnPulse 1.6s infinite}'+
-'@keyframes finnPulse{0%,100%{opacity:1}50%{opacity:.3}}'+
-'@media(max-width:430px){#finnAvatar{right:4px;width:126px;transform:translateY(-55%) scale(.9)}#finnCard{left:10px;right:126px;bottom:12px}}';
+  /* Finn visual assistant v4 — clean layout, SVG character, no overlap chaos */
 
-function style(){if(document.getElementById('finn3dStyle'))return;var s=document.createElement('style');s.id='finn3dStyle';s.textContent=css;document.head.appendChild(s);}
-function avatarMarkup(){return '<div class="body3d"><div class="hair"></div><div class="head"></div><div class="eye l"></div><div class="eye r"></div><div class="mouth"></div><div class="neck"></div><div class="torso"></div><div class="shirt"></div><div class="arm left"></div><div class="arm right"><div class="forearm"><div class="hand"></div><div class="finger"></div></div></div><div class="leg l"></div><div class="leg r"></div><div class="shoe l"></div><div class="shoe r"></div><div class="badge"></div></div><div class="hello">ФИНН</div>';}
-function miniMarkup(){return '<div class="mini3d">'+avatarMarkup().replace('<div class="hello">ФИНН</div>','')+'</div><span class="online"></span>';}
-function inject(){
-  style();
-  if(document.getElementById('finn3d')){root=document.getElementById('finn3d');return;}
-  root=document.createElement('div');root.id='finn3d';
-  root.innerHTML='<div id="finnShade"></div><div id="finnSpot"></div><div id="finnAvatar">'+avatarMarkup()+'</div><div id="finnCard"><button class="skip">Пропустить</button><div class="name">ФИНН · 3D-АССИСТЕНТ</div><div class="text"></div><div class="actions"><button class="prev">Назад</button><button class="primary next">Далее</button></div></div>';
-  document.body.appendChild(root);
-  card=root.querySelector('#finnCard');spot=root.querySelector('#finnSpot');shade=root.querySelector('#finnShade');avatar=root.querySelector('#finnAvatar');
-  card.querySelector('.skip').onclick=finish;card.querySelector('.next').onclick=next;card.querySelector('.prev').onclick=prev;
-  if(!document.getElementById('finnFloat')){float=document.createElement('button');float.id='finnFloat';float.type='button';float.title='Финн — показать помощника';float.innerHTML=miniMarkup();float.onclick=function(){window.Finn3D&&window.Finn3D.replay();};document.body.appendChild(float);}else float=document.getElementById('finnFloat');
-}
-function ensureVisible(){inject();if(float)float.style.display='flex';}
-function scrollTo(el){if(!el)return Promise.resolve();var r=el.getBoundingClientRect(),vh=innerHeight;if(r.top<100||r.bottom>vh-165){var y=window.scrollY+(r.top+r.bottom)/2-vh*.36;window.scrollTo({top:Math.max(0,y),behavior:'smooth'});return new Promise(function(resolve){setTimeout(resolve,460);});}return Promise.resolve();}
-function showTarget(sel){targetEl=sel?document.querySelector(sel):null;if(!targetEl){spot.style.display='none';shade.classList.remove('on');resetArm();return Promise.resolve();}return scrollTo(targetEl).then(function(){var r=targetEl.getBoundingClientRect();spot.style.display='block';spot.style.left=(r.left-8)+'px';spot.style.top=(r.top-8)+'px';spot.style.width=(r.width+16)+'px';spot.style.height=(r.height+16)+'px';shade.classList.add('on');pointArm();});}
-function pointArm(){if(!targetEl||!avatar)return;var tr=targetEl.getBoundingClientRect(),ar=avatar.getBoundingClientRect();var tx=tr.left+tr.width/2,ty=tr.top+tr.height/2,ax=ar.left+ar.width*.58,ay=ar.top+ar.height*.45;var deg=Math.max(-55,Math.min(55,Math.atan2(ty-ay,tx-ax)*180/Math.PI));var armEl=avatar.querySelector('.arm.right'),fore=avatar.querySelector('.forearm');if(armEl)armEl.style.transform='rotate('+(-12+deg*.42)+'deg)';if(fore)fore.style.transform='rotate('+(-12+deg*.7)+'deg)';}
-function resetArm(){if(!avatar)return;var a=avatar.querySelector('.arm.right'),f=avatar.querySelector('.forearm');if(a)a.style.transform='rotate(18deg)';if(f)f.style.transform='rotate(-10deg)';}
-function set(i){step=i;var x=steps[i];card.querySelector('.text').textContent=x.text;card.querySelector('.prev').style.visibility=i?'visible':'hidden';card.querySelector('.next').textContent=i===steps.length-1?'Готово':'Далее';showTarget(x.target||null);}
-function start(){
-  ensureVisible();
-  steps=[
-    {text:'Привет! Я Финн. Я показываю руками, куда смотреть, а экран сам прокручивается к нужному разделу.'},
-    {target:'.hero',text:'Это главный экран: баланс, доступная сумма и основные финансовые показатели.'},
-    {target:'#btnCloud',text:'Здесь облако и синхронизация данных.'},
-    {target:'#btnSettings',text:'Здесь настройки приложения, ИИ и резервного копирования.'},
-    {target:'#fab',text:'Эта кнопка добавляет доход, расход, резерв, долг или обязательный платёж.'},
-    {target:'.sec',text:'Ниже находятся разделы с долгами, резервами, обязательными платежами и операциями. Я сама прокручиваю страницу к ним.'},
-    {text:'Готово. Я остаюсь здесь как твой визуальный помощник. Нажми на меня справа внизу, чтобы повторить обучение.'}
-  ];
-  root.classList.add('show');set(0);
-}
-function next(){if(step<steps.length-1)set(step+1);else finish();}
-function prev(){if(step>0)set(step-1);}
-function finish(){if(root)root.classList.remove('show');targetEl=null;if(spot)spot.style.display='none';if(shade)shade.classList.remove('on');resetArm();try{localStorage.setItem('finn_onboarding_done','1');localStorage.setItem('finn3d_seen_v3','1');}catch(e){}}
-function replay(){try{localStorage.removeItem('finn_onboarding_done');localStorage.removeItem('finn3d_seen_v3');}catch(e){}start();}
-function boot(){document.title='Финн';var h=document.querySelector('.topbar h1');if(h)h.textContent='Финн';ensureVisible();var seen=false;try{seen=localStorage.getItem('finn3d_seen_v3')==='1';}catch(e){}if(!seen)setTimeout(start,700);}
-window.Finn3D={start:start,finish:finish,replay:replay,pointTo:function(sel){ensureVisible();showTarget(sel);root.classList.add('show');}};
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+  var root, floatBtn, cardEl, spotlight, shade, stage;
+  var step = 0, steps = [], targetEl = null, raf = 0;
+
+  var CSS = [
+    '#finnRoot{position:fixed;inset:0;z-index:220;display:none;pointer-events:none;',
+    'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif}',
+    '#finnRoot.on{display:block}',
+
+    '#finnShade{position:absolute;inset:0;background:rgba(6,8,12,.55);opacity:0;',
+    'transition:opacity .25s ease;pointer-events:none}',
+    '#finnShade.on{opacity:1}',
+
+    '#finnSpot{position:fixed;z-index:221;display:none;border-radius:18px;',
+    'box-shadow:0 0 0 9999px rgba(6,8,12,.55),0 0 0 2px #f0c384,0 0 28px rgba(229,167,94,.45);',
+    'pointer-events:none;transition:all .3s cubic-bezier(.2,.8,.2,1)}',
+
+    '#finnStage{position:fixed;z-index:223;left:0;top:0;width:42%;max-width:200px;height:58%;',
+    'display:flex;align-items:flex-end;justify-content:center;padding:0 0 8px 8px;',
+    'pointer-events:none;opacity:0;transform:translateY(20px);transition:opacity .35s,transform .35s}',
+    '#finnRoot.on #finnStage{opacity:1;transform:none}',
+    '#finnStage svg{width:100%;max-width:180px;height:auto;filter:drop-shadow(0 16px 28px rgba(0,0,0,.4));',
+    'animation:finnBob 3s ease-in-out infinite}',
+    '@keyframes finnBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}',
+
+    '#finnCard{position:fixed;z-index:224;left:12px;right:12px;bottom:calc(96px + env(safe-area-inset-bottom,0px));',
+    'max-width:480px;margin:0 auto;pointer-events:auto;',
+    'background:linear-gradient(180deg,rgba(28,32,42,.98),rgba(16,18,24,.98));',
+    'border:1px solid rgba(229,167,94,.28);border-radius:20px;padding:16px 16px 14px;',
+    'box-shadow:0 20px 50px rgba(0,0,0,.55);backdrop-filter:blur(16px);',
+    'opacity:0;transform:translateY(16px);transition:opacity .3s,transform .3s}',
+    '#finnRoot.on #finnCard{opacity:1;transform:none}',
+    '#finnCard .row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}',
+    '#finnCard .badge{font-size:10px;font-weight:800;letter-spacing:.12em;color:#f0c384;',
+    'background:rgba(229,167,94,.12);border:1px solid rgba(229,167,94,.25);padding:4px 8px;border-radius:999px}',
+    '#finnCard .skip{font-size:12px;color:#8b92a3;padding:4px 8px;border-radius:8px;background:transparent}',
+    '#finnCard .skip:active{background:rgba(255,255,255,.06)}',
+    '#finnCard .text{font-size:15px;line-height:1.45;color:#f2f3f7;margin:8px 0 14px;min-height:44px}',
+    '#finnCard .dots{display:flex;gap:5px;margin-bottom:12px}',
+    '#finnCard .dots i{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.15);display:block}',
+    '#finnCard .dots i.on{background:#e5a75e;width:16px;border-radius:4px}',
+    '#finnCard .actions{display:flex;gap:8px}',
+    '#finnCard .actions button{flex:1;padding:12px;border-radius:12px;font-weight:700;font-size:14px;',
+    'background:#222632;color:#fff;border:1px solid rgba(255,255,255,.08)}',
+    '#finnCard .actions .primary{background:linear-gradient(135deg,#f0c384,#e5a75e);color:#1a1208;border:0}',
+    '#finnCard .actions .ghost{visibility:hidden}',
+    '#finnCard .actions .ghost.show{visibility:visible}',
+
+    '#finnLaunch{position:fixed;z-index:200;',
+    'right:calc(16px + 56px + 12px);bottom:calc(18px + env(safe-area-inset-bottom,0px));',
+    'width:52px;height:52px;border-radius:16px;padding:0;border:1px solid rgba(229,167,94,.4);',
+    'background:linear-gradient(145deg,#2a3144,#12161f);',
+    'box-shadow:0 10px 24px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.08);',
+    'display:flex;align-items:center;justify-content:center;overflow:hidden;pointer-events:auto}',
+    '#finnLaunch svg{width:36px;height:36px;display:block}',
+    '#finnLaunch .pulse{position:absolute;top:6px;right:6px;width:8px;height:8px;border-radius:50%;',
+    'background:#4ade80;box-shadow:0 0 8px #4ade80;animation:finnPulse 1.8s infinite}',
+    '@keyframes finnPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.85)}}',
+    '#finnLaunch:active{transform:scale(.96)}',
+
+    '@media (max-width:380px){',
+    '#finnStage{width:38%;max-width:150px}',
+    '#finnCard{left:10px;right:10px;bottom:calc(90px + env(safe-area-inset-bottom,0px));padding:14px}',
+    '#finnCard .text{font-size:14px}',
+    '}'
+  ].join('');
+
+  function characterSVG(opts) {
+    opts = opts || {};
+    var armRot = opts.armRot != null ? opts.armRot : -8;
+    var w = opts.w || 160;
+    var h = opts.h || 280;
+    return (
+      '<svg viewBox="0 0 160 280" width="' + w + '" height="' + h + '" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+      '<defs>' +
+      '<linearGradient id="fnSuit" x1="0" y1="0" x2="1" y2="1">' +
+      '<stop offset="0%" stop-color="#3d5a80"/><stop offset="55%" stop-color="#2b3f5c"/><stop offset="100%" stop-color="#1a2740"/>' +
+      '</linearGradient>' +
+      '<linearGradient id="fnSkin" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0%" stop-color="#ffd4b0"/><stop offset="100%" stop-color="#e0a57a"/>' +
+      '</linearGradient>' +
+      '<linearGradient id="fnHair" x1="0" y1="0" x2="1" y2="1">' +
+      '<stop offset="0%" stop-color="#4a342c"/><stop offset="100%" stop-color="#2a1c18"/>' +
+      '</linearGradient>' +
+      '<linearGradient id="fnGold" x1="0" y1="0" x2="1" y2="1">' +
+      '<stop offset="0%" stop-color="#f0c384"/><stop offset="100%" stop-color="#e5a75e"/>' +
+      '</linearGradient>' +
+      '<linearGradient id="fnPants" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0%" stop-color="#1e2a3d"/><stop offset="100%" stop-color="#121a28"/>' +
+      '</linearGradient>' +
+      '</defs>' +
+      '<ellipse cx="80" cy="268" rx="36" ry="6" fill="rgba(0,0,0,.25)"/>' +
+      '<rect x="52" y="168" width="22" height="72" rx="10" fill="url(#fnPants)"/>' +
+      '<rect x="86" y="168" width="22" height="72" rx="10" fill="url(#fnPants)"/>' +
+      '<rect x="46" y="232" width="32" height="14" rx="7" fill="#0f141c"/>' +
+      '<rect x="82" y="232" width="32" height="14" rx="7" fill="#0f141c"/>' +
+      '<rect x="44" y="100" width="72" height="78" rx="18" fill="url(#fnSuit)"/>' +
+      '<path d="M70 104 L90 104 L84 150 L76 150 Z" fill="#e8eaef"/>' +
+      '<circle cx="98" cy="128" r="5" fill="url(#fnGold)"/>' +
+      '<g transform="translate(40,108) rotate(14)">' +
+      '<rect x="-8" y="0" width="16" height="54" rx="8" fill="url(#fnSuit)"/>' +
+      '<rect x="-6" y="48" width="12" height="40" rx="6" fill="url(#fnSkin)"/>' +
+      '<ellipse cx="0" cy="90" rx="9" ry="8" fill="url(#fnSkin)"/>' +
+      '</g>' +
+      '<g id="finnArmR" transform="translate(120,108) rotate(' + armRot + ')">' +
+      '<rect x="-8" y="0" width="16" height="50" rx="8" fill="url(#fnSuit)"/>' +
+      '<g transform="translate(0,46) rotate(-18)">' +
+      '<rect x="-6" y="0" width="12" height="42" rx="6" fill="url(#fnSkin)"/>' +
+      '<ellipse cx="0" cy="44" rx="9" ry="8" fill="url(#fnSkin)"/>' +
+      '<rect x="-2" y="40" width="5" height="18" rx="2.5" fill="#e0a57a"/>' +
+      '</g></g>' +
+      '<rect x="70" y="88" width="20" height="18" rx="5" fill="url(#fnSkin)"/>' +
+      '<ellipse cx="80" cy="62" rx="34" ry="38" fill="url(#fnSkin)"/>' +
+      '<path d="M48 58 C48 28 112 28 112 58 C112 42 100 32 80 32 C60 32 48 42 48 58 Z" fill="url(#fnHair)"/>' +
+      '<path d="M108 55 C116 62 118 78 112 92 C108 80 108 68 108 55 Z" fill="url(#fnHair)"/>' +
+      '<ellipse cx="68" cy="64" rx="4.5" ry="5" fill="#1a1f2b"/>' +
+      '<ellipse cx="92" cy="64" rx="4.5" ry="5" fill="#1a1f2b"/>' +
+      '<circle cx="69.5" cy="62.5" r="1.4" fill="#fff" opacity=".7"/>' +
+      '<circle cx="93.5" cy="62.5" r="1.4" fill="#fff" opacity=".7"/>' +
+      '<path d="M60 54 Q68 50 76 54" stroke="#3a2a24" stroke-width="2" fill="none" stroke-linecap="round"/>' +
+      '<path d="M84 54 Q92 50 100 54" stroke="#3a2a24" stroke-width="2" fill="none" stroke-linecap="round"/>' +
+      '<path d="M70 76 Q80 84 90 76" stroke="#b06a58" stroke-width="2.2" fill="none" stroke-linecap="round"/>' +
+      '</svg>'
+    );
+  }
+
+  function miniSVG() {
+    return (
+      '<svg viewBox="40 20 80 100" width="36" height="36" xmlns="http://www.w3.org/2000/svg">' +
+      '<defs>' +
+      '<linearGradient id="mSkin" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffd4b0"/><stop offset="100%" stop-color="#e0a57a"/></linearGradient>' +
+      '<linearGradient id="mHair" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#4a342c"/><stop offset="100%" stop-color="#2a1c18"/></linearGradient>' +
+      '<linearGradient id="mSuit" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#3d5a80"/><stop offset="100%" stop-color="#1a2740"/></linearGradient>' +
+      '</defs>' +
+      '<rect x="54" y="78" width="52" height="38" rx="12" fill="url(#mSuit)"/>' +
+      '<rect x="72" y="70" width="16" height="14" rx="4" fill="url(#mSkin)"/>' +
+      '<ellipse cx="80" cy="52" rx="26" ry="28" fill="url(#mSkin)"/>' +
+      '<path d="M56 50 C56 28 104 28 104 50 C104 38 96 30 80 30 C64 30 56 38 56 50 Z" fill="url(#mHair)"/>' +
+      '<ellipse cx="71" cy="54" rx="3.5" ry="4" fill="#1a1f2b"/>' +
+      '<ellipse cx="89" cy="54" rx="3.5" ry="4" fill="#1a1f2b"/>' +
+      '<path d="M72 64 Q80 70 88 64" stroke="#b06a58" stroke-width="1.8" fill="none" stroke-linecap="round"/>' +
+      '</svg>'
+    );
+  }
+
+  function ensureStyle() {
+    if (document.getElementById('finnStyleV4')) return;
+    var s = document.createElement('style');
+    s.id = 'finnStyleV4';
+    s.textContent = CSS;
+    document.head.appendChild(s);
+  }
+
+  function inject() {
+    ensureStyle();
+    if (!document.getElementById('finnLaunch')) {
+      floatBtn = document.createElement('button');
+      floatBtn.id = 'finnLaunch';
+      floatBtn.type = 'button';
+      floatBtn.title = 'Финн';
+      floatBtn.innerHTML = miniSVG() + '<span class="pulse"></span>';
+      floatBtn.onclick = function () {
+        if (window.Finn3D) window.Finn3D.replay();
+      };
+      document.body.appendChild(floatBtn);
+    } else {
+      floatBtn = document.getElementById('finnLaunch');
+    }
+
+    if (document.getElementById('finnRoot')) {
+      root = document.getElementById('finnRoot');
+      cardEl = document.getElementById('finnCard');
+      spotlight = document.getElementById('finnSpot');
+      shade = document.getElementById('finnShade');
+      stage = document.getElementById('finnStage');
+      return;
+    }
+
+    root = document.createElement('div');
+    root.id = 'finnRoot';
+    root.innerHTML =
+      '<div id="finnShade"></div>' +
+      '<div id="finnSpot"></div>' +
+      '<div id="finnStage">' + characterSVG() + '</div>' +
+      '<div id="finnCard">' +
+      '<div class="row"><span class="badge">ФИНН</span><button type="button" class="skip">Пропустить</button></div>' +
+      '<div class="text"></div>' +
+      '<div class="dots"></div>' +
+      '<div class="actions"><button type="button" class="ghost prev">Назад</button><button type="button" class="primary next">Далее</button></div>' +
+      '</div>';
+    document.body.appendChild(root);
+
+    cardEl = document.getElementById('finnCard');
+    spotlight = document.getElementById('finnSpot');
+    shade = document.getElementById('finnShade');
+    stage = document.getElementById('finnStage');
+
+    cardEl.querySelector('.skip').onclick = finish;
+    cardEl.querySelector('.next').onclick = next;
+    cardEl.querySelector('.prev').onclick = prev;
+  }
+
+  function setArm(deg) {
+    if (!stage) return;
+    stage.innerHTML = characterSVG({ armRot: deg });
+  }
+
+  function scrollToEl(el) {
+    if (!el) return Promise.resolve();
+    var r = el.getBoundingClientRect();
+    var vh = window.innerHeight;
+    var cardH = 200;
+    if (r.top >= 80 && r.bottom <= vh - cardH - 20) return Promise.resolve();
+    var y = window.scrollY + r.top - vh * 0.28;
+    window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+    return new Promise(function (res) { setTimeout(res, 420); });
+  }
+
+  function highlight(sel) {
+    targetEl = sel ? document.querySelector(sel) : null;
+    if (!targetEl) {
+      spotlight.style.display = 'none';
+      shade.classList.remove('on');
+      setArm(-8);
+      return Promise.resolve();
+    }
+    return scrollToEl(targetEl).then(function () {
+      var r = targetEl.getBoundingClientRect();
+      spotlight.style.display = 'block';
+      spotlight.style.left = (r.left - 6) + 'px';
+      spotlight.style.top = (r.top - 6) + 'px';
+      spotlight.style.width = (r.width + 12) + 'px';
+      spotlight.style.height = (r.height + 12) + 'px';
+      shade.classList.add('on');
+      var midY = r.top + r.height / 2;
+      var deg = midY < window.innerHeight * 0.4 ? -35 : midY > window.innerHeight * 0.65 ? 12 : -12;
+      setArm(deg);
+    });
+  }
+
+  function renderDots() {
+    var d = cardEl.querySelector('.dots');
+    var html = '';
+    for (var i = 0; i < steps.length; i++) html += '<i' + (i === step ? ' class="on"' : '') + '></i>';
+    d.innerHTML = html;
+  }
+
+  function setStep(i) {
+    step = i;
+    var s = steps[i];
+    cardEl.querySelector('.text').textContent = s.text;
+    var prevB = cardEl.querySelector('.prev');
+    if (i > 0) prevB.classList.add('show'); else prevB.classList.remove('show');
+    cardEl.querySelector('.next').textContent = i === steps.length - 1 ? 'Готово' : 'Далее';
+    renderDots();
+    highlight(s.target || null);
+  }
+
+  function start() {
+    inject();
+    steps = [
+      { text: 'Привет! Я Финн — твой помощник по финансам. Коротко покажу, где что лежит.' },
+      { target: '.hero', text: 'Главный блок: сколько можно тратить сегодня, касса и доступный остаток.' },
+      { target: '#btnCloud', text: 'Облако — синхронизация данных между устройствами.' },
+      { target: '#btnSettings', text: 'Настройки: ключ ИИ, ставки смен, экспорт и импорт.' },
+      { target: '#fab', text: 'Плюс — добавить доход, расход, резерв, долг или обязательный платёж.' },
+      { target: '.sec', text: 'Ниже разделы: обязательные платежи, резервы, долги и история операций.' },
+      { text: 'Готово. Я всегда справа внизу — нажми на меня, если захочешь повторить тур.' }
+    ];
+    root.classList.add('on');
+    if (floatBtn) floatBtn.style.visibility = 'hidden';
+    setStep(0);
+  }
+
+  function next() {
+    if (step < steps.length - 1) setStep(step + 1);
+    else finish();
+  }
+
+  function prev() {
+    if (step > 0) setStep(step - 1);
+  }
+
+  function finish() {
+    if (root) root.classList.remove('on');
+    targetEl = null;
+    if (spotlight) spotlight.style.display = 'none';
+    if (shade) shade.classList.remove('on');
+    if (floatBtn) floatBtn.style.visibility = 'visible';
+    try {
+      localStorage.setItem('finn_onboarding_done', '1');
+      localStorage.setItem('finn3d_seen_v4', '1');
+    } catch (e) {}
+  }
+
+  function replay() {
+    try { localStorage.removeItem('finn3d_seen_v4'); } catch (e) {}
+    start();
+  }
+
+  function boot() {
+    document.title = 'Финн';
+    var h = document.querySelector('.topbar h1');
+    if (h) h.textContent = 'Финн';
+    inject();
+    var seen = false;
+    try { seen = localStorage.getItem('finn3d_seen_v4') === '1'; } catch (e) {}
+    if (!seen) setTimeout(start, 650);
+  }
+
+  window.Finn3D = {
+    start: start,
+    finish: finish,
+    replay: replay,
+    pointTo: function (sel) {
+      inject();
+      root.classList.add('on');
+      if (floatBtn) floatBtn.style.visibility = 'hidden';
+      highlight(sel);
+    }
+  };
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
 })();
