@@ -10,8 +10,8 @@ android {
         applicationId "app.fin.kopeyka"
         minSdk 26
         targetSdk 34
-        versionCode 25
-        versionName "3.3.0"
+        versionCode 26
+        versionName "3.4.0"
     }
 
     signingConfigs {
@@ -31,6 +31,7 @@ android {
 
     buildTypes {
         debug {
+            applicationIdSuffix ".debug"
             versionNameSuffix "-debug"
         }
         release {

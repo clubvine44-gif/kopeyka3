@@ -173,6 +173,12 @@ button,input,select{font:inherit;color:inherit;border:none;outline:none;backgrou
   background:rgba(94,200,255,.12);
   box-shadow:0 0 14px rgba(94,200,255,.3);
 }
+.cal-d .star{
+  position:absolute;top:2px;right:4px;font-size:8px;line-height:1;
+  filter:drop-shadow(0 0 3px rgba(240,192,96,.7));
+  animation:starPulse 2.4s ease-in-out infinite;
+}
+@keyframes starPulse{0%,100%{opacity:.55;transform:scale(.9)}50%{opacity:1;transform:scale(1.1)}}
 
 .btn-shift{
   width:100%;margin-top:12px;padding:12px;
@@ -255,10 +261,10 @@ body.has-bnav{padding-bottom:calc(var(--nav-h) + 20px + var(--safe-b))}
 .fab{
   position:fixed;right:18px;bottom:calc(var(--nav-h) + var(--safe-b) + 18px);z-index:45;
   width:56px;height:56px;border-radius:50%;
-  background:linear-gradient(145deg,#5EC8FF,#3A8FE8);
+  background:linear-gradient(145deg,#F8D48A,#E5A75E);
   color:#0A101C;font-size:28px;font-weight:300;
   display:flex;align-items:center;justify-content:center;
-  box-shadow:0 6px 24px rgba(60,140,220,.45),0 0 0 1px rgba(255,255,255,.2);
+  box-shadow:0 6px 24px rgba(220,160,80,.45),0 0 0 1px rgba(255,255,255,.2);
   transition:transform .2s,box-shadow .2s;
 }
 .fab:active{transform:scale(.92)}
