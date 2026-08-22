@@ -8,6 +8,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.media.AudioAttributes;
+import android.media.AudioManager;
 import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.Build;
@@ -38,9 +39,14 @@ import java.util.Set;
 public class FinBridge {
     public static final String CHANNEL_ID = "fin_alerts_v3";
     private final Context context;
+    private final AudioManager audioManager;
+    private int savedSystemVolume = -1;
+    private int savedNotificationVolume = -1;
+    private boolean speechFeedbackMuted = false;
 
     public FinBridge(Context context) {
         this.context = context.getApplicationContext();
+        this.audioManager = (AudioManager) this.context.getSystemService(Context.AUDIO_SERVICE);
         ensureChannel();
     }
 
@@ -48,7 +54,6 @@ public class FinBridge {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
         NotificationManager nm = context.getSystemService(NotificationManager.class);
         if (nm == null) return;
-        // remove silent legacy channels
         try { nm.deleteNotificationChannel("fin_reminders"); } catch (Exception ignored) {}
         try { nm.deleteNotificationChannel("fin_alerts_v2"); } catch (Exception ignored) {}
 
@@ -66,6 +71,49 @@ public class FinBridge {
             ch.setSound(sound, aa);
             ch.setLockscreenVisibility(NotificationCompat.VISIBILITY_PUBLIC);
             nm.createNotificationChannel(ch);
+        }
+    }
+
+    /** Temporarily mutes only Android system/notification audio while speech recognition starts. */
+    @JavascriptInterface
+    public synchronized void silenceSpeechFeedback() {
+        if (audioManager == null || speechFeedbackMuted) return;
+        try {
+            savedSystemVolume = audioManager.getStreamVolume(AudioManager.STREAM_SYSTEM);
+            savedNotificationVolume = audioManager.getStreamVolume(AudioManager.STREAM_NOTIFICATION);
+            int flags = AudioManager.FLAG_REMOVE_SOUND_AND_VIBRATE;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                audioManager.adjustStreamVolume(AudioManager.STREAM_SYSTEM, AudioManager.ADJUST_MUTE, flags);
+                audioManager.adjustStreamVolume(AudioManager.STREAM_NOTIFICATION, AudioManager.ADJUST_MUTE, flags);
+            } else {
+                audioManager.setStreamVolume(AudioManager.STREAM_SYSTEM, 0, flags);
+                audioManager.setStreamVolume(AudioManager.STREAM_NOTIFICATION, 0, flags);
+            }
+            speechFeedbackMuted = true;
+        } catch (Exception ignored) {
+            speechFeedbackMuted = false;
+        }
+    }
+
+    /** Restores the exact system/notification volumes saved before speech recognition. */
+    @JavascriptInterface
+    public synchronized void restoreSpeechFeedback() {
+        if (audioManager == null || !speechFeedbackMuted) return;
+        try {
+            int flags = AudioManager.FLAG_REMOVE_SOUND_AND_VIBRATE;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                audioManager.adjustStreamVolume(AudioManager.STREAM_SYSTEM, AudioManager.ADJUST_UNMUTE, flags);
+                audioManager.adjustStreamVolume(AudioManager.STREAM_NOTIFICATION, AudioManager.ADJUST_UNMUTE, flags);
+            }
+            if (savedSystemVolume >= 0)
+                audioManager.setStreamVolume(AudioManager.STREAM_SYSTEM, savedSystemVolume, flags);
+            if (savedNotificationVolume >= 0)
+                audioManager.setStreamVolume(AudioManager.STREAM_NOTIFICATION, savedNotificationVolume, flags);
+        } catch (Exception ignored) {
+        } finally {
+            speechFeedbackMuted = false;
+            savedSystemVolume = -1;
+            savedNotificationVolume = -1;
         }
     }
 
