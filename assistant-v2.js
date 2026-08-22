@@ -11,7 +11,7 @@ function open(opts){
   var already=!!document.getElementById('kopeykaAiDialog');
   if(!already){
     loadHistory();
-    document.body.insertAdjacentHTML('beforeend','<div id="kopeykaAiDialog" class="ka-bg"><div class="ka-card"><div class="ka-head"><div class="ka-head-left"><span class="ka-dot"></span><div><div class="ka-title">Финн</div><div class="ka-sub" id="kaCloud">Готов</div></div></div><button class="ka-close" id="kaClose" aria-label="Закрыть">×</button></div><div class="ka-chat" id="kaChat"></div><div class="ka-status" id="kaStatus">Готов</div><div class="ka-input-row"><button class="ka-mic" id="kaOrb" aria-label="Говорить">◉</button><input id="kaInput" autocomplete="off" placeholder="Спроси что угодно…"><button id="kaSend" aria-label="Отправить">➤</button></div></div></div>');
+    document.body.insertAdjacentHTML('beforeend','<div id="kopeykaAiDialog" class="ka-bg"><div class="ka-card"><div class="ka-head"><div class="ka-head-left"><span class="ka-dot"></span><div><div class="ka-title">Финн</div><div class="ka-sub" id="kaCloud">Готов</div></div></div><button class="ka-close" id="kaClose" aria-label="Закрыть">×</button></div><div class="ka-chat" id="kaChat"></div><div class="ka-status" id="kaStatus">Готов</div><div class="ka-input-row"><input id="kaInput" autocomplete="off" placeholder="Спроси что угодно…"><button id="kaSend" aria-label="Отправить">➤</button><button class="ka-mic" id="kaOrb" aria-label="Говорить">◉</button></div></div></div>');
     style();
     var bg=document.getElementById('kopeykaAiDialog');
     bg.addEventListener('click',function(e){if(e.target===bg)close();});
