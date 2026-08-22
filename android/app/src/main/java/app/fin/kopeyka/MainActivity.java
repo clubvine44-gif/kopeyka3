@@ -50,8 +50,6 @@ public class MainActivity extends AppCompatActivity {
     private static final int REQ_MIC = 1001;
     private static final int REQ_FILE_CHOOSER = 2002;
     private static final String UPDATE_URL = "https://raw.githubusercontent.com/clubvine44-gif/kopeyka3/main/update.json";
-    private static final String PREFS_NAME = "fin_update_prefs";
-    private static final String PREF_DISMISSED_CODE = "dismissed_version_code";
     private WebView webView;
     private SwipeRefreshLayout refreshLayout;
     private PermissionRequest pendingMicRequest;
@@ -115,7 +113,7 @@ public class MainActivity extends AppCompatActivity {
         s.setDisplayZoomControls(false);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) s.setSafeBrowsingEnabled(false);
-        s.setUserAgentString(s.getUserAgentString() + " FinApp/1.1");
+        s.setUserAgentString(s.getUserAgentString() + " FinApp/1.2");
         webView.addJavascriptInterface(new FinBridge(this), "FinBridge");
 
         final WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
@@ -228,20 +226,25 @@ public class MainActivity extends AppCompatActivity {
 
     private void checkForUpdate() {
         updateExecutor.execute(() -> {
+            HttpURLConnection c = null;
             try {
                 URL url = new URL(UPDATE_URL + "?t=" + System.currentTimeMillis());
-                HttpURLConnection c = (HttpURLConnection) url.openConnection();
+                c = (HttpURLConnection) url.openConnection();
                 c.setConnectTimeout(7000);
                 c.setReadTimeout(7000);
                 c.setRequestMethod("GET");
-                c.setRequestProperty("Cache-Control", "no-cache");
+                c.setUseCaches(false);
+                c.setRequestProperty("Cache-Control", "no-cache, no-store, max-age=0");
+                c.setRequestProperty("Pragma", "no-cache");
+                int status = c.getResponseCode();
+                if (status != HttpURLConnection.HTTP_OK) throw new IllegalStateException("HTTP " + status);
+
                 InputStream in = c.getInputStream();
                 StringBuilder out = new StringBuilder();
                 byte[] buf = new byte[4096];
                 int n;
                 while ((n = in.read(buf)) != -1) out.append(new String(buf, 0, n, "UTF-8"));
                 in.close();
-                c.disconnect();
 
                 JSONObject j = new JSONObject(out.toString());
                 int remoteCode = j.optInt("versionCode", 0);
@@ -249,25 +252,28 @@ public class MainActivity extends AppCompatActivity {
                 String apkUrl = j.optString("apkUrl", "");
                 String notes = j.optString("notes", "");
                 int localCode = getPackageManager().getPackageInfo(getPackageName(), 0).versionCode;
-                int dismissedCode = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getInt(PREF_DISMISSED_CODE, 0);
-                if (remoteCode > localCode && remoteCode > dismissedCode && !apkUrl.isEmpty()) {
+
+                if (remoteCode > localCode && !apkUrl.isEmpty()) {
                     runOnUiThread(() -> showUpdateDialog(remoteCode, remoteName, apkUrl, notes));
                 }
-            } catch (Exception ignored) { }
+            } catch (Exception e) {
+                android.util.Log.w("FinUpdate", "Update check failed", e);
+            } finally {
+                if (c != null) c.disconnect();
+            }
         });
     }
 
     private void showUpdateDialog(int code, String name, String apkUrl, String notes) {
+        if (isFinishing() || isDestroyed()) return;
         String message = "Доступна новая версия Финн" + (name.isEmpty() ? "" : " " + name)
                 + "\n\n" + (notes.isEmpty() ? "Обновление приложения." : notes);
         new AlertDialog.Builder(this)
                 .setTitle("Доступно обновление")
                 .setMessage(message)
-                .setNegativeButton("Позже", (d, w) ->
-                        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-                                .putInt(PREF_DISMISSED_CODE, code).apply())
+                .setNegativeButton("Позже", null)
                 .setPositiveButton("Установить", (d, w) -> downloadUpdate(apkUrl, name))
-                .setCancelable(false)
+                .setCancelable(true)
                 .show();
     }
 
@@ -296,7 +302,7 @@ public class MainActivity extends AppCompatActivity {
                 Intent settings = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                         Uri.parse("package:" + getPackageName()));
                 startActivity(settings);
-                Toast.makeText(this, "Разреши установку из этого источника и снова нажми установить обновление.", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "Разреши установку из этого источника и снова запусти обновление.", Toast.LENGTH_LONG).show();
                 return;
             }
             Intent install = new Intent(Intent.ACTION_VIEW);
