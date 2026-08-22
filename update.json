@@ -1,6 +1,6 @@
 {
-  "versionCode": 4,
-  "versionName": "1.3.0",
+  "versionCode": 5,
+  "versionName": "1.3.1",
   "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/latest/download/Fin.apk",
-  "notes": "3D-Финн: интерактивное обучение и визуальный помощник"
+  "notes": "Финн 1.3.1: исправлена проверка обновлений и повторное обнаружение новой версии"
 }
