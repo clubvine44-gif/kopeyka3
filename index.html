@@ -24,12 +24,82 @@
 .set-row .set-val{font-size:13px;color:var(--accent);font-weight:700;white-space:nowrap}
 .set-row.danger .set-main b{color:var(--red)}
 .set-row.danger .set-val{color:var(--red)}
-</style></head><body><div class="topbar"><div class="top-actions" style="width:80px"><button class="icon-btn" id="btnCloud" title="Облако">☁</button></div>
-<div class="finn-avatar" id="finnAvatar" title="Финн">
-<svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="30" fill="#1A1208" stroke="#E5A75E" stroke-width="2"/><circle cx="32" cy="32" r="24" fill="url(#cg)"/><defs><linearGradient id="cg" x1="12" y1="10" x2="52" y2="54"><stop stop-color="#F8E0A8"/><stop offset="1" stop-color="#B86B2E"/></linearGradient></defs><circle class="finn-eye" id="finnEyeL" cx="24" cy="28" r="4" fill="#4ADE80"/><circle class="finn-eye" id="finnEyeR" cx="40" cy="28" r="4" fill="#4ADE80"/><path d="M22 40c3 4 8 6 10 6s7-2 10-6" stroke="#1A1208" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>
+
+/* === Finn live avatar === */
+.finn-avatar{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;transition:transform .25s cubic-bezier(.34,1.56,.64,1);-webkit-tap-highlight-color:transparent}
+.finn-avatar:active{transform:scale(.88)}
+.finn-avatar svg{width:46px;height:46px;overflow:visible}
+.finn-tip{position:absolute;top:54px;left:50%;transform:translateX(-50%) translateY(-6px);background:rgba(28,31,40,.96);border:1px solid rgba(229,167,94,.35);padding:10px 14px;border-radius:14px;font-size:12px;font-weight:600;color:#F2F3F7;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;z-index:80;box-shadow:0 12px 32px rgba(0,0,0,.55),0 0 0 1px rgba(229,167,94,.12);backdrop-filter:blur(8px)}
+.finn-avatar.show-tip .finn-tip{opacity:1;transform:translateX(-50%) translateY(0)}
+.finn-aura{position:absolute;inset:-4px;border-radius:50%;pointer-events:none;opacity:.55;animation:finnAura 3.2s ease-in-out infinite}
+.finn-avatar.status-green .finn-aura{background:radial-gradient(circle,rgba(74,222,128,.35) 0%,transparent 70%)}
+.finn-avatar.status-orange .finn-aura{background:radial-gradient(circle,rgba(251,191,36,.4) 0%,transparent 70%)}
+.finn-avatar.status-red .finn-aura{background:radial-gradient(circle,rgba(248,113,113,.4) 0%,transparent 70%)}
+@keyframes finnAura{0%,100%{transform:scale(1);opacity:.45}50%{transform:scale(1.18);opacity:.75}}
+@keyframes finnFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-2.5px)}}
+@keyframes finnBlink{0%,42%,46%,100%{transform:scaleY(1)}44%{transform:scaleY(.08)}}
+@keyframes finnGlow{0%,100%{filter:drop-shadow(0 0 3px currentColor)}50%{filter:drop-shadow(0 0 7px currentColor)}}
+@keyframes finnMouth{0%,100%{d:path("M22 41c3.5 3.5 8 5 10 5s6.5-1.5 10-5")}50%{d:path("M23 40.5c3 4 7.5 6 9 6s6-2 9-4")}}
+.finn-face{animation:finnFloat 3.6s ease-in-out infinite}
+.finn-eye-g{animation:finnBlink 4.8s ease-in-out infinite;transform-origin:center}
+.finn-eye-g:nth-child(2){animation-delay:.15s}
+.finn-eye-g circle{animation:finnGlow 2.4s ease-in-out infinite}
+/* bottom nav */
+.bottom-nav{position:fixed;left:0;right:0;bottom:0;z-index:40;display:flex;justify-content:space-around;align-items:center;padding:6px 8px calc(8px + var(--safe-b));background:rgba(10,11,14,.94);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--line)}
+.bn-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 4px;border-radius:12px;color:var(--muted);font-size:10px;font-weight:600;letter-spacing:.02em;transition:color .2s,background .2s}
+.bn-item.active{color:var(--accent);background:rgba(229,167,94,.1)}
+.bn-item .bn-ic{width:24px;height:24px;display:flex;align-items:center;justify-content:center}
+.bn-item .bn-ic svg{width:22px;height:22px}
+body.has-bnav{padding-bottom:calc(72px + var(--safe-b))}
+.view-header{display:flex;align-items:center;gap:10px;padding:4px 0 12px}
+.view-header .back-btn{width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:var(--card);border:1px solid var(--line);font-size:18px}
+.view-header h2{font-size:17px;font-weight:700;flex:1}
+</style></head><body class="has-bnav"><div class="topbar"><div class="top-actions" style="width:80px"><button class="icon-btn" id="btnCloud" title="Облако">☁</button></div>
+<div class="finn-avatar status-green" id="finnAvatar" title="Финн">
+<span class="finn-aura"></span>
+<svg class="finn-face" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="finnCoin" x1="10" y1="8" x2="54" y2="56"><stop stop-color="#F8E0A8"/><stop offset=".45" stop-color="#E5A75E"/><stop offset="1" stop-color="#B86B2E"/></linearGradient>
+    <filter id="finnSoft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="1.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <circle cx="32" cy="32" r="30" fill="#121018" stroke="#E5A75E" stroke-width="1.8" opacity=".95"/>
+  <circle cx="32" cy="32" r="25" fill="url(#finnCoin)" filter="url(#finnSoft)"/>
+  <circle cx="32" cy="32" r="20.5" fill="#1A1208"/>
+  <!-- eyes groups for blink -->
+  <g class="finn-eye-g"><circle id="finnEyeL" cx="24.5" cy="28" r="3.6" fill="#4ADE80"/></g>
+  <g class="finn-eye-g"><circle id="finnEyeR" cx="39.5" cy="28" r="3.6" fill="#4ADE80"/></g>
+  <!-- soft smile -->
+  <path id="finnMouth" d="M22 41c3.5 3.5 8 5 10 5s6.5-1.5 10-5" stroke="#E5A75E" stroke-width="2.2" stroke-linecap="round" fill="none" opacity=".9"/>
+  <!-- cheek dots -->
+  <circle cx="17" cy="35" r="1.6" fill="#E5A75E" opacity=".35"/>
+  <circle cx="47" cy="35" r="1.6" fill="#E5A75E" opacity=".35"/>
+</svg>
 <div class="finn-tip">Чтобы включить ИИ-ассистента удерживайте (+)</div>
 </div>
-<div class="top-actions" style="width:80px;justify-content:flex-end"><button class="icon-btn" id="btnSettings" title="Настройки">⚙</button></div></div><div class="wrap" id="app"></div><div class="fab-wrap"><div class="radial" id="radial"><button data-act="income"><span class="ic">➕</span> Доход</button><button data-act="expense"><span class="ic">➖</span> Расход</button><button data-act="reserve"><span class="ic">🏦</span> Резерв</button><button data-act="debt"><span class="ic">📉</span> Долг</button><button data-act="oblig"><span class="ic">📅</span> Обязательный</button></div><button class="fab" id="fab">+</button></div><div class="modal-bg" id="modalBg"></div><div class="toast" id="toast"></div><script src="app.js?v=2026082220"></script><script src="onboard.js?v=2026082220"></script><script src="cloud.js?v=2026082220"></script><script src="products.js?v=2026082220"></script><script src="engine.js?v=2026082220"></script><script src="ai.js?v=2026082220"></script><script src="assistant-v2.js?v=2026082220"></script><script src="voice.js?v=2026082220"></script><script src="finn3d.js?v=2026082220"></script><script src="finn-wake.js?v=2026082220"></script><script>window.__kopeykaBuild='2026082220';window.__FIN_NATIVE=true;</script><script>
+<div class="top-actions" style="width:80px;justify-content:flex-end"><button class="icon-btn" id="btnSettings" title="Настройки">⚙</button></div></div><div class="wrap" id="app"></div>
+<nav class="bottom-nav" id="bottomNav">
+  <button type="button" class="bn-item active" data-view="home">
+    <span class="bn-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 10.5L12 4l8 6.5V20a1 1 0 01-1 1h-5v-6H10v6H5a1 1 0 01-1-1v-9.5z"/></svg></span>
+    <span>Главная</span>
+  </button>
+  <button type="button" class="bn-item" data-view="ops">
+    <span class="bn-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h10M4 18h14"/><circle cx="18" cy="12" r="2" fill="currentColor"/></svg></span>
+    <span>Операции</span>
+  </button>
+  <button type="button" class="bn-item" data-view="res">
+    <span class="bn-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v18M7 8c0-2 2.2-3.5 5-3.5s5 1.5 5 3.5-2.2 3-5 3-5 1.2-5 3 2.2 3.5 5 3.5 5-1.5 5-3.5"/></svg></span>
+    <span>Резервы</span>
+  </button>
+  <button type="button" class="bn-item" data-view="debt">
+    <span class="bn-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 7h12v3H6zM8 10v7M16 10v7M5 17h14"/><path d="M9 7V5.5A1.5 1.5 0 0110.5 4h3A1.5 1.5 0 0115 5.5V7"/></svg></span>
+    <span>Долги</span>
+  </button>
+  <button type="button" class="bn-item" data-view="obl">
+    <span class="bn-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/><path d="M9 14l2 2 4-4"/></svg></span>
+    <span>Платежи</span>
+  </button>
+</nav>
+<div class="fab-wrap"><div class="radial" id="radial"><button data-act="income"><span class="ic">➕</span> Доход</button><button data-act="expense"><span class="ic">➖</span> Расход</button><button data-act="reserve"><span class="ic">🏦</span> Резерв</button><button data-act="debt"><span class="ic">📉</span> Долг</button><button data-act="oblig"><span class="ic">📅</span> Обязательный</button></div><button class="fab" id="fab">+</button></div><div class="modal-bg" id="modalBg"></div><div class="toast" id="toast"></div><script src="app.js?v=2026082222"></script><script src="onboard.js?v=2026082222"></script><script src="cloud.js?v=2026082222"></script><script src="products.js?v=2026082222"></script><script src="engine.js?v=2026082222"></script><script src="ai.js?v=2026082222"></script><script src="assistant-v2.js?v=2026082222"></script><script src="voice.js?v=2026082222"></script><script src="finn3d.js?v=2026082222"></script><script src="finn-wake.js?v=2026082222"></script><script>window.__kopeykaBuild='2026082222';window.__FIN_NATIVE=true;</script><script>
 (function(){
   function tryTestPush(){
     try{
@@ -45,4 +115,41 @@
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',tryTestPush);
   else tryTestPush();
 })();
-</script></body></html>
+</script>
+<script>
+(function(){
+  function syncNav(){
+    var v = (window.currentView || (typeof currentView!=='undefined'?currentView:'home')) || 'home';
+    // currentView is local to app.js closure, so use data attribute or global
+    document.querySelectorAll('#bottomNav .bn-item').forEach(function(b){
+      b.classList.toggle('active', b.getAttribute('data-view') === (window.__finView||'home'));
+    });
+  }
+  document.addEventListener('click', function(e){
+    var b = e.target.closest('#bottomNav .bn-item');
+    if(!b) return;
+    e.preventDefault();
+    var v = b.getAttribute('data-view') || 'home';
+    window.__finView = v;
+    if(typeof goView === 'function') goView(v);
+    else if(typeof goHome === 'function' && v==='home') goHome();
+    document.querySelectorAll('#bottomNav .bn-item').forEach(function(x){x.classList.toggle('active', x===b);});
+  });
+  // swipe right to go back
+  var sx=0, sy=0;
+  document.addEventListener('touchstart', function(e){ if(e.touches[0]){sx=e.touches[0].clientX;sy=e.touches[0].clientY;} }, {passive:true});
+  document.addEventListener('touchend', function(e){
+    if(!e.changedTouches[0]) return;
+    var dx = e.changedTouches[0].clientX - sx;
+    var dy = e.changedTouches[0].clientY - sy;
+    if(dx > 80 && Math.abs(dy) < 60){
+      if(window.__finView && window.__finView !== 'home' && typeof goHome === 'function'){
+        window.__finView = 'home';
+        goHome();
+        document.querySelectorAll('#bottomNav .bn-item').forEach(function(x){x.classList.toggle('active', x.getAttribute('data-view')==='home');});
+      }
+    }
+  }, {passive:true});
+})();
+</script>
+</body></html>

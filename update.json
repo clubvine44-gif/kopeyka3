@@ -1,6 +1,6 @@
 {
-  "versionCode": 21,
-  "versionName": "3.1.0",
+  "versionCode": 22,
+  "versionName": "3.2.0",
   "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/latest/download/Fin.apk",
-  "notes": "Новая версия Финна"
+  "notes": "Финн 3.2.0: живой анимированный Финн в шапке (моргает, парит, глаза = статус связи), современная нижняя панель, разделы вынесены с главного, свайп назад + кнопка Назад, продуктивный дашборд без дублей."
 }
