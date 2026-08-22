@@ -3,75 +3,60 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Копейка — видео-превью</title>
+<title>Копейка — видео showcase</title>
 <style>
-:root{--gold:#e5a75e;--bg:#050609}
-*{box-sizing:border-box}
-html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg)}
+:root{--gold:#e5a75e;--bg:#040507}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg)}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif}
-#scene{position:fixed;inset:0;background:radial-gradient(70vw 80vh at 50% 35%,rgba(229,167,94,.055),transparent 65%),#050609;display:grid;place-items:center;overflow:hidden}
-#device{position:relative;width:min(520px,100vw);height:min(100vh,980px);padding:8px;border-radius:38px;background:#0d0e12;border:1px solid rgba(255,255,255,.12);box-shadow:0 45px 120px rgba(0,0,0,.72),0 0 80px rgba(229,167,94,.05);transform:scale(.96);opacity:0;animation:deviceIn 1.2s cubic-bezier(.16,1,.3,1) .35s forwards}
-@keyframes deviceIn{to{transform:scale(1);opacity:1}}
-#screen{position:relative;width:100%;height:100%;overflow:hidden;border-radius:31px;background:#0a0b0e}
+#scene{position:fixed;inset:0;display:grid;place-items:center;overflow:hidden;background:radial-gradient(55vw 75vh at 50% 42%,rgba(229,167,94,.07),transparent 68%),#040507}
+#device{position:relative;width:min(430px,88vw);height:min(900px,calc(100vh - 28px));aspect-ratio:430/900;padding:7px;border-radius:36px;background:linear-gradient(145deg,#191b20,#0b0c0f 60%);border:1px solid rgba(255,255,255,.16);box-shadow:0 42px 120px rgba(0,0,0,.8),0 0 90px rgba(229,167,94,.055);transform:translateY(18px) scale(.985);opacity:0;animation:deviceIn 1.35s cubic-bezier(.16,1,.3,1) .15s forwards;overflow:hidden}
+@keyframes deviceIn{to{transform:translateY(0) scale(1);opacity:1}}
+#screen{position:relative;width:100%;height:100%;overflow:hidden;border-radius:30px;background:#0a0b0e}
 iframe{display:block;width:100%;height:100%;border:0;background:#0a0b0e}
-#vignette{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 48%,rgba(0,0,0,.34) 100%);z-index:8}
-#spot{position:fixed;z-index:10;pointer-events:none;border:1px solid rgba(229,167,94,.95);border-radius:15px;opacity:0;box-shadow:0 0 0 9999px rgba(0,0,0,.54),0 0 0 5px rgba(229,167,94,.08),0 0 42px rgba(229,167,94,.42);transition:left 1.05s cubic-bezier(.22,1,.36,1),top 1.05s cubic-bezier(.22,1,.36,1),width 1.05s cubic-bezier(.22,1,.36,1),height 1.05s cubic-bezier(.22,1,.36,1),opacity .45s}
-#spot:before{content:"";position:absolute;inset:-9px;border-radius:inherit;border:1px solid rgba(229,167,94,.18);animation:pulse 2.2s ease-in-out infinite}
-@keyframes pulse{0%,100%{transform:scale(1);opacity:.2}50%{transform:scale(1.035);opacity:.8}}
+#vignette{position:fixed;inset:0;pointer-events:none;z-index:8;background:radial-gradient(ellipse at center,transparent 43%,rgba(0,0,0,.42) 100%)}
+#shade{position:fixed;inset:0;z-index:9;pointer-events:none;background:rgba(0,0,0,.52);opacity:0;transition:opacity .7s cubic-bezier(.22,1,.36,1)}
+#spot{position:fixed;z-index:10;pointer-events:none;border:1.5px solid rgba(245,194,117,.98);border-radius:14px;opacity:0;will-change:left,top,width,height,box-shadow;transition:left 1.15s cubic-bezier(.16,1,.3,1),top 1.15s cubic-bezier(.16,1,.3,1),width 1.15s cubic-bezier(.16,1,.3,1),height 1.15s cubic-bezier(.16,1,.3,1),border-radius 1.15s cubic-bezier(.16,1,.3,1),opacity .45s ease;box-shadow:0 0 0 2px rgba(229,167,94,.08),0 0 22px rgba(229,167,94,.35),0 0 52px rgba(229,167,94,.18)}
+#spot:before{content:"";position:absolute;inset:-6px;border:1px solid rgba(229,167,94,.24);border-radius:inherit;animation:ring 2.2s ease-in-out infinite}
+@keyframes ring{0%,100%{transform:scale(.99);opacity:.2}50%{transform:scale(1.025);opacity:.8}}
 #spot.on{opacity:1}
-#flare{position:fixed;inset:0;z-index:9;pointer-events:none;opacity:0;background:radial-gradient(circle at 50% 50%,rgba(229,167,94,.14),transparent 38%)}
-#flare.go{animation:flare .8s ease}
-@keyframes flare{0%{opacity:0}35%{opacity:1}100%{opacity:0}}
-#black{position:fixed;inset:0;z-index:30;background:#050609;opacity:1;pointer-events:none;transition:opacity .9s cubic-bezier(.4,0,.2,1)}
-#black.off{opacity:0}
-/* no controls, captions, labels or presentation chrome: this page is intentionally record-ready */
-@media(max-width:560px){#device{width:100vw;height:100vh;padding:0;border-radius:0;border:0;box-shadow:none}#screen{border-radius:0}}
+#spot.wide{border-radius:20px}
+#flare{position:fixed;inset:0;z-index:11;pointer-events:none;opacity:0;background:radial-gradient(circle at 50% 50%,rgba(229,167,94,.11),transparent 34%)}
+#flare.go{animation:flare .95s ease}@keyframes flare{0%{opacity:0}28%{opacity:1}100%{opacity:0}}
+#black{position:fixed;inset:0;z-index:30;background:#040507;opacity:1;pointer-events:none;transition:opacity 1s cubic-bezier(.4,0,.2,1)}#black.off{opacity:0}
+@media(max-width:560px){#device{width:100vw;height:100vh;max-height:none;padding:0;border-radius:0;border:0;box-shadow:none}#screen{border-radius:0}}
 </style>
 </head>
 <body>
-<div id="scene">
-  <div id="device"><div id="screen"><iframe id="app" src="index.html?showcase=1&demo=1"></iframe></div></div>
-</div>
-<div id="black"></div><div id="spot"></div><div id="flare"></div><div id="vignette"></div>
+<div id="scene"><div id="device"><div id="screen"><iframe id="app" src="index.html?showcase=1&demo=1"></iframe></div></div></div>
+<div id="shade"></div><div id="spot"></div><div id="flare"></div><div id="vignette"></div><div id="black"></div>
 <script>
-const frame=document.getElementById('app'),spot=document.getElementById('spot'),flare=document.getElementById('flare'),black=document.getElementById('black');
-let current=-1,timer;
+const frame=document.getElementById('app'),spot=document.getElementById('spot'),shade=document.getElementById('shade'),flare=document.getElementById('flare'),black=document.getElementById('black');
+let current=-1,timer=null;
 function d(){return frame.contentDocument||frame.contentWindow.document}
-function visible(el){if(!el)return false;const r=el.getBoundingClientRect();return r.width>1&&r.height>1}
-function first(qs){for(const q of qs){try{const el=d().querySelector(q);if(visible(el))return el}catch(e){}}return null}
-function textEl(words){const all=[...d().querySelectorAll('button,.sec-head,.sec-title,.nav-item,[role="button"]')];return all.find(el=>words.some(w=>(el.textContent||'').toLowerCase().includes(w))&&visible(el))}
-function scrollToEl(el){try{el.scrollIntoView({behavior:'smooth',block:'center',inline:'nearest'})}catch(e){}}
-function rect(el){const r=el.getBoundingClientRect(),fr=frame.getBoundingClientRect();return {x:fr.left+r.left,y:fr.top+r.top,w:r.width,h:r.height}}
-function focus(el){if(!el)return;const r=rect(el);spot.style.left=r.x+'px';spot.style.top=r.y+'px';spot.style.width=r.w+'px';spot.style.height=r.h+'px';spot.classList.add('on')}
-function transitionFlash(){flare.classList.remove('go');void flare.offsetWidth;flare.classList.add('go')}
-function tap(words){const e=textEl(words);if(e){e.click();return true}return false}
-function demo(){
-  try{
-    const w=frame.contentWindow;
-    if(typeof w.setAppState==='function'){
-      const t=new Date(),m=t.toISOString().slice(0,7),day=t.toISOString().slice(0,10);
-      w.setAppState({version:7,settings:{openingBalance:18500,month:m,dayRate:4800,nightRate:5200,scheduleMode:'legacy'},income:[{id:'v1',date:day,amount:98000,note:'Зарплата'}],expenses:[{id:'v2',date:day,amount:1250,category:'Продукты',note:'Продукты'},{id:'v3',date:day,amount:900,category:'Проезд',note:'Проезд'}],reserves:[{id:'v4',name:'Подушка безопасности',category:'Подушка безопасности',saved:18500,target:100000}],debts:[{id:'v5',name:'Кредит',total:12000,paid:4000}],reserveOps:[],obligations:[{id:'v6',name:'Обязательный платёж',amount:8000,day:25,active:true}],obligationPays:[],voiceMap:{},shiftsOverride:{}});
-    }
-  }catch(e){}
-}
+function visible(e){if(!e)return false;const r=e.getBoundingClientRect();const s=getComputedStyle(e);return r.width>2&&r.height>2&&s.display!=='none'&&s.visibility!=='hidden'}
+function q(arr){for(const x of arr){try{const e=d().querySelector(x);if(visible(e))return e}catch(_){}}return null}
+function byText(words){try{const all=[...d().querySelectorAll('button,a,[role="button"],.sec-head,.sec-title,.nav-item,.tab,.bottom-nav *')];return all.find(e=>visible(e)&&words.some(w=>(e.textContent||'').trim().toLowerCase().includes(w)))}catch(_){return null}}
+function fixedBottom(){try{const all=[...d().querySelectorAll('*')];let best=null;for(const e of all){if(!visible(e))continue;const s=getComputedStyle(e),r=e.getBoundingClientRect();if((s.position==='fixed'||s.position==='sticky')&&r.bottom>=d().documentElement.clientHeight-8&&r.height>42&&r.width>d().documentElement.clientWidth*.65){best=e;break}}return best}catch(_){return null}}
+function box(e){const r=e.getBoundingClientRect(),fr=frame.getBoundingClientRect();return{x:fr.left+r.left,y:fr.top+r.top,w:r.width,h:r.height}}
+function focus(e,wide=false){if(!e)return;const r=box(e);spot.style.left=r.x+'px';spot.style.top=r.y+'px';spot.style.width=r.w+'px';spot.style.height=r.h+'px';spot.classList.toggle('wide',wide);spot.classList.add('on');shade.style.opacity='.52'}
+function clearFocus(){spot.classList.remove('on');shade.style.opacity='0'}
+function flash(){flare.classList.remove('go');void flare.offsetWidth;flare.classList.add('go')}
+function smoothScroll(e){try{e.scrollIntoView({behavior:'smooth',block:'center',inline:'nearest'})}catch(_){} }
+function demo(){try{const w=frame.contentWindow;if(typeof w.setAppState==='function'){const now=new Date(),m=now.toISOString().slice(0,7),day=now.toISOString().slice(0,10);w.setAppState({version:7,settings:{openingBalance:18500,month:m,dayRate:4800,nightRate:5200,scheduleMode:'legacy'},income:[{id:'demo-income',date:day,amount:98000,note:'Зарплата'}],expenses:[{id:'demo-food',date:day,amount:3250,category:'Продукты',note:'Продукты'},{id:'demo-transport',date:day,amount:1800,category:'Транспорт',note:'Транспорт'},{id:'demo-home',date:day,amount:5400,category:'Дом',note:'Дом'}],reserves:[{id:'demo-reserve',name:'Подушка безопасности',category:'Подушка безопасности',saved:18500,target:100000}],debts:[{id:'demo-debt',name:'Кредит',total:120000,paid:40000}],reserveOps:[],obligations:[{id:'demo-obligation',name:'Обязательный платёж',amount:8000,day:25,active:true}],obligationPays:[],voiceMap:{},shiftsOverride:{}})}}catch(_){} }
 const scenes=[
-  // real app areas, no captions
-  {at:1000,find:['.hero'],hold:5200},
-  {at:0,find:['.fab'],tap:['+'],hold:4200,after:()=>{try{const b=d().querySelector('.fab');if(b)b.click()}catch(e){}}},
-  {find:['.cal'],scroll:true,hold:5000},
-  {find:['.list'],scroll:true,hold:4800},
-  {find:['.sec'],scroll:true,words:['резерв','reserve'],hold:4800},
-  {find:['.sec'],scroll:true,words:['долг','обяз'],hold:4800},
-  {find:['.sec'],scroll:true,words:['аналит','статист'],hold:4800},
-  {find:['.finn-avatar'],scroll:false,hold:5200},
-  {find:['.top-actions','.icon-btn'],hold:4800}
+ {name:'home',hold:5200,target:()=>q(['.hero'])},
+ {name:'quick',hold:4300,target:()=>q(['.fab']),before:()=>{const b=q(['.fab']);if(b)b.click()}},
+ {name:'calendar',hold:5600,target:()=>q(['.cal']),scroll:true},
+ {name:'history',hold:5000,target:()=>q(['.list']),scroll:true},
+ {name:'reserves',hold:5000,target:()=>byText(['резерв']),scroll:true},
+ {name:'debts',hold:5000,target:()=>byText(['долг','обязатель']),scroll:true},
+ {name:'analytics',hold:5200,target:()=>byText(['аналит','статист']),scroll:true},
+ {name:'finn',hold:5200,target:()=>q(['.finn-avatar'])},
+ {name:'navigation',hold:5000,target:()=>fixedBottom(),wide:true}
 ];
-async function run(i){clearTimeout(timer);current=i;if(i>=scenes.length){setTimeout(()=>location.reload(),1800);return}spot.classList.remove('on');transitionFlash();const s=scenes[i];if(s.tap)tap(s.tap);if(s.after)setTimeout(s.after,350);setTimeout(()=>{
-  let el=first(s.find);if(!el&&s.words)el=textEl(s.words);if(el&&s.scroll){scrollToEl(el);setTimeout(()=>focus(el),650)}else if(el)focus(el);
-  timer=setTimeout(()=>run(i+1),s.hold||4800);
-},500)}
-frame.addEventListener('load',()=>{setTimeout(()=>{demo();black.classList.add('off');setTimeout(()=>run(0),1100)},900)});
-window.addEventListener('resize',()=>{if(current>=0){const s=scenes[current],el=first(s.find);if(el)focus(el)}});
+async function run(i){clearTimeout(timer);current=i;if(i>=scenes.length){clearFocus();setTimeout(()=>location.reload(),1800);return}const s=scenes[i];clearFocus();flash();setTimeout(()=>{try{if(s.before)s.before()}catch(_){}let el=s.target();if(!el&&s.name==='reserves')el=q(['.sec']);if(!el&&s.name==='debts')el=q(['.sec']);if(!el&&s.name==='analytics')el=q(['.sec']);if(s.scroll&&el)smoothScroll(el);setTimeout(()=>{el=s.target()||el;if(el)focus(el,!!s.wide);timer=setTimeout(()=>run(i+1),s.hold)},s.scroll?850:350)},250)}
+frame.addEventListener('load',()=>setTimeout(()=>{demo();setTimeout(()=>{black.classList.add('off');setTimeout(()=>run(0),1100)},700)},900));
+window.addEventListener('resize',()=>{if(current>=0){const s=scenes[current];const e=s.target();if(e)focus(e,!!s.wide)}});
 </script>
 </body>
 </html>
