@@ -16,14 +16,14 @@ function open(opts){
     var bg=document.getElementById('kopeykaAiDialog');
     bg.addEventListener('click',function(e){if(e.target===bg)close();});
     document.getElementById('kaClose').onclick=close;
-    document.getElementById('kaOrb').onclick=toggleListen;
+    document.getElementById('kaOrb').onclick=function(e){e.preventDefault();};bindHoldMic(document.getElementById('kaOrb'));
     document.getElementById('kaSend').onclick=sendInput;
     document.getElementById('kaInput').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();sendInput();}});
     renderHistory();
     updateCloud();
   }
   if(opts.command) setTimeout(function(){handle(String(opts.command));},180);
-  else if(opts.listen===true) setTimeout(function(){startListen();},600);
+  /* hold-to-talk only */
 }
 
 function close(){wantListen=false;stopListen();var e=document.getElementById('kopeykaAiDialog');if(e)e.remove();try{if(window.Finn3D&&window.Finn3D.deactivate)window.Finn3D.deactivate();}catch(x){}try{if(window.__finnWakeStart)window.__finnWakeStart();}catch(x){}}
@@ -51,7 +51,7 @@ function style(){if(document.getElementById('kaStyle'))return;var s=document.cre
 '.ka-act.ok{background:linear-gradient(135deg,#F0C384,#E5A75E);color:#1A1208;border:0}'+
 '.ka-status{text-align:center;color:#9AA0B0;font-size:11px;padding:0 12px 6px;min-height:15px}'+
 '.ka-input-row{display:flex;gap:7px;padding:8px 10px 10px;border-top:1px solid rgba(255,255,255,.06);align-items:center}'+
-'.ka-mic{width:38px;height:38px;border-radius:11px;border:1px solid rgba(229,167,94,.32);'+
+'.ka-mic.holding{background:linear-gradient(135deg,#F0C384,#E5A75E);color:#1A1208;transform:scale(1.06);box-shadow:0 0 0 4px rgba(229,167,94,.25)}.ka-mic{width:38px;height:38px;border-radius:11px;border:1px solid rgba(229,167,94,.32);'+
 'background:#1C1F28;color:#E5A75E;font-size:15px;flex-shrink:0}'+
 '.ka-mic.listening{background:rgba(229,167,94,.16);box-shadow:0 0 0 3px rgba(229,167,94,.12);animation:kaMic 1.1s ease-in-out infinite}'+
 '@keyframes kaMic{50%{box-shadow:0 0 0 6px rgba(229,167,94,.07)}}'+
@@ -67,6 +67,11 @@ function status(t){var e=document.getElementById('kaStatus');if(e)e.textContent=
 function updateCloud(){var e=document.getElementById('kaCloud'),c=window.kopeykaEngine&&window.kopeykaEngine.snapshot?window.kopeykaEngine.snapshot().cloud:null;if(e)e.textContent=c&&c.connected?'Облако подключено':c&&c.online?'Онлайн · локально':'Офлайн';}
 function sendInput(){var i=document.getElementById('kaInput');if(!i)return;var x=i.value.trim();if(x){i.value='';handle(x);}}
 function toggleListen(){if(listening||wantListen){wantListen=false;stopListen();status('Готов. Нажми круг или скажи «Фин»');}else startListen();}
+function bindHoldMic(btn){if(!btn||btn._hb)return;btn._hb=true;var holding=false;
+function down(e){e.preventDefault();if(holding)return;holding=true;btn.classList.add('holding');startListen();}
+function up(e){if(e)e.preventDefault();if(!holding)return;holding=false;btn.classList.remove('holding');stopListen();}
+btn.addEventListener('touchstart',down,{passive:false});btn.addEventListener('touchend',up,{passive:false});
+btn.addEventListener('touchcancel',up,{passive:false});btn.addEventListener('mousedown',down);btn.addEventListener('mouseup',up);btn.addEventListener('mouseleave',up);}
 function startListen(){if(!SR){status('Нет распознавания речи');return;}if(listening)return;wantListen=true;restarts=0;createRecognition();}
 function createRecognition(){
   if(!wantListen||listening)return;
@@ -83,10 +88,10 @@ function createRecognition(){
   rec.onerror=function(e){
     var code=e&&e.error||'';listening=false;var o=document.getElementById('kaOrb');if(o)o.classList.remove('listening');
     try{rec.abort();}catch(x){}rec=null;
-    if(wantListen&&restarts<3&&['no-speech','audio-capture','network','aborted'].indexOf(code)>=0){restarts++;setTimeout(createRecognition,350);}
+    if(false){}
     else{wantListen=false;status(code==='not-allowed'?'Нет доступа к микрофону':'Скажи «Фин» или нажми круг');}
   };
-  rec.onend=function(){listening=false;var o=document.getElementById('kaOrb');if(o)o.classList.remove('listening');if(wantListen&&restarts<3){restarts++;setTimeout(createRecognition,250);}};
+  rec.onend=function(){listening=false;};
   try{rec.start();}catch(e){rec=null;listening=false;wantListen=false;status('Микрофон не запустился');}
 }
 function stopListen(){wantListen=false;if(rec){try{rec.stop();}catch(e){try{rec.abort();}catch(x){}}rec=null;}listening=false;var o=document.getElementById('kaOrb');if(o)o.classList.remove('listening');}

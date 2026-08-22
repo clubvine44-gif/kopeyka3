@@ -1,10 +1,5 @@
-(function () {
-  'use strict';
-  // Постоянное фоновое прослушивание wake-word отключено: Web Speech API в WebView
-  // не умеет слушать непрерывно, вынужден каждые 1-2 сек пересоздавать сессию,
-  // а каждый запуск Android сопровождает системным звуком/индикатором микрофона.
-  // Это давало ложные срабатывания звука ~10 раз в минуту без участия пользователя.
-  // Оставлен только явный запуск (тап/долгий тап по кнопке) — см. assistant-v2.js, finn3d.js.
-  window.__finnWakeStop = function () {};
-  window.__finnWakeStart = function () {};
+(function(){'use strict';
+// Фоновый wake отключён — на Android каждый start() SpeechRecognition даёт системный звук.
+window.__finnWakeStop=function(){};
+window.__finnWakeStart=function(){};
 })();
