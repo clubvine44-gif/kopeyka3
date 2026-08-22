@@ -132,6 +132,18 @@ public class FinBridge {
     }
 
     @JavascriptInterface
+    public void updateWidgetDataFull(String daily, String cash, String available, String shift, String left) {
+        context.getSharedPreferences("fin_widget", Context.MODE_PRIVATE).edit()
+                .putString("daily", daily != null ? daily : "—")
+                .putString("cash", cash != null ? cash : "—")
+                .putString("available", available != null ? available : "—")
+                .putString("shift", shift != null ? shift : "")
+                .putString("left", left != null ? left : "")
+                .apply();
+        FinWidgetProvider.refreshAll(context);
+    }
+
+    @JavascriptInterface
     public void saveBackup(String json, String filename) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

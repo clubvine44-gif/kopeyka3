@@ -3,6 +3,7 @@ var KEY='kopeyka3_state_v1',ANCHOR='2026-08-17',CYCLE=['day','day','night','nigh
 var CATS=['Продукты','Алкоголь','Сигареты','Хозтовары','Бытовая химия','Кафе','Связь','Проезд','Жильё','Здоровье','Красота','Одежда','Развлечения','Подписки','Техника','Дети','Животные','Обязательные','Долг','Прочее'];
 var RES_PRESETS=['Подушка безопасности','Права','Отпуск','Ремонт','Налог','Свой вариант'];
 var SHIFT_LABEL={day:'День',night:'Ночь',off:'Выходной'};
+var _renderQueued=false,_rafRender=null;
 var MONTHS_RU=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 var viewMonth=null,openSecs={ops:1,obl:1,an:0,res:0,debt:0},undoStack=[],UNDO_MAX=30;
 function monthLabel(ym){var p=String(ym||'').split('-').map(Number);return (MONTHS_RU[(p[1]||1)-1]||'')+' '+(p[0]||'');}
@@ -114,16 +115,33 @@ var oblH=STATE.obligations.length?STATE.obligations.map(function(ob){var paid=0;
 var ops=[];STATE.income.forEach(function(i){if(inMonth(i.date,month))ops.push({t:i.date,type:'in',a:i.amount,n:i.note||'Доход',id:i.id});});STATE.expenses.forEach(function(e){if(!inMonth(e.date,month))return;var label=e.category||'Расход';if(e.category==='Долг'&&e.note)label=e.note;else if(e.note&&e.category==='Обязательные')label=e.note;ops.push({t:e.date,type:'ex',a:e.amount,n:label,id:e.id});});ops.sort(function(a,b){return(b.t||'').localeCompare(a.t||'');});var opsH=ops.slice(0,12).map(function(o){return '<div class="item" data-id="'+o.id+'" data-k="'+o.type+'"><div class="left"><b>'+esc(o.n)+'</b><span class="muted">'+(o.t||'')+'</span></div><div class="amt '+(o.type==='in'?'plus':'minus')+'">'+(o.type==='in'?'+':'−')+fmt(o.a)+'</div></div>';}).join('')||'<div class="empty tight">Нет операций</div>';
 var colors=['#E5A75E','#60A5FA','#F87171','#4ADE80','#A78BFA','#FBBF24','#F472B6','#2DD4BF'];var catH='';if(c.cats.length){var totalCat=c.cats.reduce(function(s,x){return s+x.amount;},0)||1;catH=c.cats.slice(0,6).map(function(x,i){return '<div class="mini-cat"><span class="leg-dot" style="background:'+colors[i%colors.length]+'"></span><span class="leg-name">'+esc(x.name)+'</span><span class="leg-pct">'+Math.round(x.amount/totalCat*100)+'%</span><b>'+fmt(x.amount)+'</b></div>';}).join('');}else catH='<div class="empty tight">Нет расходов</div>';
 function sec(id,title,right,body){var on=!!openSecs[id];return '<div class="sec'+(on?' open':'')+'" data-sec="'+id+'"><button type="button" class="sec-head"><span class="sec-title">'+title+'</span><span class="sec-right">'+right+'</span><span class="sec-chev">›</span></button><div class="sec-body">'+body+'</div></div>';}
-var free=Math.max(0,c.available);
-var health=c.cash>0?Math.max(0.05,Math.min(1,free/Math.max(c.cash,1))):0.05;
-var r=50,circ=2*Math.PI*r,dash=(health*circ).toFixed(1),gap=(circ-health*circ).toFixed(1);
-var ang=-Math.PI/2+health*2*Math.PI;
-var satX=(64+Math.cos(ang)*r).toFixed(1),satY=(64+Math.sin(ang)*r).toFixed(1);
-var tone=health<0.25?'#F87171':(health<0.5?'#FBBF24':'#E5A75E');
 var dailyStr=fmt(c.daily);
 var whyDaily=c.available<=0?'<div class="hint">Свободных денег нет — сначала закрой долги или обязательные.</div>':'';
-var ringSvg='<svg class="orbit-svg" viewBox="0 0 128 128" width="104" height="104"><circle cx="64" cy="64" r="50" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="8"/><circle cx="64" cy="64" r="50" fill="none" stroke="'+tone+'" stroke-width="8" stroke-linecap="round" stroke-dasharray="'+dash+' '+gap+'" transform="rotate(-90 64 64)"/><circle cx="'+satX+'" cy="'+satY+'" r="4.5" fill="'+tone+'"/></svg>';
-app.innerHTML='<div class="card hero"><div class="hero-main"><div class="orbit-wrap">'+ringSvg+'<div class="orbit-core"><div class="orbit-val">'+dailyStr+'</div><div class="orbit-sub">на день</div></div></div><div class="hero-stats"><div class="hero-shift">'+sl+' · ещё '+c.daysLeft+' дн.</div><div class="hs-block"><span class="hs-l">В кассе</span><b class="'+(c.cash<0?'neg':'')+'">'+fmt(c.cash)+'</b></div><div class="hs-block"><span class="hs-l">Свободно</span><b class="'+(c.available<0?'neg':'')+'">'+fmt(c.available)+'</b></div><div class="hs-note">Кольцо — какая доля кассы свободна</div></div></div>'+whyDaily+'</div><div class="card tight"><div class="month-nav"><button type="button" class="mnav" id="mPrev">‹</button><div class="month-title">'+monthLabel(month)+(isCurrent?'':' · просмотр')+'</div><button type="button" class="mnav" id="mNext">›</button></div>'+cal+'<button type="button" class="btn-shift" id="btnShiftPay">Смены и зарплата</button></div>'+sec('obl','Обязательные',(c.obligDue?fmt(c.obligDue):'—'),'<div class="list">'+oblH+'</div>')+sec('res','Резервы и цели',fmt(c.reservesTotal),'<div class="list">'+resH+'</div>')+sec('debt','Долги',(c.debtLeft?fmt(c.debtLeft):'—'),'<div class="list">'+debH+'</div>')+sec('an','Аналитика',fmt(c.expenseSum),catH)+sec('ops','Операции',String(ops.length),'<div class="list">'+opsH+'</div>');
+var r=50,circ=2*Math.PI*r;
+var segs=[{label:'Свободно',val:Math.max(0,c.available),color:'#E5A75E'},{label:'Обязательные',val:Math.max(0,c.obligDue),color:'#60A5FA'},{label:'Долг',val:Math.max(0,c.debtLeft),color:'#F87171'}].filter(function(s){return s.val>0;});
+var ringArcs='',legendHtml='';
+if(c.cash<0){
+  ringArcs='<circle cx="64" cy="64" r="'+r+'" fill="none" stroke="#F87171" stroke-width="8" stroke-linecap="round"/>';
+  legendHtml='<div class="ring-leg-item"><span class="leg-dot" style="background:#F87171"></span><span class="leg-name">Касса в минусе</span><b class="neg">'+fmt(c.cash)+'</b></div>';
+}else if(c.cash===0){
+  ringArcs='<circle cx="64" cy="64" r="'+r+'" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="8"/>';
+  legendHtml='<div class="ring-leg-item"><span class="leg-name">Пока пусто</span><b>0 ₽</b></div>';
+}else{
+  var sumParts=segs.reduce(function(s,x){return s+x.val;},0);
+  var scale=(sumParts>c.cash&&sumParts>0)?c.cash/sumParts:1;
+  var total=c.cash,cum=0;
+  ringArcs+='<circle cx="64" cy="64" r="'+r+'" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="8"/>';
+  segs.forEach(function(s){
+    var frac=Math.min(1,(s.val*scale)/total),len=frac*circ;
+    ringArcs+='<circle cx="64" cy="64" r="'+r+'" fill="none" stroke="'+s.color+'" stroke-width="8" stroke-dasharray="'+len.toFixed(1)+' '+(circ-len).toFixed(1)+'" stroke-dashoffset="'+(-cum).toFixed(1)+'" transform="rotate(-90 64 64)"/>';
+    cum+=len;
+    legendHtml+='<div class="ring-leg-item"><span class="leg-dot" style="background:'+s.color+'"></span><span class="leg-name">'+s.label+'</span><b>'+fmt(s.val)+'</b></div>';
+  });
+  if(!segs.length)legendHtml='<div class="ring-leg-item"><span class="leg-name">Вся касса свободна</span><b>'+fmt(c.cash)+'</b></div>';
+  if(sumParts>c.cash)legendHtml+='<div class="ring-leg-item"><span class="leg-name">Не хватает в кассе</span><b class="neg">'+fmt(sumParts-c.cash)+'</b></div>';
+}
+var ringSvg='<svg class="orbit-svg" viewBox="0 0 128 128" width="104" height="104">'+ringArcs+'</svg>';
+app.innerHTML='<div class="card hero"><div class="hero-main"><div class="orbit-wrap">'+ringSvg+'<div class="orbit-core"><div class="orbit-val">'+dailyStr+'</div><div class="orbit-sub">на день</div></div></div><div class="hero-stats"><div class="hero-shift">'+sl+' · ещё '+c.daysLeft+' дн.</div><div class="ring-legend">'+legendHtml+'</div></div></div>'+whyDaily+'</div><div class="card tight"><div class="month-nav"><button type="button" class="mnav" id="mPrev">‹</button><div class="month-title">'+monthLabel(month)+(isCurrent?'':' · просмотр')+'</div><button type="button" class="mnav" id="mNext">›</button></div>'+cal+'<button type="button" class="btn-shift" id="btnShiftPay">Смены и зарплата</button></div>'+sec('obl','Обязательные',(c.obligDue?fmt(c.obligDue):'—'),'<div class="list">'+oblH+'</div>')+sec('res','Резервы и цели',fmt(c.reservesTotal),'<div class="list">'+resH+'</div>')+sec('debt','Долги',(c.debtLeft?fmt(c.debtLeft):'—'),'<div class="list">'+debH+'</div>')+sec('an','Аналитика',fmt(c.expenseSum),catH)+sec('ops','Операции',String(ops.length),'<div class="list">'+opsH+'</div>');
 try{if(window.FinBridge){if(window.FinBridge.updateWidgetDataFull){window.FinBridge.updateWidgetDataFull(fmt(c.daily),fmt(c.cash),fmt(c.available),sl,String(c.daysLeft));}else if(window.FinBridge.updateWidgetData){window.FinBridge.updateWidgetData(fmt(c.daily),fmt(c.cash),sl);}}}catch(e){}
 if(!app._bound){app._bound=true;app.addEventListener('click',function(e){var t=e.target.closest('[data-date],.item[data-id],.sec-head,#mPrev,#mNext,#btnShiftPay');if(!t||!app.contains(t))return;if(t.id==='mPrev'){viewMonth=shiftMonth(getViewMonth(),-1);render();return;}if(t.id==='mNext'){viewMonth=shiftMonth(getViewMonth(),1);render();return;}if(t.id==='btnShiftPay'){showShiftPay();return;}if(t.classList.contains('sec-head')){var secEl=t.parentElement,id=secEl.dataset.sec;openSecs[id]=!openSecs[id];secEl.classList.toggle('open',!!openSecs[id]);return;}if(t.dataset.date){var isCur=(getViewMonth()===today().slice(0,7));if(!isCur){viewMonth=today().slice(0,7);render();toast('Вернись к текущему месяцу');return;}pushUndo();var ds=t.dataset.date,cur=shift(ds,STATE.shiftsOverride),n=cur==='day'?'night':cur==='night'?'off':'day';STATE.shiftsOverride[ds]=n;save(true);render();toast('Смена: '+(SHIFT_LABEL[n]||n));return;}var id=t.dataset.id,k=t.dataset.k,month=getViewMonth();if(!id||!k)return;
 if(k==='in'){if(!confirm('Удалить доход?'))return;pushUndo();STATE.income=STATE.income.filter(function(i){return i.id!==id;});save(true);render();toast('Удалено');return;}if(k==='ex'){if(!confirm('Удалить расход?'))return;pushUndo();STATE.expenses=STATE.expenses.filter(function(i){return i.id!==id;});save(true);render();toast('Удалено');return;}

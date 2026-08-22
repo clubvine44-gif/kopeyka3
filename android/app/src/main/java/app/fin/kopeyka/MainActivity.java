@@ -94,7 +94,7 @@ public class MainActivity extends AppCompatActivity {
         s.setBuiltInZoomControls(false);
         s.setDisplayZoomControls(false);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
-        s.setUserAgentString(s.getUserAgentString() + " FinApp/2.8.0");
+        s.setUserAgentString(s.getUserAgentString() + " FinApp/2.9.0");
         webView.addJavascriptInterface(new FinBridge(this), "FinBridge");
         final WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))

@@ -1,6 +1,6 @@
 {
-  "versionCode": 16,
-  "versionName": "2.8.0",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v2.8.0/Fin.apk",
-  "notes": "Финн 2.8.0: восстановлен интерфейс, ассистент, пуш со звуком, фоновое уведомление об обновлении, кольцо без дублей."
+  "versionCode": 17,
+  "versionName": "2.9.0",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v2.9.0/Fin.apk",
+  "notes": "Финн 2.9.0: исправлен пустой экран, кольцо состава кассы, без спама микрофона, экспорт/напоминания, пуш со звуком."
 }
