@@ -1,6 +1,6 @@
 {
-  "versionCode": 18,
-  "versionName": "2.9.1",
+  "versionCode": 17,
+  "versionName": "2.9.0",
   "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/latest/download/Fin.apk",
-  "notes": "Финн 2.9.1: убран системный звук запуска/остановки микрофона. Данные и остальные функции без изменений."
+  "notes": "Финн 2.9.0"
 }
