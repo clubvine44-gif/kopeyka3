@@ -1,68 +1,91 @@
 (function () {
   'use strict';
 
-  /* Finn UI v6 — no character, theme-colored FAB outline, header hint */
-
-  var fabHalo = null;
+  /* Finn UI v7 — без персонажа, подсветка строго по контуру FAB, цвета темы */
+  var FAB_CLASS = 'finn-active';
+  var STYLE_ID = 'finnStyleV7';
 
   var CSS = [
-    '#finnHalo{position:fixed;z-index:59;pointer-events:none;border-radius:50%;',
-    'border:2px solid rgba(229,167,94,.5);box-sizing:border-box;',
-    'opacity:0;transition:opacity .25s,border-color .25s,box-shadow .25s}',
-    '#finnHalo.idle{opacity:1}',
-    '#finnHalo.pulse{opacity:1;animation:finnFabPulse 1.05s ease-in-out infinite}',
-    '@keyframes finnFabPulse{',
-    '0%,100%{border-color:rgba(229,167,94,.95);box-shadow:0 0 0 0 rgba(229,167,94,.45),0 0 12px rgba(229,167,94,.35)}',
-    '50%{border-color:rgba(240,195,132,1);box-shadow:0 0 0 6px rgba(229,167,94,.12),0 0 22px rgba(229,167,94,.55)}',
+    /* пульс прямо на кнопке «+» — по её контуру */
+    '.fab.finn-active{',
+    '  animation:finnFabPulse 1.05s ease-in-out infinite;',
+    '  box-shadow:0 0 0 0 rgba(229,167,94,.55),0 8px 28px rgba(229,167,94,.45);',
     '}',
-    '.finn-hint{display:flex;align-items:center;gap:6px;margin-left:8px;padding:4px 10px;',
-    'border-radius:999px;border:1px solid rgba(229,167,94,.28);background:rgba(229,167,94,.08);',
-    'color:#c9b08a;font-size:11px;font-weight:600;letter-spacing:.01em;white-space:nowrap;',
-    'max-width:52vw;overflow:hidden;text-overflow:ellipsis}',
+    '@keyframes finnFabPulse{',
+    '  0%,100%{',
+    '    box-shadow:0 0 0 0 rgba(229,167,94,.55),0 8px 28px rgba(229,167,94,.4);',
+    '    filter:brightness(1.05);',
+    '  }',
+    '  50%{',
+    '    box-shadow:0 0 0 8px rgba(229,167,94,.18),0 0 28px rgba(229,167,94,.65);',
+    '    filter:brightness(1.12);',
+    '  }',
+    '}',
+    /* тихий idle-контур (лёгкая обводка в цвете темы) */
+    '.fab.finn-idle{',
+    '  box-shadow:0 0 0 2px rgba(229,167,94,.35),0 8px 28px rgba(229,167,94,.35);',
+    '}',
+    /* подсказка в шапке */
+    '.finn-hint{',
+    '  display:inline-flex;align-items:center;gap:5px;margin-left:10px;',
+    '  padding:3px 10px;border-radius:999px;',
+    '  border:1px solid rgba(229,167,94,.28);',
+    '  background:rgba(229,167,94,.09);',
+    '  color:#c9b08a;font-size:11px;font-weight:600;letter-spacing:.01em;',
+    '  white-space:nowrap;max-width:48vw;overflow:hidden;text-overflow:ellipsis;',
+    '}',
     '.finn-hint b{color:var(--accent,#E5A75E);font-weight:700}',
     '@media(max-width:360px){.finn-hint{display:none}}'
   ].join('');
 
   function ensureStyle() {
-    if (document.getElementById('finnStyleV6')) return;
+    if (document.getElementById(STYLE_ID)) return;
     var s = document.createElement('style');
-    s.id = 'finnStyleV6';
+    s.id = STYLE_ID;
     s.textContent = CSS;
     document.head.appendChild(s);
   }
 
   function purgeLegacy() {
-    ['finnRoot', 'finnLaunch', 'finnFloat', 'finnTip', 'finn3d', 'finnStage', 'finnCard', 'finnShade', 'finnSpot', 'kopeykaAiFab'].forEach(function (id) {
+    [
+      'finnRoot', 'finnLaunch', 'finnFloat', 'finnTip', 'finn3d', 'finnStage',
+      'finnCard', 'finnShade', 'finnSpot', 'kopeykaAiFab', 'finnHalo'
+    ].forEach(function (id) {
       var n = document.getElementById(id);
       if (n) n.remove();
     });
-    var old = document.getElementById('finnStyleV5') || document.getElementById('finnStyleV4') || document.getElementById('finn3dStyle');
-    if (old) old.remove();
+    ['finnStyleV6', 'finnStyleV5', 'finnStyleV4', 'finn3dStyle'].forEach(function (id) {
+      var old = document.getElementById(id);
+      if (old) old.remove();
+    });
   }
 
-  function positionHalo() {
-    var fab = document.getElementById('fab');
-    if (!fab || !fabHalo) return;
-    var r = fab.getBoundingClientRect();
-    fabHalo.style.left = r.left + 'px';
-    fabHalo.style.top = r.top + 'px';
-    fabHalo.style.width = r.width + 'px';
-    fabHalo.style.height = r.height + 'px';
+  function getFab() {
+    return document.getElementById('fab');
   }
 
-  function injectHalo() {
-    if (!document.getElementById('finnHalo')) {
-      fabHalo = document.createElement('div');
-      fabHalo.id = 'finnHalo';
-      fabHalo.className = 'idle';
-      document.body.appendChild(fabHalo);
-      window.addEventListener('resize', positionHalo);
-      window.addEventListener('scroll', positionHalo, { passive: true });
-      setInterval(positionHalo, 600);
-    } else {
-      fabHalo = document.getElementById('finnHalo');
+  function setIdle() {
+    var fab = getFab();
+    if (!fab) return;
+    fab.classList.remove(FAB_CLASS);
+    fab.classList.add('finn-idle');
+  }
+
+  function activate(cmd) {
+    var fab = getFab();
+    if (fab) {
+      fab.classList.remove('finn-idle');
+      fab.classList.add(FAB_CLASS);
     }
-    positionHalo();
+    setTimeout(function () {
+      if (window.kopeykaAssistant && typeof window.kopeykaAssistant.open === 'function') {
+        window.kopeykaAssistant.open({ command: cmd || null, listen: !cmd });
+      }
+    }, 100);
+  }
+
+  function deactivate() {
+    setIdle();
   }
 
   function injectHint() {
@@ -72,7 +95,7 @@
     var h1 = bar.querySelector('h1');
     var hint = document.createElement('div');
     hint.className = 'finn-hint';
-    hint.innerHTML = 'Скажи: <b>Привет, Финн</b>';
+    hint.innerHTML = 'Позови: <b>Привет, Финн</b>';
     if (h1 && h1.parentNode === bar) {
       var wrap = document.createElement('div');
       wrap.style.cssText = 'display:flex;align-items:center;min-width:0;flex:1';
@@ -84,37 +107,14 @@
     }
   }
 
-  function activate(cmd) {
-    injectHalo();
-    positionHalo();
-    if (fabHalo) {
-      fabHalo.classList.remove('idle');
-      fabHalo.classList.add('pulse');
-    }
-    setTimeout(function () {
-      if (window.kopeykaAssistant && typeof window.kopeykaAssistant.open === 'function') {
-        window.kopeykaAssistant.open({ command: cmd || null, listen: !cmd });
-      }
-    }, 120);
-  }
-
-  function deactivate() {
-    if (fabHalo) {
-      fabHalo.classList.remove('pulse');
-      fabHalo.classList.add('idle');
-    }
-  }
-
   function boot() {
     ensureStyle();
     purgeLegacy();
-    injectHalo();
     injectHint();
-    if (fabHalo) fabHalo.classList.add('idle');
+    setIdle();
 
     var obs = new MutationObserver(function () {
       if (!document.getElementById('kopeykaAiDialog')) deactivate();
-      positionHalo();
     });
     obs.observe(document.body, { childList: true, subtree: false });
   }

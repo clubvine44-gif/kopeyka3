@@ -93,7 +93,7 @@ public class MainActivity extends AppCompatActivity {
         s.setBuiltInZoomControls(false);
         s.setDisplayZoomControls(false);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
-        s.setUserAgentString(s.getUserAgentString() + " FinApp/2.4.0");
+        s.setUserAgentString(s.getUserAgentString() + " FinApp/2.5.0");
         webView.addJavascriptInterface(new FinBridge(this), "FinBridge");
         final WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
@@ -271,6 +271,7 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
+    /** Прямое скачивание APK с проверкой ZIP-сигнатуры — без битых файлов DownloadManager. */
     private void downloadAndInstall(String apkUrl, String versionName) {
         if (!downloading.compareAndSet(false, true)) return;
         Toast.makeText(this, "Скачиваю обновление…", Toast.LENGTH_SHORT).show();
@@ -279,16 +280,21 @@ public class MainActivity extends AppCompatActivity {
             File dir = getExternalFilesDir(null);
             if (dir == null) dir = getFilesDir();
             File apk = new File(dir, "Fin-update.apk");
-            if (apk.exists()) apk.delete();
+            if (apk.exists()) //noinspection ResultOfMethodCallIgnored
+                apk.delete();
 
             HttpURLConnection c = null;
             try {
-                c = openFollowingRedirects(new URL(apkUrl));
+                URL url = new URL(apkUrl);
+                c = openFollowingRedirects(url);
                 int status = c.getResponseCode();
+                if (status == 404) throw new IllegalStateException("APK не найден (404). Релиз ещё не опубликован.");
                 if (status != 200) throw new IllegalStateException("HTTP " + status);
 
                 String ctype = String.valueOf(c.getContentType()).toLowerCase();
-                if (ctype.contains("text/html")) throw new IllegalStateException("Сервер вернул HTML вместо APK");
+                // GitHub иногда отдаёт application/octet-stream — это ок
+                if (ctype.contains("text/html") || ctype.contains("text/plain"))
+                    throw new IllegalStateException("Сервер вернул текст вместо APK. Релиз ещё не готов.");
 
                 long contentLen = c.getContentLengthLong();
                 InputStream in = c.getInputStream();
@@ -304,24 +310,28 @@ public class MainActivity extends AppCompatActivity {
                 out.close();
                 in.close();
 
-                if (total < 100000) throw new IllegalStateException("Файл слишком маленький (" + total + " байт)");
+                if (total < 100_000) throw new IllegalStateException("Файл слишком маленький (" + total + " байт) — это не APK");
                 if (contentLen > 0 && total < contentLen * 0.95) throw new IllegalStateException("Скачивание оборвалось");
 
+                // APK = ZIP, магия PK\x03\x04
                 java.io.RandomAccessFile raf = new java.io.RandomAccessFile(apk, "r");
                 byte[] magic = new byte[4];
                 raf.readFully(magic);
                 raf.close();
                 if (magic[0] != 'P' || magic[1] != 'K') {
+                    //noinspection ResultOfMethodCallIgnored
                     apk.delete();
-                    throw new IllegalStateException("Файл не является APK (повреждён)");
+                    throw new IllegalStateException("Скачанный файл не APK. Возможно, релиз ещё не опубликован.");
                 }
 
                 runOnUiThread(() -> installApk(apk));
             } catch (Exception e) {
                 android.util.Log.e("FinUpdate", "download failed: " + e.getMessage(), e);
-                if (apk.exists()) apk.delete();
+                if (apk.exists()) //noinspection ResultOfMethodCallIgnored
+                    apk.delete();
+                final String msg = e.getMessage() != null ? e.getMessage() : "неизвестная ошибка";
                 runOnUiThread(() -> Toast.makeText(this,
-                        "Не удалось скачать обновление: " + e.getMessage()
+                        "Не удалось обновить: " + msg
                                 + "\nСкачай APK вручную с GitHub Releases.",
                         Toast.LENGTH_LONG).show());
             } finally {
@@ -338,7 +348,7 @@ public class MainActivity extends AppCompatActivity {
             c.setConnectTimeout(20000);
             c.setReadTimeout(60000);
             c.setInstanceFollowRedirects(false);
-            c.setRequestProperty("User-Agent", "FinApp-Updater/2.4");
+            c.setRequestProperty("User-Agent", "FinApp-Updater/2.5");
             c.setRequestProperty("Accept", "application/vnd.android.package-archive,application/octet-stream,*/*");
             int code = c.getResponseCode();
             if (code >= 300 && code < 400) {

@@ -10,7 +10,7 @@ function open(opts){
   var already=!!document.getElementById('kopeykaAiDialog');
   if(!already){
     loadHistory();
-    document.body.insertAdjacentHTML('beforeend','<div id="kopeykaAiDialog" class="ka-bg"><div class="ka-card"><div class="ka-head"><div><div class="ka-kicker"><span class="ka-dot"></span>Фин</div><div class="ka-title">Финансовый помощник</div><div class="ka-sub" id="kaCloud">Проверяю облако…</div></div><button class="ka-close" id="kaClose">×</button></div><div class="ka-chat" id="kaChat"></div><div class="ka-orb-wrap"><div class="ka-rings"></div><button class="ka-orb" id="kaOrb" aria-label="Говорить"><span class="ka-orb-icon">◉</span><span class="ka-wave w1"></span><span class="ka-wave w2"></span><span class="ka-wave w3"></span></button></div><div class="ka-status" id="kaStatus">Нажми на круг, чтобы говорить</div><div class="ka-input-row"><input id="kaInput" autocomplete="off" placeholder="Напиши сообщение…"><button id="kaSend" aria-label="Отправить">➤</button></div></div></div>');
+    document.body.insertAdjacentHTML('beforeend','<div id="kopeykaAiDialog" class="ka-bg"><div class="ka-card"><div class="ka-head"><div class="ka-head-left"><span class="ka-dot"></span><div><div class="ka-title">Финн</div><div class="ka-sub" id="kaCloud">Готов</div></div></div><button class="ka-close" id="kaClose" aria-label="Закрыть">×</button></div><div class="ka-chat" id="kaChat"></div><div class="ka-status" id="kaStatus">Слушаю…</div><div class="ka-input-row"><button class="ka-mic" id="kaOrb" aria-label="Говорить">◉</button><input id="kaInput" autocomplete="off" placeholder="Спроси что угодно…"><button id="kaSend" aria-label="Отправить">➤</button></div></div></div>');
     style();
     document.getElementById('kaClose').onclick=close;
     document.getElementById('kaOrb').onclick=toggleListen;
@@ -22,10 +22,44 @@ function open(opts){
   if(opts.command) setTimeout(function(){handle(String(opts.command));},120);
   else if(opts.listen!==false) setTimeout(function(){startListen();},250);
 }
-function close(){wantListen=false;stopListen();var e=document.getElementById('kopeykaAiDialog');if(e)e.remove();try{if(window.__finnWakeStart)window.__finnWakeStart();}catch(x){}}
-function style(){if(document.getElementById('kaStyle'))return;var s=document.createElement('style');s.id='kaStyle';s.textContent='.ka-bg{position:fixed;inset:0;z-index:1000;background:radial-gradient(circle at 50% 18%,rgba(229,167,94,.09),transparent 38%),rgba(4,6,10,.8);backdrop-filter:blur(10px);display:flex;align-items:flex-end;justify-content:center}.ka-card{width:100%;max-width:580px;height:min(94vh,800px);background:linear-gradient(180deg,#11141b,#0c0f14);color:#f4f5f8;border:1px solid rgba(255,255,255,.11);border-radius:28px 28px 0 0;display:flex;flex-direction:column;padding:18px 15px calc(14px + env(safe-area-inset-bottom,0px));box-shadow:0 -18px 60px rgba(0,0,0,.55);overflow:hidden}.ka-head{display:flex;justify-content:space-between;align-items:flex-start;padding:0 2px}.ka-kicker{font-size:10px;color:#d7b47d;text-transform:uppercase;letter-spacing:.13em;font-weight:700;display:flex;align-items:center;gap:7px}.ka-dot{width:7px;height:7px;border-radius:50%;background:#e5a75e;box-shadow:0 0 12px #e5a75e}.ka-title{font-size:21px;font-weight:750;margin-top:4px;letter-spacing:-.02em}.ka-sub{font-size:11px;color:#777e8e;margin-top:3px}.ka-close{width:40px;height:40px;border:1px solid rgba(255,255,255,.08);border-radius:13px;background:#181c24;color:#fff;font-size:25px;line-height:1}.ka-chat{flex:1;overflow:auto;padding:18px 2px 8px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth}.ka-empty{text-align:center;color:#777e8e;font-size:13px;line-height:1.6;margin:auto 22px}.ka-msg{max-width:88%;padding:11px 13px;border-radius:17px;font-size:14px;line-height:1.5;white-space:pre-wrap;box-shadow:0 5px 18px rgba(0,0,0,.12)}.ka-user{align-self:flex-end;background:linear-gradient(135deg,#2c2923,#211f1a);border:1px solid rgba(229,167,94,.22);border-bottom-right-radius:6px}.ka-ai{align-self:flex-start;background:#181c24;border:1px solid rgba(255,255,255,.07);border-bottom-left-radius:6px}.ka-action{padding:2px}.ka-actions{display:flex;gap:8px;margin-top:11px}.ka-act{flex:1;padding:11px;border-radius:12px;border:1px solid rgba(255,255,255,.08);font-weight:750;background:#252a34;color:#fff}.ka-act.ok{background:linear-gradient(135deg,#f4cb91,#e5a75e);color:#1b1309;border:0}.ka-orb-wrap{position:relative;width:104px;height:104px;margin:2px auto;display:grid;place-items:center}.ka-rings,.ka-rings:before,.ka-rings:after{position:absolute;border-radius:50%;content:"";inset:5px;border:1px solid rgba(229,167,94,.16);animation:kaRing 2.8s ease-out infinite}.ka-rings:before{inset:7px;animation-delay:.7s}.ka-rings:after{inset:9px;animation-delay:1.4s}.ka-orb{position:relative;width:76px;height:76px;border-radius:50%;border:1px solid rgba(255,255,255,.35);background:radial-gradient(circle at 35% 30%,#ffe0a9 0,#e9b66f 42%,#b66f27 100%);color:#1a1208;box-shadow:0 0 28px rgba(229,167,94,.28),inset 0 0 18px rgba(255,255,255,.22);display:grid;place-items:center;cursor:pointer;transition:.2s}.ka-orb:active{transform:scale(.94)}.ka-orb-icon{font-size:25px;z-index:3}.ka-wave{position:absolute;border-radius:50%;border:1px solid rgba(255,255,255,.45);opacity:0}.ka-orb.listening{animation:kaListen 1.15s ease-in-out infinite}.ka-orb.listening .ka-wave{inset:-4px;animation:kaWave 1.5s ease-out infinite}.ka-orb.listening .w2{animation-delay:.35s}.ka-orb.listening .w3{animation-delay:.7s}.ka-status{text-align:center;color:#858c9b;font-size:12px;min-height:18px;margin:0 0 9px}.ka-input-row{display:flex;gap:8px}.ka-input-row input{flex:1;min-width:0;background:#171b23;border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:12px 13px;color:#fff;outline:none;font-size:14px}.ka-input-row input:focus{border-color:rgba(229,167,94,.45);box-shadow:0 0 0 3px rgba(229,167,94,.08)}.ka-input-row button{width:46px;border:0;border-radius:14px;background:linear-gradient(135deg,#f0c384,#e5a75e);color:#1a1208;font-weight:900;font-size:18px}@keyframes kaListen{50%{box-shadow:0 0 34px rgba(229,167,94,.5),inset 0 0 22px rgba(255,255,255,.25)}}@keyframes kaWave{0%{transform:scale(.8);opacity:.65}100%{transform:scale(1.55);opacity:0}}@keyframes kaRing{0%{transform:scale(.78);opacity:0}30%{opacity:.35}100%{transform:scale(1.2);opacity:0}}';document.head.appendChild(s);}
+function close(){wantListen=false;stopListen();var e=document.getElementById('kopeykaAiDialog');if(e)e.remove();try{if(window.Finn3D&&window.Finn3D.deactivate)window.Finn3D.deactivate();}catch(x){}try{if(window.__finnWakeStart)window.__finnWakeStart();}catch(x){}}
+function style(){if(document.getElementById('kaStyle'))return;var s=document.createElement('style');s.id='kaStyle';s.textContent=''+
+'.ka-bg{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;'+
+'background:rgba(6,8,12,.52);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}'+
+'.ka-card{width:min(100%,380px);max-height:min(72vh,520px);display:flex;flex-direction:column;'+
+'background:linear-gradient(165deg,#171A22 0%,#0F1118 100%);border:1px solid rgba(229,167,94,.2);'+
+'border-radius:18px;box-shadow:0 20px 50px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.03);overflow:hidden;color:#F2F3F7}'+
+'.ka-head{display:flex;align-items:center;justify-content:space-between;padding:12px 12px 8px;'+
+'border-bottom:1px solid rgba(255,255,255,.06)}'+
+'.ka-head-left{display:flex;align-items:center;gap:9px;min-width:0}'+
+'.ka-dot{width:7px;height:7px;border-radius:50%;background:#E5A75E;box-shadow:0 0 8px rgba(229,167,94,.5);flex-shrink:0}'+
+'.ka-title{font-size:15px;font-weight:750;letter-spacing:-.01em}'+
+'.ka-sub{font-size:11px;color:#9AA0B0;margin-top:1px}'+
+'.ka-close{width:32px;height:32px;border-radius:9px;border:1px solid rgba(255,255,255,.08);'+
+'background:#1C1F28;color:#F2F3F7;font-size:18px;line-height:1}'+
+'.ka-chat{flex:1;min-height:120px;max-height:38vh;overflow:auto;padding:10px 12px;display:flex;flex-direction:column;gap:7px}'+
+'.ka-empty{margin:auto;text-align:center;color:#9AA0B0;font-size:12.5px;line-height:1.5;padding:10px}'+
+'.ka-msg{max-width:92%;padding:9px 11px;border-radius:13px;font-size:13px;line-height:1.42;white-space:pre-wrap}'+
+'.ka-user{align-self:flex-end;background:rgba(229,167,94,.13);border:1px solid rgba(229,167,94,.2);border-bottom-right-radius:4px}'+
+'.ka-ai{align-self:flex-start;background:#1C1F28;border:1px solid rgba(255,255,255,.06);border-bottom-left-radius:4px}'+
+'.ka-actions{display:flex;gap:7px;margin-top:8px}'+
+'.ka-act{flex:1;padding:9px;border-radius:10px;border:1px solid rgba(255,255,255,.08);font-weight:700;background:#252a34;color:#fff;font-size:13px}'+
+'.ka-act.ok{background:linear-gradient(135deg,#F0C384,#E5A75E);color:#1A1208;border:0}'+
+'.ka-status{text-align:center;color:#9AA0B0;font-size:11px;padding:0 12px 6px;min-height:15px}'+
+'.ka-input-row{display:flex;gap:7px;padding:8px 10px 10px;border-top:1px solid rgba(255,255,255,.06);align-items:center}'+
+'.ka-mic{width:38px;height:38px;border-radius:11px;border:1px solid rgba(229,167,94,.32);'+
+'background:#1C1F28;color:#E5A75E;font-size:15px;flex-shrink:0}'+
+'.ka-mic.listening{background:rgba(229,167,94,.16);box-shadow:0 0 0 3px rgba(229,167,94,.12);animation:kaMic 1.1s ease-in-out infinite}'+
+'@keyframes kaMic{50%{box-shadow:0 0 0 6px rgba(229,167,94,.07)}}'+
+'.ka-input-row input{flex:1;min-width:0;background:#1C1F28;border:1px solid rgba(255,255,255,.07);'+
+'border-radius:11px;padding:10px 11px;color:#fff;outline:none;font-size:13.5px}'+
+'.ka-input-row input:focus{border-color:rgba(229,167,94,.38)}'+
+'.ka-input-row #kaSend{width:38px;height:38px;border:0;border-radius:11px;'+
+'background:linear-gradient(135deg,#F0C384,#E5A75E);color:#1A1208;font-weight:900;font-size:15px;flex-shrink:0}';
+document.head.appendChild(s);}
 function bubble(role,text){var c=document.getElementById('kaChat');if(!c)return;var e=document.createElement('div');e.className='ka-msg '+(role==='user'?'ka-user':'ka-ai');e.textContent=text;c.appendChild(e);c.scrollTop=c.scrollHeight;}
-function renderHistory(){var c=document.getElementById('kaChat');if(!c)return;c.innerHTML='';if(!history.length){var e=document.createElement('div');e.className='ka-empty';e.textContent='Скажи «Привет, Фин» или нажми на круг. Можно: «удали долг ёжику».';c.appendChild(e);return;}history.slice(-40).forEach(function(x){bubble(x.role,x.content);});}
+function renderHistory(){var c=document.getElementById('kaChat');if(!c)return;c.innerHTML='';if(!history.length){var e=document.createElement('div');e.className='ka-empty';e.textContent='Скажи «Привет, Финн» — я слушаю.
+Например: «сколько можно тратить».';c.appendChild(e);return;}history.slice(-40).forEach(function(x){bubble(x.role,x.content);});}
 function status(t){var e=document.getElementById('kaStatus');if(e)e.textContent=t;}
 function updateCloud(){var e=document.getElementById('kaCloud'),c=window.kopeykaEngine&&window.kopeykaEngine.snapshot?window.kopeykaEngine.snapshot().cloud:null;if(e)e.textContent=c&&c.connected?'Облако подключено':c&&c.online?'Онлайн · локально':'Офлайн';}
 function sendInput(){var i=document.getElementById('kaInput');if(!i)return;var x=i.value.trim();if(x){i.value='';handle(x);}}

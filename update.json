@@ -1,6 +1,6 @@
 {
-  "versionCode": 12,
-  "versionName": "2.4.0",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v2.4.0/Fin.apk",
-  "notes": "Финн 2.4.0: 3D-ассистент, обучение и визуальная навигация."
+  "versionCode": 13,
+  "versionName": "2.5.0",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v2.5.0/Fin.apk",
+  "notes": "Финн 2.5.0: без персонажа, подсветка плюса по контуру в цветах темы, аккуратное окно ассистента по центру, исправлена установка обновлений."
 }
