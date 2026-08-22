@@ -46,7 +46,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Фин — Android-оболочка: UI и логика приложения работают внутри WebView. */
+/** Финн — Android-оболочка: UI и логика приложения работают внутри WebView. */
 public class MainActivity extends AppCompatActivity {
     private static final int REQ_MIC = 1001;
     private static final int REQ_FILE_CHOOSER = 2002;
@@ -54,9 +54,8 @@ public class MainActivity extends AppCompatActivity {
     private static final String PREFS = "fin_update";
     private static final String KEY_SKIP_CODE = "skip_code";
     private static final String KEY_SKIP_UNTIL = "skip_until";
-    private static final String KEY_LAST_CHECK = "last_check";
-    private static final long CHECK_INTERVAL_MS = 6L * 60L * 60L * 1000L; // не чаще раз в 6 часов
-    private static final long SKIP_MS = 48L * 60L * 60L * 1000L; // «Позже» — 48 часов
+    // Не блокируем новые релизы старым результатом проверки. URL получает cache-buster ниже.
+    private static final long SKIP_MS = 48L * 60L * 60L * 1000L;
 
     private WebView webView;
     private SwipeRefreshLayout refreshLayout;
@@ -94,8 +93,7 @@ public class MainActivity extends AppCompatActivity {
             registerReceiver(downloadReceiver, new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
         }
         webView.loadUrl("https://appassets.androidplatform.net/assets/www/index.html");
-        // Первый запуск — проверить обновление, но не зацикливать
-        checkForUpdate(false);
+        checkForUpdate();
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -112,7 +110,7 @@ public class MainActivity extends AppCompatActivity {
         s.setBuiltInZoomControls(false);
         s.setDisplayZoomControls(false);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
-        s.setUserAgentString(s.getUserAgentString() + " FinApp/2.0.0");
+        s.setUserAgentString(s.getUserAgentString() + " FinApp/2.0.1");
         webView.addJavascriptInterface(new FinBridge(this), "FinBridge");
         final WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
@@ -177,31 +175,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode != REQ_FILE_CHOOSER || filePathCallback == null) return;
-        Uri[] results = null;
-        if (resultCode == RESULT_OK && data != null && data.getData() != null) {
-            results = new Uri[]{data.getData()};
-        }
-        filePathCallback.onReceiveValue(results);
-        filePathCallback = null;
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQ_MIC && pendingMicRequest != null) {
-            boolean ok = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
-            if (ok) pendingMicRequest.grant(pendingMicRequest.getResources());
-            else pendingMicRequest.deny();
-            pendingMicRequest = null;
-        }
-    }
-
-    @Override
-    protected void onResume() {
+    @Override protected void onResume() {
         super.onResume();
         if (webView != null) {
             webView.onResume();
@@ -209,32 +183,18 @@ public class MainActivity extends AppCompatActivity {
             if (lastResumeAt > 0 && now - lastResumeAt > 1500) webView.reload();
             lastResumeAt = now;
         }
-        // Тихая проверка не чаще интервала — без спама диалогом
-        checkForUpdate(true);
+        // Проверяем каждый возврат в приложение: новый релиз должен приходить сразу.
+        checkForUpdate();
     }
 
-    @Override
-    protected void onPause() {
+    @Override protected void onPause() {
         if (webView != null) webView.onPause();
         super.onPause();
     }
 
-    /**
-     * @param respectCooldownRate true = не проверять чаще CHECK_INTERVAL_MS
-     */
-    private void checkForUpdate(boolean respectRateLimit) {
+    private void checkForUpdate() {
         if (updateDialogShowing.get()) return;
         if (!updateCheckRunning.compareAndSet(false, true)) return;
-
-        SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-        long now = System.currentTimeMillis();
-        if (respectRateLimit) {
-            long last = prefs.getLong(KEY_LAST_CHECK, 0L);
-            if (now - last < CHECK_INTERVAL_MS) {
-                updateCheckRunning.set(false);
-                return;
-            }
-        }
 
         updateExecutor.execute(() -> {
             HttpURLConnection c = null;
@@ -247,6 +207,7 @@ public class MainActivity extends AppCompatActivity {
                 c.setUseCaches(false);
                 c.setRequestProperty("Cache-Control", "no-cache, no-store, max-age=0");
                 c.setRequestProperty("Pragma", "no-cache");
+                c.setRequestProperty("Accept", "application/json");
                 int status = c.getResponseCode();
                 if (status != HttpURLConnection.HTTP_OK) throw new IllegalStateException("HTTP " + status);
 
@@ -266,15 +227,12 @@ public class MainActivity extends AppCompatActivity {
                 int localCode = getPackageManager().getPackageInfo(getPackageName(), 0).versionCode;
                 android.util.Log.i("FinUpdate", "localCode=" + localCode + ", remoteCode=" + remoteCode + ", name=" + remoteName);
 
-                prefs.edit().putLong(KEY_LAST_CHECK, System.currentTimeMillis()).apply();
-
-                // Уже на этой или более новой версии — молча выходим
                 if (remoteCode <= localCode || apkUrl.isEmpty()) {
                     android.util.Log.i("FinUpdate", "No update needed");
                     return;
                 }
 
-                // Пользователь нажал «Позже» для этой версии — не достаём до skip_until
+                SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
                 int skipCode = prefs.getInt(KEY_SKIP_CODE, 0);
                 long skipUntil = prefs.getLong(KEY_SKIP_UNTIL, 0L);
                 if (skipCode == remoteCode && System.currentTimeMillis() < skipUntil) {
@@ -361,14 +319,12 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    @Override
-    public void onBackPressed() {
+    @Override public void onBackPressed() {
         if (webView != null && webView.canGoBack()) webView.goBack();
         else super.onBackPressed();
     }
 
-    @Override
-    protected void onDestroy() {
+    @Override protected void onDestroy() {
         try { unregisterReceiver(downloadReceiver); } catch (Exception ignored) {}
         updateExecutor.shutdownNow();
         if (webView != null) {
