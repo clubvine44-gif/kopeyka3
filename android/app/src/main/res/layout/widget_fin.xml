@@ -9,17 +9,16 @@
 
     <TextView
         android:id="@+id/widget_shift"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Финн"
-        android:textColor="#9AA0B0"
+        android:text="Сегодня"
+        android:textColor="#E5A75E"
         android:textSize="11sp"
-        android:textAllCaps="true"
-        android:letterSpacing="0.04" />
+        android:textStyle="bold" />
 
     <TextView
         android:id="@+id/widget_daily"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
         android:text="—"
@@ -30,16 +29,56 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="на день"
+        android:text="можно сегодня"
         android:textColor="#9AA0B0"
         android:textSize="11sp" />
 
-    <TextView
-        android:id="@+id/widget_cash"
-        android:layout_width="wrap_content"
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="10dp"
-        android:text="—"
-        android:textColor="#E5A75E"
-        android:textSize="13sp" />
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Касса"
+                android:textColor="#9AA0B0"
+                android:textSize="10sp" />
+            <TextView
+                android:id="@+id/widget_cash"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="—"
+                android:textColor="#F2F3F7"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Доступно"
+                android:textColor="#9AA0B0"
+                android:textSize="10sp" />
+            <TextView
+                android:id="@+id/widget_available"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="—"
+                android:textColor="#E5A75E"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </LinearLayout>
 </LinearLayout>

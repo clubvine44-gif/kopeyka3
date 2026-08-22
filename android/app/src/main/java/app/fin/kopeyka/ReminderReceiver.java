@@ -8,15 +8,16 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.media.AudioAttributes;
 import android.os.Build;
+import android.provider.Settings;
 
 import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationCompat;
 
-/** Показывает уведомление о дате обязательного платежа. */
 public class ReminderReceiver extends BroadcastReceiver {
 
-    private static final String CHANNEL_ID = "fin_reminders";
+    private static final String CHANNEL_ID = "fin_alerts_v2";
 
     @Override
     public void onReceive(Context context, Intent intent) {
@@ -28,7 +29,14 @@ public class ReminderReceiver extends BroadcastReceiver {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = nm.getNotificationChannel(CHANNEL_ID);
             if (channel == null) {
-                channel = new NotificationChannel(CHANNEL_ID, "Напоминания Копейки", NotificationManager.IMPORTANCE_DEFAULT);
+                channel = new NotificationChannel(CHANNEL_ID, "Уведомления Финн", NotificationManager.IMPORTANCE_HIGH);
+                channel.setDescription("Напоминания о платежах и важные сообщения");
+                channel.enableVibration(true);
+                AudioAttributes aa = new AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build();
+                channel.setSound(Settings.System.DEFAULT_NOTIFICATION_URI, aa);
                 nm.createNotificationChannel(channel);
             }
         }
@@ -40,17 +48,21 @@ public class ReminderReceiver extends BroadcastReceiver {
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setContentTitle(title != null && !title.isEmpty() ? title : "Копейка")
+                .setContentTitle(title != null && !title.isEmpty() ? title : "Финн")
                 .setContentText(message)
+                .setStyle(new NotificationCompat.BigTextStyle().bigText(message))
                 .setAutoCancel(true)
                 .setContentIntent(contentIntent)
-                .setPriority(NotificationCompat.PRIORITY_DEFAULT);
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setDefaults(NotificationCompat.DEFAULT_ALL)
+                .setSound(Settings.System.DEFAULT_NOTIFICATION_URI)
+                .setCategory(NotificationCompat.CATEGORY_REMINDER);
 
         boolean canNotify = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
                 || ActivityCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
                         == PackageManager.PERMISSION_GRANTED;
         if (canNotify) {
-            nm.notify((title + "|" + message).hashCode(), builder.build());
+            nm.notify((int) (System.currentTimeMillis() & 0xffff), builder.build());
         }
     }
 }

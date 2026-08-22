@@ -1,39 +1,20 @@
 (function () {
   'use strict';
 
-  /* Finn UI v7 — без персонажа, подсветка строго по контуру FAB, цвета темы */
   var FAB_CLASS = 'finn-active';
-  var STYLE_ID = 'finnStyleV7';
+  var STYLE_ID = 'finnStyleV8';
 
   var CSS = [
-    /* пульс прямо на кнопке «+» — по её контуру */
-    '.fab.finn-active{',
-    '  animation:finnFabPulse 1.05s ease-in-out infinite;',
-    '  box-shadow:0 0 0 0 rgba(229,167,94,.55),0 8px 28px rgba(229,167,94,.45);',
-    '}',
+    '#fab.finn-idle{box-shadow:0 8px 28px rgba(229,167,94,.4),0 0 0 2px rgba(229,167,94,.35)}',
+    '#fab.finn-active{animation:finnFabPulse 1.05s ease-in-out infinite}',
     '@keyframes finnFabPulse{',
-    '  0%,100%{',
-    '    box-shadow:0 0 0 0 rgba(229,167,94,.55),0 8px 28px rgba(229,167,94,.4);',
-    '    filter:brightness(1.05);',
-    '  }',
-    '  50%{',
-    '    box-shadow:0 0 0 8px rgba(229,167,94,.18),0 0 28px rgba(229,167,94,.65);',
-    '    filter:brightness(1.12);',
-    '  }',
+    '0%,100%{box-shadow:0 0 0 3px rgba(229,167,94,.9),0 0 18px rgba(229,167,94,.55),0 8px 28px rgba(229,167,94,.4)}',
+    '50%{box-shadow:0 0 0 8px rgba(229,167,94,.15),0 0 28px rgba(229,167,94,.7),0 8px 28px rgba(229,167,94,.45)}',
     '}',
-    /* тихий idle-контур (лёгкая обводка в цвете темы) */
-    '.fab.finn-idle{',
-    '  box-shadow:0 0 0 2px rgba(229,167,94,.35),0 8px 28px rgba(229,167,94,.35);',
-    '}',
-    /* подсказка в шапке */
-    '.finn-hint{',
-    '  display:inline-flex;align-items:center;gap:5px;margin-left:10px;',
-    '  padding:3px 10px;border-radius:999px;',
-    '  border:1px solid rgba(229,167,94,.28);',
-    '  background:rgba(229,167,94,.09);',
-    '  color:#c9b08a;font-size:11px;font-weight:600;letter-spacing:.01em;',
-    '  white-space:nowrap;max-width:48vw;overflow:hidden;text-overflow:ellipsis;',
-    '}',
+    '.finn-hint{display:flex;align-items:center;gap:6px;margin-left:8px;padding:4px 10px;',
+    'border-radius:999px;border:1px solid rgba(229,167,94,.28);background:rgba(229,167,94,.08);',
+    'color:#c9b08a;font-size:11px;font-weight:600;letter-spacing:.01em;white-space:nowrap;',
+    'max-width:52vw;overflow:hidden;text-overflow:ellipsis}',
     '.finn-hint b{color:var(--accent,#E5A75E);font-weight:700}',
     '@media(max-width:360px){.finn-hint{display:none}}'
   ].join('');
@@ -47,22 +28,14 @@
   }
 
   function purgeLegacy() {
-    [
-      'finnRoot', 'finnLaunch', 'finnFloat', 'finnTip', 'finn3d', 'finnStage',
-      'finnCard', 'finnShade', 'finnSpot', 'kopeykaAiFab', 'finnHalo'
-    ].forEach(function (id) {
-      var n = document.getElementById(id);
-      if (n) n.remove();
-    });
-    ['finnStyleV6', 'finnStyleV5', 'finnStyleV4', 'finn3dStyle'].forEach(function (id) {
-      var old = document.getElementById(id);
-      if (old) old.remove();
+    ['finnRoot','finnLaunch','finnFloat','finnTip','finn3d','finnStage','finnCard','finnShade','finnSpot','kopeykaAiFab','finnHalo']
+      .forEach(function (id) { var n = document.getElementById(id); if (n) n.remove(); });
+    ['finnStyleV6','finnStyleV5','finnStyleV4','finn3dStyle','finnStyleV7'].forEach(function (id) {
+      var old = document.getElementById(id); if (old) old.remove();
     });
   }
 
-  function getFab() {
-    return document.getElementById('fab');
-  }
+  function getFab() { return document.getElementById('fab'); }
 
   function setIdle() {
     var fab = getFab();
@@ -78,16 +51,13 @@
       fab.classList.add(FAB_CLASS);
     }
     try { if (window.__finnWakeStop) window.__finnWakeStop(); } catch (e) {}
-    setTimeout(function () {
-      if (window.kopeykaAssistant && typeof window.kopeykaAssistant.open === 'function') {
-        window.kopeykaAssistant.open({ command: cmd || null, listen: !cmd });
-      }
-    }, 80);
+    // Окно сразу
+    if (window.kopeykaAssistant && typeof window.kopeykaAssistant.open === 'function') {
+      window.kopeykaAssistant.open({ command: cmd || null, listen: false });
+    }
   }
 
-  function deactivate() {
-    setIdle();
-  }
+  function deactivate() { setIdle(); }
 
   function injectHint() {
     if (document.querySelector('.finn-hint')) return;
@@ -96,7 +66,7 @@
     var h1 = bar.querySelector('h1');
     var hint = document.createElement('div');
     hint.className = 'finn-hint';
-    hint.innerHTML = 'Позови: <b>Привет, Финн</b>';
+    hint.innerHTML = 'Скажи: <b>Привет, Финн</b>';
     if (h1 && h1.parentNode === bar) {
       var wrap = document.createElement('div');
       wrap.style.cssText = 'display:flex;align-items:center;min-width:0;flex:1';
@@ -113,6 +83,24 @@
     purgeLegacy();
     injectHint();
     setIdle();
+
+    // Долгий тап / двойной тап по плюсу не мешает radial —
+    // но если ассистент «завис» в pulse без окна — тап по FAB открывает его
+    var fab = getFab();
+    if (fab && !fab._finnTap) {
+      fab._finnTap = true;
+      var last = 0;
+      fab.addEventListener('click', function () {
+        var now = Date.now();
+        if (now - last < 400) {
+          // double-tap → assistant
+          try {
+            if (window.kopeykaAssistant) window.kopeykaAssistant.open({ listen: true });
+          } catch (e) {}
+        }
+        last = now;
+      }, true);
+    }
 
     var obs = new MutationObserver(function () {
       if (!document.getElementById('kopeykaAiDialog')) deactivate();

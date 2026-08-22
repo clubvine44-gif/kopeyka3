@@ -13,21 +13,21 @@ public class FinWidgetProvider extends AppWidgetProvider {
 
     @Override
     public void onUpdate(Context context, AppWidgetManager mgr, int[] ids) {
-        for (int id : ids) {
-            updateOne(context, mgr, id);
-        }
+        for (int id : ids) updateOne(context, mgr, id);
     }
 
     static void updateOne(Context context, AppWidgetManager mgr, int id) {
         SharedPreferences p = context.getSharedPreferences("fin_widget", Context.MODE_PRIVATE);
         String daily = p.getString("daily", "—");
         String cash = p.getString("cash", "—");
+        String available = p.getString("available", "—");
         String shift = p.getString("shift", "");
 
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_fin);
         views.setTextViewText(R.id.widget_daily, daily);
         views.setTextViewText(R.id.widget_cash, cash);
-        views.setTextViewText(R.id.widget_shift, shift.isEmpty() ? "Финн" : ("Сегодня · " + shift));
+        views.setTextViewText(R.id.widget_available, available);
+        views.setTextViewText(R.id.widget_shift, shift.isEmpty() ? "Сегодня" : ("Сегодня · " + shift));
 
         Intent open = new Intent(context, MainActivity.class);
         open.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);

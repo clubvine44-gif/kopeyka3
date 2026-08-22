@@ -23,7 +23,7 @@ function open(opts){
     updateCloud();
   }
   if(opts.command) setTimeout(function(){handle(String(opts.command));},180);
-  else if(opts.listen!==false) setTimeout(function(){startListen();},550);
+  else if(opts.listen===true) setTimeout(function(){startListen();},600);
 }
 
 function close(){wantListen=false;stopListen();var e=document.getElementById('kopeykaAiDialog');if(e)e.remove();try{if(window.Finn3D&&window.Finn3D.deactivate)window.Finn3D.deactivate();}catch(x){}try{if(window.__finnWakeStart)window.__finnWakeStart();}catch(x){}}
