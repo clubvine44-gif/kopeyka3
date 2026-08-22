@@ -41,7 +41,7 @@ function style(){if(document.getElementById('kaStyle'))return;var s=document.cre
 '.ka-sub{font-size:11px;color:#9AA0B0;margin-top:1px}'+
 '.ka-close{width:32px;height:32px;border-radius:9px;border:1px solid rgba(255,255,255,.08);'+
 'background:#1C1F28;color:#F2F3F7;font-size:18px;line-height:1}'+
-'.ka-chat{flex:1;min-height:120px;max-height:38vh;overflow:auto;padding:10px 12px;display:flex;flex-direction:column;gap:7px}'+
+'.ka-chat{flex:1;min-height:120px;max-height:38vh;overflow:auto;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;padding:10px 12px;display:flex;flex-direction:column;gap:7px}'+
 '.ka-empty{margin:auto;text-align:center;color:#9AA0B0;font-size:12.5px;line-height:1.5;padding:10px}'+
 '.ka-msg{max-width:92%;padding:9px 11px;border-radius:13px;font-size:13px;line-height:1.42;white-space:pre-wrap}'+
 '.ka-user{align-self:flex-end;background:rgba(94,200,255,.13);border:1px solid rgba(94,200,255,.2);border-bottom-right-radius:4px}'+

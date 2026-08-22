@@ -407,6 +407,23 @@ body.has-bnav{padding-bottom:calc(var(--nav-h) + 20px + var(--safe-b))}
 .card,.bottom-nav,.topbar,.fab-wrap,.modal-card{transform:translateZ(0);backface-visibility:hidden}
 .wrap{content-visibility:auto}
 
+
+html, body { overscroll-behavior-y: none; overscroll-behavior: none; }
+.modal-bg, .modal-card, .ka-chat, .ka-card, .wrap {
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.modal-bg.show { overscroll-behavior: none; }
+.modal-bg.show .modal-card { touch-action: pan-y; overscroll-behavior-y: contain; }
+.finn-eye-g { transform-origin: center; transform-box: fill-box; }
+.finn-avatar.blinking .finn-eye-g { animation: finnBlink 0.16s ease-in-out; }
+@keyframes finnBlink {
+  0% { transform: scaleY(1); }
+  45% { transform: scaleY(0.08); }
+  55% { transform: scaleY(0.08); }
+  100% { transform: scaleY(1); }
+}
+
 </style></head><body class="has-bnav"><div class="topbar"><div class="top-actions" style="width:80px"><button class="icon-btn" id="btnCloud" title="Облако">☁</button></div>
 <div class="finn-avatar status-green" id="finnAvatar" title="Финн">
 <span class="finn-aura"></span>
@@ -452,7 +469,7 @@ body.has-bnav{padding-bottom:calc(var(--nav-h) + 20px + var(--safe-b))}
     <span>Платежи</span>
   </button>
 </nav>
-<div class="fab-wrap"><div class="radial" id="radial"><button data-act="income"><span class="ic">➕</span> Доход</button><button data-act="expense"><span class="ic">➖</span> Расход</button><button data-act="reserve"><span class="ic">🏦</span> Резерв</button><button data-act="debt"><span class="ic">📉</span> Долг</button><button data-act="oblig"><span class="ic">📅</span> Обязательный</button></div><button class="fab" id="fab" aria-label="Добавить"><span aria-hidden="true">+</span></button></div><div class="modal-bg" id="modalBg"></div><div class="toast" id="toast"></div><script src="app.js?v=2026082236"></script><script src="onboard.js?v=2026082236"></script><script src="cloud.js?v=2026082236"></script><script src="products.js?v=2026082236"></script><script src="engine.js?v=2026082236"></script><script src="ai.js?v=2026082236"></script><script src="assistant-v2.js?v=2026082236"></script><script src="voice.js?v=2026082236"></script><script src="finn3d.js?v=2026082236"></script><script src="finn-wake.js?v=2026082236"></script><script>window.__kopeykaBuild='2026082236';window.__FIN_NATIVE=true;</script><script>
+<div class="fab-wrap"><div class="radial" id="radial"><button data-act="income"><span class="ic">➕</span> Доход</button><button data-act="expense"><span class="ic">➖</span> Расход</button><button data-act="reserve"><span class="ic">🏦</span> Резерв</button><button data-act="debt"><span class="ic">📉</span> Долг</button><button data-act="oblig"><span class="ic">📅</span> Обязательный</button></div><button class="fab" id="fab" aria-label="Добавить"><span aria-hidden="true">+</span></button></div><div class="modal-bg" id="modalBg"></div><div class="toast" id="toast"></div><script src="app.js?v=2026082238"></script><script src="onboard.js?v=2026082238"></script><script src="cloud.js?v=2026082238"></script><script src="products.js?v=2026082238"></script><script src="engine.js?v=2026082238"></script><script src="ai.js?v=2026082238"></script><script src="assistant-v2.js?v=2026082238"></script><script src="voice.js?v=2026082238"></script><script src="finn3d.js?v=2026082238"></script><script src="finn-wake.js?v=2026082238"></script><script>window.__kopeykaBuild='2026082238';window.__FIN_NATIVE=true;</script><script>
 (function(){
   function tryTestPush(){
     try{
@@ -503,6 +520,31 @@ body.has-bnav{padding-bottom:calc(var(--nav-h) + 20px + var(--safe-b))}
       }
     }
   }, {passive:true});
+})();
+</script>
+
+<script>
+(function(){
+  var lastY=0;
+  document.addEventListener('touchstart', function(e){
+    if(e.touches[0]) lastY=e.touches[0].clientY;
+  }, {passive:true});
+  document.addEventListener('touchmove', function(e){
+    var t=e.target;
+    if(!t || !t.closest) return;
+    if(t.closest('.modal-bg.show') || t.closest('.ka-bg') || t.closest('#finTour') || t.closest('.modal-card') || t.closest('.ka-chat')){
+      var sc=t.closest('.modal-card, .ka-chat, .ka-card');
+      if(sc){
+        var y=e.touches[0]?e.touches[0].clientY:lastY;
+        var dy=y-lastY;
+        if((sc.scrollTop<=0 && dy>0) || (sc.scrollTop+sc.clientHeight>=sc.scrollHeight-1 && dy<0)){
+          e.preventDefault();
+        }
+      } else {
+        e.preventDefault();
+      }
+    }
+  }, {passive:false});
 })();
 </script>
 </body></html>

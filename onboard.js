@@ -1,43 +1,136 @@
 (function(){
 'use strict';
-var KEY='kopeyka3_onboarded_v3';
+var KEY='kopeyka3_onboarded_v4';
+var index=0, timer=null, root=null, spot=null, busy=false;
+
 var slides=[
- {title:'Добро пожаловать в Финну',text:'Твой персональный ИИ-агент для финансов. Я помогу учитывать деньги, планировать бюджет и принимать решения на основе твоих данных.',target:'.hero',tone:'hero',time:5000},
- {title:'Главный экран',text:'Здесь всё главное сразу перед глазами: баланс, доступные деньги, доходы, расходы и текущая финансовая ситуация.',target:'.hero',time:5000},
- {title:'Добавляй операции за секунды',text:'Кнопка «+» открывает быстрые действия. Доход, расход, резерв, долг или обязательный платёж — без сложных форм.',target:'.fab',time:5000},
- {title:'Календарь смен',text:'Календарь показывает твой график. У нового пользователя все дни изначально выходные. Смена появляется только после твоего ручного выбора.',target:'.cal',time:5000},
- {title:'Резерв и цели',text:'Отделяй деньги на подушку, права, отпуск или любую другую цель. Так накопления не смешиваются с деньгами на обычные расходы.',target:'[id*=res], .sec',time:5000},
- {title:'Долги и обязательства',text:'Храни обязательства в одном месте, отмечай выплаты и всегда видь, сколько осталось.',target:'[id*=debt], .sec',time:5000},
- {title:'Аналитика',text:'Смотри категории расходов, доходы и динамику. Вместо догадок — понятная картина твоих финансов.',target:'[id*=an], .sec',time:5000},
- {title:'Фина — твой ИИ-агент',text:'Пиши обычными словами: «сколько у меня доступно?», «добавь расход 450 на продукты» или попроси разобрать бюджет. Фина работает с данными приложения.',target:'.finn-avatar',time:6000},
- {title:'Настройки и контроль',text:'Ключ ИИ, ставки, резервные копии и остальные параметры остаются доступны в настройках. Ты всегда можешь изменить конфигурацию.',target:'.top-actions',time:5000},
- {title:'Готово',text:'Теперь ты знаешь основу. Дальше просто пользуйся Финной — добавляй операции, ставь цели и разговаривай со своим ИИ-агентом.',target:'.hero',time:5000}
+  {title:'Привет, я Финн',text:'Твой умный помощник по деньгам. Покажу, как всё устроено — за минуту поймёшь приложение.',target:'.finn-avatar',action:null},
+  {title:'Сколько можно тратить',text:'Большое число — это «на день». Кольцо показывает, сколько свободно, сколько уйдёт на обязательные платежи и долги.',target:'.card.hero',action:null},
+  {title:'Смены и график',text:'Календарь — твой график. Жёлтая точка — день, синяя — ночь, серая — выходной. Нажми на день, чтобы поменять смену.',target:'.cal',action:null},
+  {title:'Смены и зарплата',text:'Здесь видно, сколько смен осталось и сколько денег ожидается. Ставки за день и ночь задаются в настройках.',target:'.btn-shift',action:null},
+  {title:'Быстрые разделы',text:'Обязательные платежи, резервы, долги и операции — всё в один тап. Ничего не теряется.',target:'.quick-grid',action:null},
+  {title:'Добавить операцию',text:'Синяя кнопка «+» справа внизу. Короткое нажатие — меню: доход, расход, резерв, долг. Удержание — открывает меня, Финна.',target:'.fab',action:null},
+  {title:'Навигация',text:'Внизу пять вкладок: Главная, Операции, Резервы, Долги и Платежи. Свайп вправо возвращает на главную.',target:'.bottom-nav',action:null},
+  {title:'Операции',text:'Все доходы и расходы за месяц. Можно открыть любую запись и изменить.',target:'#app',action:function(){ if(typeof goView==='function') goView('ops'); }},
+  {title:'Резервы',text:'Копи на цели отдельно: подушка, отпуск, права. Деньги в резерве не смешиваются с кассой на траты.',target:'#app',action:function(){ if(typeof goView==='function') goView('res'); }},
+  {title:'Долги',text:'Храни долги здесь. Видно, сколько осталось погасить. Погашение — отдельный расход.',target:'#app',action:function(){ if(typeof goView==='function') goView('debt'); }},
+  {title:'Платежи',text:'Обязательные платежи каждый месяц: аренда, связь, подписки. Отмечай оплату — и Финн учтёт это в «на день».',target:'#app',action:function(){ if(typeof goView==='function') goView('obl'); }},
+  {title:'Поговори со мной',text:'Удержи «+» или коснись меня в шапке. Можно писать и голосом: «сколько можно тратить», «добавь расход 300 на продукты».',target:'.finn-avatar',action:function(){ if(typeof goView==='function') goView('home'); }},
+  {title:'Настройки',text:'Шестерёнка справа вверху: остаток кассы, ставки за смены, ключ ИИ, резервные копии. Всё под контролем.',target:'#btnSettings',action:function(){ if(typeof goView==='function') goView('home'); }},
+  {title:'Готово!',text:'Ты в курсе. Добавляй операции, строй график и спрашивай меня в любой момент. Удачного учёта ✨',target:'.card.hero',action:function(){ if(typeof goView==='function') goView('home'); }}
 ];
-var index=0,timer=null,root=null,spot=null,caption=null,progress=null;
-function done(){try{return localStorage.getItem(KEY)==='1';}catch(e){return false;}}
-function finish(){if(timer)clearTimeout(timer);try{localStorage.setItem(KEY,'1');}catch(e){}document.body.classList.remove('fin-tour-active');if(root)root.remove();root=null;}
-function css(){if(document.getElementById('finTourStyle'))return;var s=document.createElement('style');s.id='finTourStyle';s.textContent=`
-#finTour{position:fixed;inset:0;z-index:5000;pointer-events:none;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif}
-#finTour .tour-dim{position:fixed;inset:0;background:rgba(4,5,8,.62);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);opacity:0;animation:tourIn .45s forwards}
-#finTour .tour-spot{position:fixed;border:2px solid #E5A75E;border-radius:18px;box-shadow:0 0 0 9999px rgba(4,5,8,.62),0 0 0 5px rgba(229,167,94,.12),0 0 35px rgba(229,167,94,.35);transition:all .55s cubic-bezier(.2,.8,.2,1);pointer-events:none;animation:spotPulse 2s ease-in-out infinite}
-#finTour .tour-card{position:fixed;left:16px;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));max-width:520px;margin:auto;padding:18px 18px 15px;background:rgba(22,24,31,.97);border:1px solid rgba(229,167,94,.28);border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,.55);color:#F2F3F7;pointer-events:auto}
-#finTour .tour-brand{display:flex;align-items:center;gap:8px;font-size:10px;font-weight:800;letter-spacing:.14em;color:#E5A75E;text-transform:uppercase;margin-bottom:8px}
-#finTour .tour-brand i{width:7px;height:7px;border-radius:50%;background:#E5A75E;box-shadow:0 0 12px #E5A75E}
-#finTour h2{font-size:21px;line-height:1.12;margin:0 0 7px;letter-spacing:-.025em}
-#finTour p{font-size:13px;line-height:1.5;color:#C8CCD6;margin:0 0 13px}
-#finTour .tour-meta{display:flex;align-items:center;gap:10px}
-#finTour .tour-progress{height:3px;flex:1;background:#2A2E38;border-radius:10px;overflow:hidden}.tour-progress i{display:block;height:100%;background:linear-gradient(90deg,#F0C384,#E5A75E);transition:width .4s}
-#finTour .tour-count{font-size:10px;color:#8F96A7;white-space:nowrap}
-#finTour .tour-actions{display:flex;gap:8px;margin-top:10px}
-#finTour button{padding:10px 13px;border-radius:12px;border:1px solid rgba(255,255,255,.1);font-weight:700;font-size:12px;background:#20232C;color:#F2F3F7}
-#finTour .tour-next{margin-left:auto;background:linear-gradient(135deg,#F0C384,#E5A75E);color:#1A1208;border:0;min-width:92px}
-@keyframes tourIn{to{opacity:1}}@keyframes spotPulse{0%,100%{box-shadow:0 0 0 9999px rgba(4,5,8,.62),0 0 0 4px rgba(229,167,94,.12),0 0 28px rgba(229,167,94,.28)}50%{box-shadow:0 0 0 9999px rgba(4,5,8,.62),0 0 0 7px rgba(229,167,94,.18),0 0 42px rgba(229,167,94,.42)}}`;
-document.head.appendChild(s);}
-function findTarget(sel){var el=null;try{el=document.querySelector(sel);}catch(e){}if(el)return el;return null;}
-function make(){css();root=document.createElement('div');root.id='finTour';root.innerHTML='<div class="tour-dim"></div><div class="tour-spot"></div><div class="tour-card"><div class="tour-brand"><i></i>ФИННА · ПРЕЗЕНТАЦИЯ</div><h2></h2><p></p><div class="tour-meta"><div class="tour-progress"><i></i></div><span class="tour-count"></span></div><div class="tour-actions"><button class="tour-skip">Пропустить</button><button class="tour-back">Назад</button><button class="tour-next">Далее</button></div></div>';document.body.appendChild(root);spot=root.querySelector('.tour-spot');caption=root.querySelector('.tour-card');root.querySelector('.tour-skip').onclick=finish;root.querySelector('.tour-back').onclick=function(){show(index-1,false);};root.querySelector('.tour-next').onclick=function(){show(index+1,false);};}
-function position(el){if(!el){spot.style.left='7%';spot.style.top='22%';spot.style.width='86%';spot.style.height='28%';return;}try{el.scrollIntoView({block:'center',behavior:'smooth'});}catch(e){}var r=el.getBoundingClientRect(),pad=7;spot.style.left=Math.max(4,r.left-pad)+'px';spot.style.top=Math.max(4,r.top-pad)+'px';spot.style.width=Math.min(window.innerWidth-8,r.width+pad*2)+'px';spot.style.height=Math.min(window.innerHeight-8,r.height+pad*2)+'px';}
-function show(i,auto){if(i>=slides.length){finish();return;}if(i<0)i=0;index=i;var s=slides[i],el=findTarget(s.target);if(el&&el.closest&&el.closest('#finTour'))el=null;position(el);caption.querySelector('h2').textContent=s.title;caption.querySelector('p').textContent=s.text;caption.querySelector('.tour-count').textContent=(i+1)+' / '+slides.length;caption.querySelector('.tour-progress i').style.width=((i+1)/slides.length*100)+'%';caption.querySelector('.tour-next').textContent=i===slides.length-1?'Начать пользоваться':'Далее';caption.querySelector('.tour-back').style.display=i===0?'none':'inline-block';if(timer)clearTimeout(timer);if(auto!==false)timer=setTimeout(function(){show(index+1,true);},s.time||5000);}
-function start(){if(done()&&!location.search.includes('presentation=1'))return;make();document.body.classList.add('fin-tour-active');show(0,true);}
-window.FinnIntro={start:start,replay:function(){try{localStorage.removeItem(KEY);}catch(e){}start();}};
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
+
+function done(){ try{ return localStorage.getItem(KEY)==='1'; }catch(e){ return false; } }
+function finish(){
+  if(timer) clearTimeout(timer);
+  try{ localStorage.setItem(KEY,'1'); }catch(e){}
+  document.body.classList.remove('fin-tour-active');
+  document.documentElement.style.overflow='';
+  document.body.style.overflow='';
+  if(root){ root.remove(); root=null; }
+  if(typeof goView==='function') goView('home');
+  if(typeof render==='function') try{render();}catch(e){}
+}
+function injectCss(){
+  if(document.getElementById('finTourStyle')) return;
+  var s=document.createElement('style'); s.id='finTourStyle';
+  s.textContent=
+    'body.fin-tour-active{overflow:hidden!important;}'+
+    '#finTour{position:fixed;inset:0;z-index:6000;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;}'+
+    '#finTour .tour-dim{position:absolute;inset:0;background:rgba(4,8,18,.55);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);pointer-events:auto;}'+
+    '#finTour .tour-spot{position:absolute;border-radius:18px;border:2px solid rgba(94,200,255,.95);box-shadow:0 0 0 9999px rgba(4,8,18,.62),0 0 28px rgba(94,200,255,.45),inset 0 0 20px rgba(94,200,255,.08);transition:left .55s cubic-bezier(.22,1,.36,1),top .55s cubic-bezier(.22,1,.36,1),width .55s cubic-bezier(.22,1,.36,1),height .55s cubic-bezier(.22,1,.36,1),opacity .3s;pointer-events:none;opacity:0;}'+
+    '#finTour .tour-spot.on{opacity:1;}'+
+    '#finTour .tour-card{position:absolute;left:14px;right:14px;bottom:calc(18px + env(safe-area-inset-bottom,0px));max-width:420px;margin:0 auto;background:rgba(14,22,40,.94);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);border:1px solid rgba(120,180,255,.28);border-radius:22px;padding:18px 16px 14px;box-shadow:0 18px 50px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.06);color:#E8F0FF;pointer-events:auto;transform:translateY(12px);opacity:0;transition:transform .4s cubic-bezier(.22,1,.36,1),opacity .35s;}'+
+    '#finTour .tour-card.show{transform:translateY(0);opacity:1;}'+
+    '#finTour .tour-brand{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8BA0C0;font-weight:600;margin-bottom:10px;}'+
+    '#finTour .tour-brand i{width:8px;height:8px;border-radius:50%;background:#5EC8FF;box-shadow:0 0 10px rgba(94,200,255,.7);display:inline-block;}'+
+    '#finTour h2{font-size:18px;font-weight:800;letter-spacing:-.02em;margin:0 0 8px;line-height:1.25;}'+
+    '#finTour p{font-size:14px;line-height:1.5;color:#B8C8E0;margin:0 0 14px;}'+
+    '#finTour .tour-meta{display:flex;align-items:center;gap:10px;margin-bottom:12px;}'+
+    '#finTour .tour-progress{flex:1;height:4px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden;}'+
+    '#finTour .tour-progress i{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,#5EC8FF,#3A8FE8);transition:width .45s cubic-bezier(.22,1,.36,1);}'+
+    '#finTour .tour-count{font-size:12px;color:#8BA0C0;font-variant-numeric:tabular-nums;min-width:42px;text-align:right;}'+
+    '#finTour .tour-actions{display:flex;gap:8px;}'+
+    '#finTour .tour-actions button{flex:1;padding:12px 10px;border-radius:14px;font-size:14px;font-weight:700;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.06);color:#E8F0FF;}'+
+    '#finTour .tour-next{background:linear-gradient(135deg,#5EC8FF,#3A8FE8)!important;color:#0A101C!important;border:none!important;flex:1.4;}'+
+    '#finTour .tour-skip{flex:.9;font-weight:600;color:#8BA0C0!important;}'+
+    '#finTour .tour-back{flex:.9;}';
+  document.head.appendChild(s);
+}
+function findTarget(sel){ if(!sel) return null; try{ return document.querySelector(sel); }catch(e){ return null; } }
+function highlightNav(view){
+  document.querySelectorAll('#bottomNav .bn-item').forEach(function(b){
+    b.classList.toggle('active', b.getAttribute('data-view')===view);
+  });
+}
+function positionSpot(el){
+  if(!spot) return;
+  if(!el){ spot.classList.remove('on'); return; }
+  try{ el.scrollIntoView({block:'center', behavior:'smooth', inline:'nearest'}); }catch(e){}
+  setTimeout(function(){
+    if(!spot || !el) return;
+    var r=el.getBoundingClientRect(), pad=10;
+    var left=Math.max(6, r.left-pad), top=Math.max(6, r.top-pad);
+    var w=Math.min(window.innerWidth-12, r.width+pad*2);
+    var h=Math.min(window.innerHeight-12, Math.max(40, r.height+pad*2));
+    spot.style.left=left+'px'; spot.style.top=top+'px';
+    spot.style.width=w+'px'; spot.style.height=h+'px';
+    spot.classList.add('on');
+  }, 300);
+}
+function show(i){
+  if(busy) return;
+  if(i>=slides.length){ finish(); return; }
+  if(i<0) i=0;
+  index=i;
+  var s=slides[i];
+  busy=true;
+  if(typeof s.action==='function'){ try{ s.action(); }catch(e){} }
+  var viewMap={7:'ops',8:'res',9:'debt',10:'obl'};
+  if(viewMap[i]) highlightNav(viewMap[i]);
+  else highlightNav('home');
+  var card=root.querySelector('.tour-card');
+  card.classList.remove('show');
+  setTimeout(function(){
+    card.querySelector('h2').textContent=s.title;
+    card.querySelector('p').textContent=s.text;
+    card.querySelector('.tour-count').textContent=(i+1)+' / '+slides.length;
+    card.querySelector('.tour-progress i').style.width=((i+1)/slides.length*100)+'%';
+    card.querySelector('.tour-next').textContent=i===slides.length-1?'Начать':'Далее';
+    card.querySelector('.tour-back').style.visibility=i===0?'hidden':'visible';
+    card.classList.add('show');
+    setTimeout(function(){
+      positionSpot(findTarget(s.target));
+      busy=false;
+    }, 350);
+  }, 120);
+}
+function make(){
+  injectCss();
+  root=document.createElement('div');
+  root.id='finTour';
+  root.innerHTML='<div class="tour-dim"></div><div class="tour-spot"></div><div class="tour-card"><div class="tour-brand"><i></i>Финн · знакомство</div><h2></h2><p></p><div class="tour-meta"><div class="tour-progress"><i></i></div><span class="tour-count"></span></div><div class="tour-actions"><button type="button" class="tour-skip">Пропустить</button><button type="button" class="tour-back">Назад</button><button type="button" class="tour-next">Далее</button></div></div>';
+  document.body.appendChild(root);
+  spot=root.querySelector('.tour-spot');
+  root.querySelector('.tour-skip').onclick=finish;
+  root.querySelector('.tour-back').onclick=function(){ show(index-1); };
+  root.querySelector('.tour-next').onclick=function(){ show(index+1); };
+}
+function start(){
+  if(done() && location.search.indexOf('tour=1')===-1 && location.search.indexOf('presentation=1')===-1) return;
+  function tryStart(){
+    if(!document.getElementById('app') || !document.querySelector('.card.hero,.orbit-wrap,.cal')){
+      setTimeout(tryStart, 250); return;
+    }
+    make();
+    document.body.classList.add('fin-tour-active');
+    document.documentElement.style.overflow='hidden';
+    document.body.style.overflow='hidden';
+    show(0);
+  }
+  tryStart();
+}
+window.FinnIntro={ start:start, replay:function(){ try{ localStorage.removeItem(KEY); }catch(e){} start(); } };
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', function(){ setTimeout(start, 500); });
+else setTimeout(start, 500);
 })();

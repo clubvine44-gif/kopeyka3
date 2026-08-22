@@ -1,6 +1,6 @@
 {
-  "versionCode": 28,
-  "versionName": "3.4.2",
+  "versionCode": 29,
+  "versionName": "3.4.3",
   "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/latest/download/Fin.apk",
-  "notes": "3.4.2 — фикс позиции и клика +, пульс, встроенный ключ ассистента, меньше лагов"
+  "notes": "3.4.3 — фикс скролла без pull-to-refresh, моргание Финна, новое приветственное обучение"
 }

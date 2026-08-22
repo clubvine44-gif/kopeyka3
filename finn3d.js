@@ -95,6 +95,20 @@ else boot();
     else if(problems) setStatus('orange');
     else setStatus('green');
   }
+  
+  function scheduleBlink(){
+    var av=document.getElementById('finnAvatar');
+    if(!av) return;
+    function doBlink(){
+      av.classList.remove('blinking');
+      void av.offsetWidth;
+      av.classList.add('blinking');
+      setTimeout(function(){ av.classList.remove('blinking'); }, 180);
+      setTimeout(doBlink, 2200 + Math.random()*3500);
+    }
+    setTimeout(doBlink, 1200 + Math.random()*1500);
+  }
+
   function bootAvatar(){
     var av=document.getElementById('finnAvatar');
     if(!av) return;
@@ -106,6 +120,7 @@ else boot();
     });
     updateStatus();
     setInterval(updateStatus, 5000);
+    scheduleBlink();
     window.addEventListener('online', updateStatus);
     window.addEventListener('offline', updateStatus);
   }
