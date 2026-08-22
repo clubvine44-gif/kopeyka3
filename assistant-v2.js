@@ -62,8 +62,7 @@ function style(){if(document.getElementById('kaStyle'))return;var s=document.cre
 'background:linear-gradient(135deg,#F0C384,#E5A75E);color:#1A1208;font-weight:900;font-size:15px;flex-shrink:0}';
 document.head.appendChild(s);}
 function bubble(role,text){var c=document.getElementById('kaChat');if(!c)return;var e=document.createElement('div');e.className='ka-msg '+(role==='user'?'ka-user':'ka-ai');e.textContent=text;c.appendChild(e);c.scrollTop=c.scrollHeight;}
-function renderHistory(){var c=document.getElementById('kaChat');if(!c)return;c.innerHTML='';if(!history.length){var e=document.createElement('div');e.className='ka-empty';e.textContent='Скажи «Привет, Финн» — я слушаю.
-Например: «сколько можно тратить».';c.appendChild(e);return;}history.slice(-40).forEach(function(x){bubble(x.role,x.content);});}
+function renderHistory(){var c=document.getElementById('kaChat');if(!c)return;c.innerHTML='';if(!history.length){var e=document.createElement('div');e.className='ka-empty';e.textContent='Скажи «Привет, Финн» — я слушаю. Например: «сколько можно тратить».';c.appendChild(e);return;}history.slice(-40).forEach(function(x){bubble(x.role,x.content);});}
 function status(t){var e=document.getElementById('kaStatus');if(e)e.textContent=t;}
 function updateCloud(){var e=document.getElementById('kaCloud'),c=window.kopeykaEngine&&window.kopeykaEngine.snapshot?window.kopeykaEngine.snapshot().cloud:null;if(e)e.textContent=c&&c.connected?'Облако подключено':c&&c.online?'Онлайн · локально':'Офлайн';}
 function sendInput(){var i=document.getElementById('kaInput');if(!i)return;var x=i.value.trim();if(x){i.value='';handle(x);}}

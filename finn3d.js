@@ -89,17 +89,21 @@
     var fab = getFab();
     if (fab && !fab._finnTap) {
       fab._finnTap = true;
-      var last = 0;
-      fab.addEventListener('click', function () {
-        var now = Date.now();
-        if (now - last < 400) {
-          // double-tap → assistant
+      var pressTimer = null;
+      fab.addEventListener('touchstart', function () {
+        pressTimer = setTimeout(function () {
+          pressTimer = null;
           try {
             if (window.kopeykaAssistant) window.kopeykaAssistant.open({ listen: true });
           } catch (e) {}
-        }
-        last = now;
-      }, true);
+        }, 550);
+      }, { passive: true });
+      fab.addEventListener('touchend', function () {
+        if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+      });
+      fab.addEventListener('touchmove', function () {
+        if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+      });
     }
 
     var obs = new MutationObserver(function () {

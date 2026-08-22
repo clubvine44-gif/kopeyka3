@@ -77,6 +77,7 @@ public class MainActivity extends AppCompatActivity {
         ensureMicPermission();
         webView.loadUrl("https://appassets.androidplatform.net/assets/www/index.html");
         checkForUpdate();
+        try { UpdateCheckReceiver.scheduleSoon(this); } catch (Exception ignored) {}
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -93,7 +94,7 @@ public class MainActivity extends AppCompatActivity {
         s.setBuiltInZoomControls(false);
         s.setDisplayZoomControls(false);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
-        s.setUserAgentString(s.getUserAgentString() + " FinApp/2.7.0");
+        s.setUserAgentString(s.getUserAgentString() + " FinApp/2.8.0");
         webView.addJavascriptInterface(new FinBridge(this), "FinBridge");
         final WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
@@ -180,6 +181,7 @@ public class MainActivity extends AppCompatActivity {
             lastResumeAt = now;
         }
         checkForUpdate();
+        try { UpdateCheckReceiver.scheduleSoon(this); } catch (Exception ignored) {}
     }
 
     @Override protected void onPause() {

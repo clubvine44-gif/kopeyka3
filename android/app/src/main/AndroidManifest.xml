@@ -47,6 +47,10 @@
             android:exported="false" />
 
         <receiver
+            android:name=".UpdateCheckReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".FinWidgetProvider"
             android:exported="true"
             android:label="Финн">

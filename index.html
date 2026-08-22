@@ -4,7 +4,7 @@
 .orbit-wrap{position:relative;width:112px;height:112px;flex-shrink:0}
 .orbit-svg{display:block}
 .orbit-core{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;text-align:center;padding:18px 10px}
-.orbit-val{font-size:15px;font-weight:800;letter-spacing:-.03em;line-height:1.1;color:#F2F3F7;max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.orbit-val{font-size:14px;font-weight:800;letter-spacing:-.03em;line-height:1.1;color:#F2F3F7;max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .orbit-sub{font-size:10px;color:var(--muted);margin-top:3px;font-weight:600}
 .orbit-sat{animation:satPulse 2.4s ease-in-out infinite}
 @keyframes satPulse{0%,100%{opacity:1}50%{opacity:.65}}
@@ -13,7 +13,7 @@
 .hs-block{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:7px 10px;border-radius:11px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.06)}
 .hs-block .hs-l{font-size:11px;color:var(--muted);font-weight:600}
 .hs-block b{font-size:14px;font-weight:750;letter-spacing:-.01em;text-align:right}
-.hs-block b.neg{color:var(--red)}
+.hs-block b.neg{color:var(--red)}.hs-note{font-size:10px;color:var(--muted);line-height:1.35;margin-top:2px;padding:0 2px}
 /* settings */
 .set-group{margin:0 0 14px}
 .set-group-title{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700;padding:4px 4px 8px}
@@ -24,12 +24,12 @@
 .set-row .set-val{font-size:13px;color:var(--accent);font-weight:700;white-space:nowrap}
 .set-row.danger .set-main b{color:var(--red)}
 .set-row.danger .set-val{color:var(--red)}
-</style></head><body><div class="topbar"><h1>Финн</h1><div class="top-actions"><button class="icon-btn" id="btnCloud" title="Облако">☁</button><button class="icon-btn" id="btnSettings" title="Настройки">⚙</button></div></div><div class="wrap" id="app"></div><div class="fab-wrap"><div class="radial" id="radial"><button data-act="income"><span class="ic">➕</span> Доход</button><button data-act="expense"><span class="ic">➖</span> Расход</button><button data-act="reserve"><span class="ic">🏦</span> Резерв</button><button data-act="debt"><span class="ic">📉</span> Долг</button><button data-act="oblig"><span class="ic">📅</span> Обязательный</button></div><button class="fab" id="fab">+</button></div><div class="modal-bg" id="modalBg"></div><div class="toast" id="toast"></div><script src="app.js?v=2026082214"></script><script src="onboard.js?v=2026082214"></script><script src="cloud.js?v=2026082214"></script><script src="products.js?v=2026082214"></script><script src="engine.js?v=2026082214"></script><script src="ai.js?v=2026082214"></script><script src="assistant-v2.js?v=2026082214"></script><script src="voice.js?v=2026082214"></script><script src="finn3d.js?v=2026082214"></script><script src="finn-wake.js?v=2026082214"></script><script>window.__kopeykaBuild='2026082214';window.__FIN_NATIVE=true;</script><script>
+</style></head><body><div class="topbar"><h1>Финн</h1><div class="top-actions"><button class="icon-btn" id="btnCloud" title="Облако">☁</button><button class="icon-btn" id="btnSettings" title="Настройки">⚙</button></div></div><div class="wrap" id="app"></div><div class="fab-wrap"><div class="radial" id="radial"><button data-act="income"><span class="ic">➕</span> Доход</button><button data-act="expense"><span class="ic">➖</span> Расход</button><button data-act="reserve"><span class="ic">🏦</span> Резерв</button><button data-act="debt"><span class="ic">📉</span> Долг</button><button data-act="oblig"><span class="ic">📅</span> Обязательный</button></div><button class="fab" id="fab">+</button></div><div class="modal-bg" id="modalBg"></div><div class="toast" id="toast"></div><script src="app.js?v=2026082216"></script><script src="onboard.js?v=2026082216"></script><script src="cloud.js?v=2026082216"></script><script src="products.js?v=2026082216"></script><script src="engine.js?v=2026082216"></script><script src="ai.js?v=2026082216"></script><script src="assistant-v2.js?v=2026082216"></script><script src="voice.js?v=2026082216"></script><script src="finn3d.js?v=2026082216"></script><script src="finn-wake.js?v=2026082216"></script><script>window.__kopeykaBuild='2026082216';window.__FIN_NATIVE=true;</script><script>
 (function(){
   function tryTestPush(){
     try{
       if(!window.FinBridge||!window.FinBridge.scheduleTestNotification)return;
-      var k='fin_push_test_v2';
+      var k='fin_push_test_v3';
       if(localStorage.getItem(k))return;
       localStorage.setItem(k,'1');
       setTimeout(function(){
