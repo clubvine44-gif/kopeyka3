@@ -52,20 +52,11 @@ jobs:
 
       - name: Set release version from build.gradle
         run: |
-          python3 - <<'PY'
-          import re
-          from pathlib import Path
-          t=Path('android/app/build.gradle').read_text()
-          code=re.search(r'versionCode\s+(\d+)', t).group(1)
-          name=re.search(r'versionName\s+"([^"]+)"', t).group(1)
-          Path('$RUNNER_TEMP/ver.env').write_text(f'VERSION_CODE={code}\nVERSION_NAME={name}\n')
-          print(code, name)
-          PY
-          # fallback hardcode if parse fails
-          if [ ! -f "$RUNNER_TEMP/ver.env" ]; then
-            echo 'VERSION_CODE=8' > "$RUNNER_TEMP/ver.env"
-            echo 'VERSION_NAME=2.0.1' >> "$RUNNER_TEMP/ver.env"
-          fi
+          set -e
+          CODE=$(python3 -c "import re; t=open('android/app/build.gradle').read(); print(re.search(r'versionCode\\s+(\\d+)', t).group(1))")
+          NAME=$(python3 -c "import re; t=open('android/app/build.gradle').read(); print(re.search(r'versionName\\s+\"([^\"]+)\"', t).group(1))")
+          echo "VERSION_CODE=$CODE" > "$RUNNER_TEMP/ver.env"
+          echo "VERSION_NAME=$NAME" >> "$RUNNER_TEMP/ver.env"
           cat "$RUNNER_TEMP/ver.env"
 
       - name: Prepare release keystore
@@ -121,28 +112,16 @@ jobs:
         run: |
           set -e
           source "$RUNNER_TEMP/ver.env"
-          python3 - <<PY
-          import json, os
-          from pathlib import Path
-          code=int(os.environ.get('VERSION_CODE') or open('/tmp/empty','w').write('') or 8)
-          PY
           python3 -c "
           import json
           from pathlib import Path
-          import os
-          # read env file
-          env={}
-          for line in open('$RUNNER_TEMP/ver.env'):
-              line=line.strip()
-              if not line or '=' not in line: continue
-              k,v=line.split('=',1); env[k]=v
-          code=int(env['VERSION_CODE']); name=env['VERSION_NAME']
+          code=int('${VERSION_CODE}'); name='${VERSION_NAME}'
           Path('update.json').write_text(json.dumps({
             'versionCode': code,
             'versionName': name,
             'apkUrl': f'https://github.com/clubvine44-gif/kopeyka3/releases/download/v{name}/Fin.apk',
             'notes': f'Финн {name}: 3D-ассистент, обучение, мгновенные обновления.'
-          }, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
+          }, ensure_ascii=False, indent=2)+chr(10), encoding='utf-8')
           print('update.json', code, name)
           "
           git config user.name 'github-actions[bot]'
