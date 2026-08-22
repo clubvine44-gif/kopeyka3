@@ -1,0 +1,62 @@
+name: Repair Fin app state and AI defaults
+on:
+  push:
+    paths:
+      - '.github/workflows/repair-finn.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore app.js from last known good commit and patch blank schedule
+        run: |
+          set -e
+          git show 82e9f043c2fa4be421ee21efe248037749548898:app.js > app.js
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('app.js'); t=p.read_text()
+          t=t.replace("function shift(ds,ov){var v=ov&&ov[ds];if(typeof v==='string'&&SHIFT_LABEL[v])return v;return CYCLE[((days(ANCHOR,ds)%6)+6)%6];}", "function shift(ds,ov){var v=ov&&ov[ds];if(typeof v==='string'&&SHIFT_LABEL[v])return v;return STATE&&STATE.settings&&STATE.settings.scheduleMode==='blank'?'off':CYCLE[((days(ANCHOR,ds)%6)+6)%6];}")
+          t=t.replace("function def(){return{version:6,settings:{openingBalance:0,month:today().slice(0,7),dayRate:0,nightRate:0},", "function def(){return{version:7,settings:{openingBalance:0,month:today().slice(0,7),dayRate:0,nightRate:0,scheduleMode:'blank'},")
+          needle="var o=Object.assign({},b,raw);o.settings=Object.assign({},b.settings,raw.settings||{});"
+          repl=needle+"if(!Object.prototype.hasOwnProperty.call(raw,'settings')||!Object.prototype.hasOwnProperty.call(raw.settings||{},'scheduleMode'))o.settings.scheduleMode='legacy';"
+          t=t.replace(needle,repl)
+          p.write_text(t)
+          PY
+      - name: Patch AI default key support without storing the key in source
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('ai.js'); t=p.read_text()
+          old="function getKey(){try{return(localStorage.getItem(GROQ_KEY)||'').trim();}catch(e){return '';}}"
+          new="function getKey(){try{return(localStorage.getItem(GROQ_KEY)||window.FIN_DEFAULT_AI_KEY||'').trim();}catch(e){return String(window.FIN_DEFAULT_AI_KEY||'').trim();}}"
+          if old not in t: raise SystemExit('getKey pattern not found')
+          p.write_text(t.replace(old,new,1))
+          PY
+      - name: Add secure build-time AI config to Android asset copy lists
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          for fn in ['.github/workflows/build-apk.yml','.github/workflows/release-apk.yml','.github/workflows/publish-current-apk.yml']:
+            p=Path(fn)
+            if not p.exists(): continue
+            t=p.read_text()
+            t=t.replace('for f in index.html app.js ai.js', 'for f in ai-config.js index.html app.js ai.js')
+            if 'FIN_GROQ_KEY:' not in t and 'Prepare web assets' in t:
+              marker='      - name: Prepare web assets\n'
+              if marker not in t: marker='      - name: Prepare web assets into Android\n'
+              if marker in t:
+                block="      - name: Prepare AI runtime config\n        env:\n          FIN_GROQ_KEY: ${{ secrets.FIN_GROQ_KEY || secrets.GROQ_API_KEY }}\n        run: |\n          if [ -n \"$FIN_GROQ_KEY\" ]; then printf 'window.FIN_DEFAULT_AI_KEY=%s;\\n' \"$(python3 -c 'import json,os; print(json.dumps(os.environ[\"FIN_GROQ_KEY\"]))')\" > ai-config.js; else printf 'window.FIN_DEFAULT_AI_KEY=\"\";\\n' > ai-config.js; fi\n\n"
+                t=t.replace(marker,block+marker,1)
+            p.write_text(t)
+          PY
+      - name: Commit repaired project
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app.js ai.js .github/workflows/build-apk.yml .github/workflows/release-apk.yml .github/workflows/publish-current-apk.yml
+          git diff --cached --quiet && exit 0
+          git commit -m 'Repair app state, first-launch AI, and blank new-user calendar'
+          git push
