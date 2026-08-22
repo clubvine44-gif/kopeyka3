@@ -87,13 +87,19 @@ jobs:
           FIN_KEY_PASSWORD: ${{ secrets.FIN_KEY_PASSWORD }}
         run: gradle assembleRelease --no-daemon --stacktrace
 
-      - name: Verify APK version
+      - name: Verify APK version, alignment and signature
         run: |
           set -e
           APK="android/app/build/outputs/apk/release/app-release.apk"
-          AAPT="$ANDROID_HOME/build-tools/34.0.0/aapt"
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/34.0.0"
+          AAPT="$BUILD_TOOLS/aapt"
+          ZIPALIGN="$BUILD_TOOLS/zipalign"
+          APKSIGNER="$BUILD_TOOLS/apksigner"
           test -f "$APK"
           test -x "$AAPT"
+          test -x "$ZIPALIGN"
+          test -x "$APKSIGNER"
+
           INFO="$($AAPT dump badging "$APK")"
           echo "$INFO"
           CODE=$(printf '%s\n' "$INFO" | sed -n "s/.*versionCode='\([^']*\)'.*/\1/p" | head -1)
@@ -101,6 +107,14 @@ jobs:
           echo "APK versionCode=$CODE versionName=$NAME (expected $VERSION_CODE / $VERSION_NAME)"
           test "$CODE" = "$VERSION_CODE"
           test "$NAME" = "$VERSION_NAME"
+
+          echo "Checking zip alignment..."
+          "$ZIPALIGN" -c -P 16 -v 4 "$APK"
+
+          echo "Checking APK signature..."
+          "$APKSIGNER" verify --verbose "$APK"
+
+          echo "APK SHA256:"
           sha256sum "$APK"
 
       - name: Preserve verified APK
