@@ -59,9 +59,11 @@ jobs:
           t=Path('android/app/build.gradle').read_text()
           code=re.search(r'versionCode\s+(\d+)',t).group(1)
           name=re.search(r'versionName\s+"([^"]+)"',t).group(1)
-          Path('/tmp/ver.env').write_text(f'VERSION_CODE={code}\nVERSION_NAME={name}\n')
           print(f'Building Finn {name} (versionCode {code})')
+          with open('/tmp/ver.env','w') as f:
+              f.write(f'VERSION_CODE={code}\nVERSION_NAME={name}\n')
           PY
+          cat /tmp/ver.env >> "$GITHUB_ENV"
           cp /tmp/ver.env "$RUNNER_TEMP/ver.env"
 
       - name: Prepare release keystore
@@ -88,7 +90,6 @@ jobs:
       - name: Verify APK version
         run: |
           set -e
-          source "$RUNNER_TEMP/ver.env"
           APK="android/app/build/outputs/apk/release/app-release.apk"
           AAPT="$ANDROID_HOME/build-tools/34.0.0/aapt"
           test -f "$APK"
@@ -118,7 +119,6 @@ jobs:
       - name: Update public update manifest
         run: |
           set -e
-          source "$RUNNER_TEMP/ver.env"
           python3 - <<'PY'
           import json, os
           from pathlib import Path
@@ -141,7 +141,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -e
-          source "$RUNNER_TEMP/ver.env"
           cp "$RUNNER_TEMP/Fin.apk" Fin.apk
           TAG="v${VERSION_NAME}"
           gh release delete "$TAG" --yes 2>/dev/null || true
