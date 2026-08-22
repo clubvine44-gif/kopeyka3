@@ -137,10 +137,20 @@ jobs:
           set -euo pipefail
           cp android/app/build/outputs/apk/release/app-release.apk Fin.apk
           test -s Fin.apk
-          "$ANDROID_HOME/build-tools/34.0.0/zipalign" -f -p 4 Fin.apk Fin-aligned.apk
+          BUILD_TOOLS="$(find "${ANDROID_HOME:-/nonexistent}" "${ANDROID_SDK_ROOT:-/nonexistent}" /usr/local/lib/android/sdk -maxdepth 3 -type d -path '*build-tools/34.0.0' 2>/dev/null | head -n1)"
+          if [ -z "$BUILD_TOOLS" ]; then
+            BUILD_TOOLS="$(find / -maxdepth 8 -type d -path '*build-tools/34.0.0' 2>/dev/null | head -n1)"
+          fi
+          test -n "$BUILD_TOOLS" || { echo "build-tools 34.0.0 not found"; exit 1; }
+          echo "Using build-tools at: $BUILD_TOOLS"
+          ZIPALIGN="$BUILD_TOOLS/zipalign"
+          APKSIGNER="$BUILD_TOOLS/apksigner"
+          test -x "$ZIPALIGN" || { echo "zipalign not executable at $ZIPALIGN"; exit 1; }
+          test -x "$APKSIGNER" || { echo "apksigner not executable at $APKSIGNER"; exit 1; }
+          "$ZIPALIGN" -f -p 4 Fin.apk Fin-aligned.apk
           mv Fin-aligned.apk Fin.apk
-          "$ANDROID_HOME/build-tools/34.0.0/zipalign" -c -p -v 4 Fin.apk
-          apksigner verify --verbose Fin.apk
+          "$ZIPALIGN" -c -p -v 4 Fin.apk
+          "$APKSIGNER" verify --verbose Fin.apk
           ls -lh Fin.apk
 
       - name: Publish GitHub Release
