@@ -1,40 +1,63 @@
 (function(){'use strict';
-var CSS='#fab.finn-idle{box-shadow:0 6px 24px rgba(60,140,220,.45),0 0 0 2px rgba(94,200,255,.4)!important;animation:finnIdlePulse 2.8s ease-in-out infinite!important}#fab.finn-active,#fab.open{animation:finnFabPulse 1s ease-in-out infinite!important}@keyframes finnIdlePulse{0%,100%{box-shadow:0 6px 24px rgba(60,140,220,.45),0 0 0 2px rgba(94,200,255,.4)}50%{box-shadow:0 8px 32px rgba(60,140,220,.6),0 0 0 5px rgba(94,200,255,.2)}}@keyframes finnFabPulse{0%,100%{box-shadow:0 0 0 3px rgba(94,200,255,.95),0 0 20px rgba(94,200,255,.55)}50%{box-shadow:0 0 0 9px rgba(94,200,255,.12),0 0 32px rgba(94,200,255,.7)}}#fab{-webkit-touch-callout:none!important;-webkit-user-select:none!important;user-select:none!important;touch-action:manipulation;-webkit-user-drag:none}';
+var CSS='#fab{-webkit-touch-callout:none!important;-webkit-user-select:none!important;user-select:none!important;touch-action:manipulation;-webkit-user-drag:none}';
 function boot(){
   if(!document.getElementById('finnStyleV9')){
     var s=document.createElement('style');s.id='finnStyleV9';s.textContent=CSS;document.head.appendChild(s);
   }
   var fab=document.getElementById('fab');
+  var radial=document.getElementById('radial');
   if(!fab) return;
   fab.classList.add('finn-idle');
   fab.setAttribute('unselectable','on');
-  /* prevent long-press copy / context menu on the + */
   if(!fab._finnTap){
     fab._finnTap=true;
-    var holdT=null, longPressed=false;
+    var holdT=null, longPressed=false, startX=0, startY=0;
     function clearHold(){ if(holdT){ clearTimeout(holdT); holdT=null; } }
+    function openRadial(){
+      if(!radial) return;
+      var o=radial.classList.toggle('show');
+      fab.classList.toggle('open', o);
+    }
     function startHold(e){
-      try{ e.preventDefault(); }catch(x){}
-      try{ if(window.getSelection) window.getSelection().removeAllRanges(); }catch(x){}
       longPressed=false;
       clearHold();
+      try{ var t=e.touches&&e.touches[0]; if(t){ startX=t.clientX; startY=t.clientY; } }catch(x){}
       holdT=setTimeout(function(){
         holdT=null;
         longPressed=true;
         try{ if(window.getSelection) window.getSelection().removeAllRanges(); }catch(x){}
+        if(radial){ radial.classList.remove('show'); fab.classList.remove('open'); }
         if(window.kopeykaAssistant) window.kopeykaAssistant.open({listen:false});
-      }, 550);
+      }, 520);
+    }
+    function endHold(e){
+      var wasLong=longPressed;
+      clearHold();
+      if(wasLong){
+        longPressed=false;
+        if(e){ try{ e.preventDefault(); e.stopPropagation(); }catch(x){} }
+        return;
+      }
+      if(e && e.type==='touchend'){
+        try{
+          var t=e.changedTouches&&e.changedTouches[0];
+          if(t && (Math.abs(t.clientX-startX)>12 || Math.abs(t.clientY-startY)>12)) return;
+        }catch(x){}
+        openRadial();
+        try{ e.preventDefault(); }catch(x){}
+      }
     }
     fab.addEventListener('click', function(e){
       if(longPressed){ e.preventDefault(); e.stopImmediatePropagation(); longPressed=false; return false; }
-    }, true);
-    fab.addEventListener('touchstart', startHold, {passive:false});
-    fab.addEventListener('touchend', clearHold, {passive:true});
+      openRadial();
+    });
+    fab.addEventListener('touchstart', startHold, {passive:true});
+    fab.addEventListener('touchend', endHold, {passive:false});
     fab.addEventListener('touchcancel', clearHold, {passive:true});
     fab.addEventListener('mousedown', startHold);
-    fab.addEventListener('mouseup', clearHold);
+    fab.addEventListener('mouseup', endHold);
     fab.addEventListener('mouseleave', clearHold);
-    fab.addEventListener('contextmenu', function(e){ e.preventDefault(); e.stopPropagation(); return false; });
+    fab.addEventListener('contextmenu', function(e){ e.preventDefault(); return false; });
     fab.addEventListener('selectstart', function(e){ e.preventDefault(); return false; });
   }
 }
@@ -49,7 +72,6 @@ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded'
 else boot();
 })();
 
-/* Live Finn avatar: eyes + aura status + tip */
 (function(){
   'use strict';
   function setStatus(kind){
@@ -65,7 +87,7 @@ else boot();
   function updateStatus(){
     var online=false, problems=false;
     try{
-      var k=(window.kopeykaAI&&window.kopeykaAI.getKey)?window.kopeykaAI.getKey():(localStorage.getItem('kopeyka_groq_key')||'');
+      var k=(window.kopeykaAI&&window.kopeykaAI.getKey)?window.kopeykaAI.getKey():'';
       online=!!k;
       if(navigator.onLine===false) problems=true;
     }catch(e){}
@@ -83,7 +105,7 @@ else boot();
       av._tipT=setTimeout(function(){ av.classList.remove('show-tip'); }, 3400);
     });
     updateStatus();
-    setInterval(updateStatus, 4000);
+    setInterval(updateStatus, 5000);
     window.addEventListener('online', updateStatus);
     window.addEventListener('offline', updateStatus);
   }
