@@ -147,8 +147,9 @@ jobs:
           APKSIGNER="$BUILD_TOOLS/apksigner"
           test -x "$ZIPALIGN" || { echo "zipalign not executable at $ZIPALIGN"; exit 1; }
           test -x "$APKSIGNER" || { echo "apksigner not executable at $APKSIGNER"; exit 1; }
-          "$ZIPALIGN" -f -p 4 Fin.apk Fin-aligned.apk
-          mv Fin-aligned.apk Fin.apk
+          # Gradle уже зип-алайнит и подписывает release APK (v2/v3) при сборке.
+          # Повторный zipalign после подписи ломает блок подписи — поэтому НЕ прогоняем его снова,
+          # только проверяем, что итоговый APK уже выровнен и подпись валидна.
           "$ZIPALIGN" -c -p -v 4 Fin.apk
           "$APKSIGNER" verify --verbose Fin.apk
           ls -lh Fin.apk
