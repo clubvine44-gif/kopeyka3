@@ -60,3 +60,5 @@ jobs:
           git diff --cached --quiet && exit 0
           git commit -m 'Repair app state, first-launch AI, and blank new-user calendar'
           git push
+
+# Re-run this workflow whenever this file is updated so repairs apply to latest main.
