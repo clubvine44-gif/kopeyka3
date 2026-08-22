@@ -1,6 +1,6 @@
 {
-  "versionCode": 26,
-  "versionName": "3.4.0",
+  "versionCode": 27,
+  "versionName": "3.4.1",
   "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/latest/download/Fin.apk",
-  "notes": "3.4.0 — мини-график прогноза кассы на главном экране, акцент на ближайшую смену в календаре, фикс автообновления (конфликт пакетов)"
+  "notes": "3.4.1 — фикс FAB/пульса, анимация Финна, остаток смен, glass-ассистент, скролл, плавность"
 }

@@ -1,5 +1,5 @@
 (function(){'use strict';
-var CSS='#fab.finn-idle{box-shadow:0 8px 28px rgba(229,167,94,.42),0 0 0 2px rgba(229,167,94,.4);animation:finnIdlePulse 2.8s ease-in-out infinite}#fab.finn-active{animation:finnFabPulse 1s ease-in-out infinite}@keyframes finnIdlePulse{0%,100%{box-shadow:0 8px 28px rgba(229,167,94,.42),0 0 0 2px rgba(229,167,94,.4)}50%{box-shadow:0 8px 32px rgba(229,167,94,.55),0 0 0 4px rgba(229,167,94,.22)}}@keyframes finnFabPulse{0%,100%{box-shadow:0 0 0 3px rgba(229,167,94,.95),0 0 20px rgba(229,167,94,.6)}50%{box-shadow:0 0 0 9px rgba(229,167,94,.12),0 0 32px rgba(229,167,94,.75)}}#fab{-webkit-touch-callout:none!important;-webkit-user-select:none!important;user-select:none!important;touch-action:manipulation;-webkit-user-drag:none}';
+var CSS='#fab.finn-idle{box-shadow:0 6px 24px rgba(60,140,220,.45),0 0 0 2px rgba(94,200,255,.4)!important;animation:finnIdlePulse 2.8s ease-in-out infinite!important}#fab.finn-active,#fab.open{animation:finnFabPulse 1s ease-in-out infinite!important}@keyframes finnIdlePulse{0%,100%{box-shadow:0 6px 24px rgba(60,140,220,.45),0 0 0 2px rgba(94,200,255,.4)}50%{box-shadow:0 8px 32px rgba(60,140,220,.6),0 0 0 5px rgba(94,200,255,.2)}}@keyframes finnFabPulse{0%,100%{box-shadow:0 0 0 3px rgba(94,200,255,.95),0 0 20px rgba(94,200,255,.55)}50%{box-shadow:0 0 0 9px rgba(94,200,255,.12),0 0 32px rgba(94,200,255,.7)}}#fab{-webkit-touch-callout:none!important;-webkit-user-select:none!important;user-select:none!important;touch-action:manipulation;-webkit-user-drag:none}';
 function boot(){
   if(!document.getElementById('finnStyleV9')){
     var s=document.createElement('style');s.id='finnStyleV9';s.textContent=CSS;document.head.appendChild(s);
@@ -23,7 +23,7 @@ function boot(){
         longPressed=true;
         try{ if(window.getSelection) window.getSelection().removeAllRanges(); }catch(x){}
         if(window.kopeykaAssistant) window.kopeykaAssistant.open({listen:false});
-      }, 480);
+      }, 550);
     }
     fab.addEventListener('click', function(e){
       if(longPressed){ e.preventDefault(); e.stopImmediatePropagation(); longPressed=false; return false; }
