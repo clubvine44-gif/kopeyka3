@@ -16,6 +16,25 @@ import android.webkit.JavascriptInterface;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 
+import android.content.ContentValues;
+import android.os.Environment;
+import android.provider.MediaStore;
+import android.os.Handler;
+import android.os.Looper;
+import android.widget.Toast;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Calendar;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
+
 public class FinBridge {
     public static final String CHANNEL_ID = "fin_alerts_v3";
     private final Context context;
@@ -113,14 +132,96 @@ public class FinBridge {
     }
 
     @JavascriptInterface
-    public void updateWidgetDataFull(String daily, String cash, String available, String shift, String left) {
-        context.getSharedPreferences("fin_widget", Context.MODE_PRIVATE).edit()
-                .putString("daily", daily != null ? daily : "—")
-                .putString("cash", cash != null ? cash : "—")
-                .putString("available", available != null ? available : "—")
-                .putString("shift", shift != null ? shift : "")
-                .putString("left", left != null ? left : "")
-                .apply();
-        FinWidgetProvider.refreshAll(context);
+    public void saveBackup(String json, String filename) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ContentValues cv = new ContentValues();
+                cv.put(MediaStore.Downloads.DISPLAY_NAME, filename);
+                cv.put(MediaStore.Downloads.MIME_TYPE, "application/json");
+                cv.put(MediaStore.Downloads.IS_PENDING, 1);
+                Uri uri = context.getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv);
+                if (uri == null) throw new IllegalStateException("не удалось создать файл");
+                OutputStream out = context.getContentResolver().openOutputStream(uri);
+                if (out == null) throw new IllegalStateException("нет доступа к файлу");
+                out.write(json.getBytes(StandardCharsets.UTF_8));
+                out.close();
+                cv.clear();
+                cv.put(MediaStore.Downloads.IS_PENDING, 0);
+                context.getContentResolver().update(uri, cv, null, null);
+            } else {
+                File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                if (!dir.exists()) dir.mkdirs();
+                File file = new File(dir, filename);
+                FileOutputStream out = new FileOutputStream(file);
+                out.write(json.getBytes(StandardCharsets.UTF_8));
+                out.close();
+            }
+            postToast("Сохранено в Загрузки: " + filename);
+        } catch (Exception e) {
+            postToast("Не удалось сохранить бэкап: " + e.getMessage());
+        }
+    }
+
+    @JavascriptInterface
+    public void scheduleReminders(String json) {
+        try {
+            JSONArray arr = new JSONArray(json);
+            SharedPreferences prefs = context.getSharedPreferences("fin_reminders", Context.MODE_PRIVATE);
+            Set<String> oldIds = new HashSet<>(prefs.getStringSet("ids", Collections.<String>emptySet()));
+            Set<String> newIds = new HashSet<>();
+            AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.getJSONObject(i);
+                String id = o.optString("id", "");
+                if (id.isEmpty()) continue;
+                String date = o.optString("date", "");
+                String title = o.optString("title", "Финн");
+                String message = o.optString("message", "");
+                long triggerAt = dateToMillis(date);
+                if (triggerAt <= 0) continue;
+                newIds.add(id);
+                int reqCode = id.hashCode();
+                Intent intent = new Intent(context, ReminderReceiver.class);
+                intent.putExtra("title", title);
+                intent.putExtra("message", message);
+                PendingIntent pi = PendingIntent.getBroadcast(context, reqCode, intent,
+                        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                try {
+                    if (am != null) am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi);
+                } catch (Exception ignored) { }
+            }
+
+            for (String oldId : oldIds) {
+                if (newIds.contains(oldId)) continue;
+                int reqCode = oldId.hashCode();
+                Intent intent = new Intent(context, ReminderReceiver.class);
+                PendingIntent pi = PendingIntent.getBroadcast(context, reqCode, intent,
+                        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                if (am != null) am.cancel(pi);
+            }
+
+            prefs.edit().putStringSet("ids", newIds).apply();
+        } catch (Exception ignored) { }
+    }
+
+    private long dateToMillis(String isoDate) {
+        try {
+            String[] p = isoDate.split("-");
+            Calendar c = Calendar.getInstance();
+            c.set(Integer.parseInt(p[0]), Integer.parseInt(p[1]) - 1, Integer.parseInt(p[2]), 10, 0, 0);
+            c.set(Calendar.MILLISECOND, 0);
+            return c.getTimeInMillis();
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
+    private void postToast(final String msg) {
+        new Handler(Looper.getMainLooper()).post(new Runnable() {
+            @Override public void run() {
+                Toast.makeText(context, msg, Toast.LENGTH_LONG).show();
+            }
+        });
     }
 }

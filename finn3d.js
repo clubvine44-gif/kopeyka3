@@ -66,7 +66,7 @@
     var h1 = bar.querySelector('h1');
     var hint = document.createElement('div');
     hint.className = 'finn-hint';
-    hint.innerHTML = 'Скажи: <b>Привет, Финн</b>';
+    hint.innerHTML = 'Зажми <b>➕</b>, чтобы поговорить';
     if (h1 && h1.parentNode === bar) {
       var wrap = document.createElement('div');
       wrap.style.cssText = 'display:flex;align-items:center;min-width:0;flex:1';

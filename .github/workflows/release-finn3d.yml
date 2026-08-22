@@ -1,9 +1,6 @@
 name: Release Finn 3D Update
 
 on:
-  push:
-    branches: [main]
-    paths-ignore: [update.json]
   workflow_dispatch:
 
 permissions:
