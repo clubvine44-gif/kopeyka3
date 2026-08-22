@@ -16,6 +16,11 @@ function init(){window.__finnWakeStop=function(){wakeOn=false;stopRec();};window
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
 (function(){
-  function load(){if(window.Finn3D)return;var s=document.createElement('script');s.src='finn3d.js?v=2026082302';s.async=false;s.onload=function(){if(window.Finn3D&&!localStorage.getItem('finn_onboarding_done'))window.Finn3D.start();};document.head.appendChild(s);}
+  function load(){
+    ['finn3d','finnFloat','finnTip'].forEach(function(id){var n=document.getElementById(id);if(n)n.remove();});
+    var oldStyle=document.getElementById('finn3dStyle');if(oldStyle)oldStyle.remove();
+    var s=document.createElement('script');s.src='finn3d.js?v=2026082302';s.async=false;
+    document.head.appendChild(s);
+  }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',load);else load();
 })();
