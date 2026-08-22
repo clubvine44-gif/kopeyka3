@@ -1,6 +1,6 @@
 {
-  "versionCode": 20,
-  "versionName": "3.0.0",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v3.0.0/Fin.apk",
-  "notes": "Финн 3.0.0: без спама микрофона (hold-to-talk), подсветка +, новая иконка."
+  "versionCode": 21,
+  "versionName": "3.1.0",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v3.1.0/Fin.apk",
+  "notes": "Финн 3.1.0: новая иконка с AI-глазами, анимированный Финн в шапке (индикатор связи), hold-to-talk без спама микрофона, подсветка +, освежённый дизайн, стабильность."
 }
