@@ -109,7 +109,7 @@ jobs:
           test "$NAME" = "$VERSION_NAME"
 
           echo "Checking zip alignment..."
-          "$ZIPALIGN" -c -P 16 -v 4 "$APK"
+          "$ZIPALIGN" -c -p -v 4 "$APK"
 
           echo "Checking APK signature..."
           "$APKSIGNER" verify --verbose "$APK"
