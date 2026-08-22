@@ -1,7 +1,7 @@
 (function(){
 'use strict';
-var started=false,scene,camera,renderer,avatar,arm,forearm,head,targetEl=null,step=0,steps=[],idleBubble=null;
-var css=\
+var started=false,scene,camera,renderer,avatar,arm,forearm,head,targetEl=null,step=0,steps=[];
+var css=
 '#finn3d{position:fixed;inset:0;z-index:120;pointer-events:none;display:none}'+
 '#finn3d.show{display:block}'+
 '#finn3d canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}'+
@@ -47,7 +47,6 @@ function load3(cb){
   s.src='https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js';
   s.onload=cb;
   s.onerror=function(){
-    // запасной CDN
     var s2=document.createElement('script');
     s2.src='https://unpkg.com/three@0.160.0/build/three.min.js';
     s2.onload=cb;s2.onerror=function(){cb();};
@@ -61,27 +60,26 @@ function q(g,ma){return new THREE.Mesh(g,ma);}
 
 function buildAvatar(){
   var skin=m(0xe8b48d),hair=m(0x3d2a22),suit=m(0x2a3a55),dark=m(0x121722),white=m(0xf4f5f8),gold=m(0xe5a75e),eye=m(0x1a1f2b);
-  avatar=new THREE.Group();
-  var torso=q(new THREE.BoxGeometry(.9,1.15,.42),suit);torso.position.y=1.6;avatar.add(torso);
-  head=q(new THREE.SphereGeometry(.38,24,18),skin);head.position.y=2.62;avatar.add(head);
-  var hc=q(new THREE.SphereGeometry(.4,24,18),hair);hc.scale.set(1.05,.78,1.05);hc.position.y=2.76;avatar.add(hc);
-  // глаза
+  var g=new THREE.Group();
+  var torso=q(new THREE.BoxGeometry(.9,1.15,.42),suit);torso.position.y=1.6;g.add(torso);
+  var hd=q(new THREE.SphereGeometry(.38,24,18),skin);hd.position.y=2.62;g.add(hd);
+  var hc=q(new THREE.SphereGeometry(.4,24,18),hair);hc.scale.set(1.05,.78,1.05);hc.position.y=2.76;g.add(hc);
   [[-.12,.08],[.12,.08]].forEach(function(p){
-    var e=q(new THREE.SphereGeometry(.045,12,10),eye);e.position.set(p[0],2.64+p[1],.32);avatar.add(e);
+    var e=q(new THREE.SphereGeometry(.045,12,10),eye);e.position.set(p[0],2.64+p[1],.32);g.add(e);
   });
-  var smile=q(new THREE.TorusGeometry(.1,.018,8,16,Math.PI),m(0xc47a62));smile.position.set(0,2.48,.33);smile.rotation.x=Math.PI;avatar.add(smile);
-  var collar=q(new THREE.BoxGeometry(.32,.36,.46),white);collar.position.set(0,1.98,.05);avatar.add(collar);
-  var hips=q(new THREE.BoxGeometry(.8,.32,.4),dark);hips.position.y=1;avatar.add(hips);
-  [-.22,.22].forEach(function(x){var l=q(new THREE.CylinderGeometry(.15,.17,1,14),dark);l.position.set(x,.45,0);avatar.add(l);});
-  arm=new THREE.Group();arm.position.set(.52,1.95,0);avatar.add(arm);
-  var ua=q(new THREE.CylinderGeometry(.11,.13,.58,14),suit);ua.position.y=-.28;ua.rotation.z=-.1;arm.add(ua);
-  forearm=new THREE.Group();forearm.position.y=-.55;arm.add(forearm);
-  var fa=q(new THREE.CylinderGeometry(.09,.11,.52,14),skin);fa.position.y=-.25;forearm.add(fa);
-  var hand=q(new THREE.SphereGeometry(.12,16,12),skin);hand.position.y=-.52;forearm.add(hand);
-  var finger=q(new THREE.BoxGeometry(.06,.26,.06),skin);finger.position.set(0,-.64,.08);forearm.add(finger);
-  var badge=q(new THREE.SphereGeometry(.08,14,10),gold);badge.position.set(.18,1.62,.24);avatar.add(badge);
-  avatar.scale.set(1,1,1);
-  return avatar;
+  var smile=q(new THREE.TorusGeometry(.1,.018,8,16,Math.PI),m(0xc47a62));smile.position.set(0,2.48,.33);smile.rotation.x=Math.PI;g.add(smile);
+  var collar=q(new THREE.BoxGeometry(.32,.36,.46),white);collar.position.set(0,1.98,.05);g.add(collar);
+  var hips=q(new THREE.BoxGeometry(.8,.32,.4),dark);hips.position.y=1;g.add(hips);
+  [-.22,.22].forEach(function(x){var l=q(new THREE.CylinderGeometry(.15,.17,1,14),dark);l.position.set(x,.45,0);g.add(l);});
+  var armG=new THREE.Group();armG.position.set(.52,1.95,0);g.add(armG);
+  var ua=q(new THREE.CylinderGeometry(.11,.13,.58,14),suit);ua.position.y=-.28;ua.rotation.z=-.1;armG.add(ua);
+  var faG=new THREE.Group();faG.position.y=-.55;armG.add(faG);
+  var fa=q(new THREE.CylinderGeometry(.09,.11,.52,14),skin);fa.position.y=-.25;faG.add(fa);
+  var hand=q(new THREE.SphereGeometry(.12,16,12),skin);hand.position.y=-.52;faG.add(hand);
+  var finger=q(new THREE.BoxGeometry(.06,.26,.06),skin);finger.position.set(0,-.64,.08);faG.add(finger);
+  var badge=q(new THREE.SphereGeometry(.08,14,10),gold);badge.position.set(.18,1.62,.24);g.add(badge);
+  g.userData.arm=armG;g.userData.forearm=faG;g.userData.head=hd;
+  return g;
 }
 
 function init3(){
@@ -100,9 +98,9 @@ function init3(){
   var d=new THREE.DirectionalLight(0xffe6c4,2.4);d.position.set(-3,5,4);scene.add(d);
   var fill=new THREE.DirectionalLight(0x88aaff,.6);fill.position.set(3,1,-2);scene.add(fill);
   avatar=buildAvatar();
+  arm=avatar.userData.arm;forearm=avatar.userData.forearm;head=avatar.userData.head;
   avatar.position.set(1.35,-1.15,0);
   scene.add(avatar);
-  // мини-аватар на кнопке
   initFloatAvatar();
   addEventListener('resize',resize);
   animate();
@@ -151,9 +149,9 @@ function animate(){
   var t=performance.now()/1000;
   if(renderer&&avatar){
     avatar.position.y=-1.15+Math.sin(t*1.5)*.02;
-    head.rotation.y=Math.sin(t*.7)*.05;
+    if(head)head.rotation.y=Math.sin(t*.7)*.05;
     if(targetEl)point();
-    else{arm.rotation.z=-.05+Math.sin(t*1.4)*.03;forearm.rotation.z=.05+Math.sin(t*1.1)*.025;}
+    else if(arm&&forearm){arm.rotation.z=-.05+Math.sin(t*1.4)*.03;forearm.rotation.z=.05+Math.sin(t*1.1)*.025;}
     renderer.render(scene,camera);
   }
   if(floatReady&&floatRenderer&&floatAvatar){
@@ -205,16 +203,12 @@ function fallback(){
   inject();
   var f=document.getElementById('finnFloat');
   if(f&&!f.querySelector('.f3emoji')){
-    var e=document.createElement('div');e.className='f3emoji';e.textContent='🧑‍💼';e.style.cssText='font-size:28px;line-height:1';f.appendChild(e);
+    var e=document.createElement('div');e.className='f3emoji';e.textContent='\uD83E\uDDD1\u200D\uD83D\uDCBC';e.style.cssText='font-size:28px;line-height:1';
+    f.appendChild(e);
   }
 }
 
-window.Finn3D={
-  start:start,
-  finish:finish,
-  replay:function(){started=false;start();},
-  pointTo:function(sel){target(sel);}
-};
+window.Finn3D={start:start,finish:finish,replay:function(){started=false;start();},pointTo:function(sel){target(sel);}};
 
 function boot(){
   document.title='Финн';
@@ -223,7 +217,6 @@ function boot(){
   load3(function(){
     if(window.THREE)init3();
     else fallback();
-    // показать тур один раз после обновления до 2.x, даже если старый флаг был
     var seen=false;
     try{seen=!!localStorage.getItem('finn3d_seen_v2');}catch(e){}
     if(!seen)setTimeout(start,900);
