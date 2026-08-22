@@ -1,6 +1,6 @@
 {
-  "versionCode": 24,
-  "versionName": "3.2.2",
+  "versionCode": 25,
+  "versionName": "3.3.0",
   "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/latest/download/Fin.apk",
-  "notes": "Новая версия Финна"
+  "notes": "Glass UI 3.3.0 — новый интерфейс в стиле glassmorphism, плавные анимации, обновлённый календарь и топ-карточки"
 }
