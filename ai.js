@@ -114,7 +114,7 @@ function localIntent(text){
     var dd=resolveDebt(name);
     if(dd)return{mode:'action',text:null,summary:'Удалить долг «'+dd.name+'»',actions:[{type:'delete_debt',name:dd.name}]};
     var list=debts().map(function(d){return d.name;}).join(', ');
-    return{mode:'answer',text:list?'Не нашёл долг «'+(name||'')+'». Есть: '+list+'.':'В Копейке нет долгов.',summary:null,actions:[]};
+    return{mode:'answer',text:list?'Не нашёл долг «'+(name||'')+'». Есть: '+list+'.':'В Финне нет долгов.',summary:null,actions:[]};
   }
 
   m=t.match(/(дай|дать|дал|дала|отдал|отдала|внеси|внести|внесла|кинь|кинул|погаси|погасить|заплати|заплатил)\s+(к\s+|по\s+|на\s+|в\s+)?(долг(у|а|е)?\s+)?(.+?)\s+(\d[\d\s]*(?:[.,]\d+)?)/);
@@ -150,21 +150,21 @@ function askConversation(history,userText){
   if(local)return Promise.resolve(local);
   return new Promise(function(resolve,reject){
     var key=getKey();
-    if(!key){reject(new Error('Нет ключа Groq. Открой настройки Копейки и укажи ключ Groq.'));return;}
+    if(!key){reject(new Error('Нет ключа Groq. Открой настройки Финны и укажи ключ Groq.'));return;}
     var debtNames=debts().map(function(d){return d.name;}).join(', ')||'нет';
     var profileCtx='';
     try{if(window.FinnaProfile&&window.FinnaProfile.contextForAI){var pc=window.FinnaProfile.contextForAI();profileCtx=pc.summary+' Фокус: '+(pc.focus||'')+'. Режим: '+pc.mode+'.';}}catch(e){}
     var system=[
       'Контекст сценария пользователя: '+profileCtx,
-      'Тебя зовут Финна (не Финн и не Фина). Ты дружелюбный ассистент приложения Копейка.',
+      'Тебя зовут Финна (не Финн и не Фина). Ты дружелюбный ассистент приложения Финна.',
       'Отвечай только по-русски, коротко и по делу.',
       'Ты можешь отвечать на ЛЮБЫЕ вопросы пользователя: финансы, общие знания, быт, шутки — без отказов «я только про деньги».',
-      'Если вопрос не про Копейку — просто ответь как умный помощник в mode answer.',
+      'Если вопрос не про финансы — просто ответь как умный помощник в mode answer.',
       'Долги сейчас: '+debtNames+'.',
-      'Когда нужно изменить данные Копейки — mode action с actions. Каждый action ОБЯЗАН иметь type.',
+      'Когда нужно изменить данные Финны — mode action с actions. Каждый action ОБЯЗАН иметь type.',
       'Пример: {"type":"delete_debt","name":"Ёжик"} или {"type":"pay_debt","name":"Ёжик","amount":189}.',
       'Бери точные имена из списка долгов/резервов. Никогда не удаляй доход вместо долга.',
-      'Если вопрос не требует изменения данных — можно ответить обычным текстом. Если меняешь данные Копейки — JSON. Формат JSON: {"mode":"answer","text":"...","summary":null,"actions":[]} или {"mode":"action","text":null,"summary":"...","actions":[{"type":"..."}]}.',
+      'Если вопрос не требует изменения данных — можно ответить обычным текстом. Если меняешь данные Финны — JSON. Формат JSON: {"mode":"answer","text":"...","summary":null,"actions":[]} или {"mode":"action","text":null,"summary":"...","actions":[{"type":"..."}]}.',
       'type: add_expense, add_income, add_debt, pay_debt, increase_debt, reserve_deposit, reserve_withdraw, add_obligation, delete_debt, delete_income, delete_expense, delete_reserve, delete_obligation, delete_last, change_last, set_opening_balance, set_day_rate, set_night_rate, change_shift.',
       'На вопрос «как тебя зовут» отвечай: «Меня зовут Финна».'
     ].join('\n');

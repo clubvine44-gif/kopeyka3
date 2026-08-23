@@ -11,7 +11,8 @@ function saveProfile(p){
     if(!window.STATE) window.STATE={};
     if(!STATE.settings) STATE.settings={};
     STATE.settings.profile=p;
-    if(typeof save==='function') save(true);
+    if(typeof window.saveState==='function') window.saveState();
+    else if(typeof save==='function') save(true);
   }catch(e){}
   try{ localStorage.setItem(KEY, JSON.stringify(p)); }catch(e){}
 }
@@ -171,7 +172,8 @@ function applyProfile(){
       // clear forced manual limit from previous budget profile
       // keep user choice if they set it - only clear if we set from profile
     }
-    if(typeof save==='function') save(true);
+    if(typeof window.saveState==='function') window.saveState();
+    else if(typeof save==='function') save(true);
   }catch(e){}
   return p;
 }
@@ -269,7 +271,8 @@ window.FinnaProfile={
 function maybeStart(){
   if(done()) return;
   try{
-    var onboarded = localStorage.getItem('kopeyka3_onboarded_v9')==='1' ||
+    var onboarded = localStorage.getItem('kopeyka3_onboarded_v10')==='1' ||
+                    localStorage.getItem('kopeyka3_onboarded_v9')==='1' ||
                     localStorage.getItem('kopeyka3_onboarded_v8')==='1';
     if(!onboarded) return;
   }catch(e){}

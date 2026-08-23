@@ -184,9 +184,7 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
         if (webView != null) {
             webView.onResume();
-            long now = System.currentTimeMillis();
-            if (lastResumeAt > 0 && now - lastResumeAt > 1500) webView.reload();
-            lastResumeAt = now;
+            lastResumeAt = System.currentTimeMillis();
         }
         checkForUpdate();
         try { UpdateCheckReceiver.scheduleSoon(this); } catch (Exception ignored) {}
@@ -264,7 +262,7 @@ public class MainActivity extends AppCompatActivity {
         if (isFinishing() || (Build.VERSION.SDK_INT >= 17 && isDestroyed())) return;
         if (!updateDialogShowing.compareAndSet(false, true)) return;
 
-        String message = "Доступна новая версия Финн"
+        String message = "Доступна новая версия Финна"
                 + (name.isEmpty() ? "" : " " + name)
                 + "\n\n"
                 + (notes.isEmpty() ? "Обновление приложения." : notes)
@@ -302,7 +300,7 @@ public class MainActivity extends AppCompatActivity {
             try {
                 if (progressDlg != null && progressDlg.isShowing()) progressDlg.dismiss();
                 progressDlg = new android.app.ProgressDialog(this);
-                progressDlg.setTitle("Обновление Фин " + (versionName != null ? versionName : ""));
+                progressDlg.setTitle("Обновление Финна " + (versionName != null ? versionName : ""));
                 progressDlg.setMessage("Загрузка…");
                 progressDlg.setProgressStyle(android.app.ProgressDialog.STYLE_HORIZONTAL);
                 progressDlg.setIndeterminate(true);

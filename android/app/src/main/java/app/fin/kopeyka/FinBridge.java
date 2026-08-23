@@ -27,6 +27,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.lang.ref.WeakReference;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.HashSet;
@@ -35,6 +36,7 @@ import java.util.Set;
 public class FinBridge {
     public static final String CHANNEL_ID = "fin_alerts_v3";
     private final Context context;
+    private final WeakReference<MainActivity> activityRef;
     private final AudioManager audioManager;
     private int savedSystemVolume = -1;
     private int savedNotificationVolume = -1;
@@ -42,6 +44,9 @@ public class FinBridge {
 
     public FinBridge(Context context) {
         this.context = context.getApplicationContext();
+        this.activityRef = context instanceof MainActivity
+                ? new WeakReference<>((MainActivity) context)
+                : new WeakReference<>(null);
         this.audioManager = (AudioManager) this.context.getSystemService(Context.AUDIO_SERVICE);
         ensureChannel();
         scheduleFirstLaunchWelcome();
@@ -55,7 +60,7 @@ public class FinBridge {
         try { nm.deleteNotificationChannel("fin_alerts_v2"); } catch (Exception ignored) {}
         NotificationChannel ch = nm.getNotificationChannel(CHANNEL_ID);
         if (ch == null) {
-            ch = new NotificationChannel(CHANNEL_ID, "Уведомления Финн", NotificationManager.IMPORTANCE_HIGH);
+            ch = new NotificationChannel(CHANNEL_ID, "Уведомления Финна", NotificationManager.IMPORTANCE_HIGH);
             ch.setDescription("Напоминания и обновления");
             ch.enableVibration(true);
             ch.setVibrationPattern(new long[]{0, 180, 100, 180});
@@ -126,15 +131,14 @@ public class FinBridge {
     @JavascriptInterface public String getVersion() { try { return context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionName; } catch (Exception e) { return ""; } }
     @JavascriptInterface public int getVersionCode() { try { return context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionCode; } catch (Exception e) { return 0; } }
     @JavascriptInterface public void setPullRefresh(boolean on) {
-        if (context instanceof MainActivity) {
-            ((MainActivity) context).runOnUiThread(() -> ((MainActivity) context).setPullRefreshEnabled(on));
-        }
+        MainActivity a = activityRef != null ? activityRef.get() : null;
+        if (a != null) a.runOnUiThread(() -> a.setPullRefreshEnabled(on));
     }
     @JavascriptInterface public void checkUpdate() {
-        if (context instanceof MainActivity) {
-            ((MainActivity) context).runOnUiThread(((MainActivity) context)::forceCheckUpdate);
-        }
+        MainActivity a = activityRef != null ? activityRef.get() : null;
+        if (a != null) a.runOnUiThread(a::forceCheckUpdate);
     }
+    @JavascriptInterface public void checkForUpdate() { checkUpdate(); }
     @JavascriptInterface public boolean isNative() { return true; }
 
     @JavascriptInterface
@@ -146,7 +150,7 @@ public class FinBridge {
         Uri sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
         NotificationCompat.Builder b = new NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setContentTitle(title != null && !title.isEmpty() ? title : "Финн")
+                .setContentTitle(title != null && !title.isEmpty() ? title : "Финна")
                 .setContentText(message != null ? message : "")
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(message != null ? message : ""))
                 .setAutoCancel(true).setContentIntent(pi).setPriority(NotificationCompat.PRIORITY_HIGH)

@@ -595,6 +595,8 @@ html, body { overscroll-behavior-y: none; overscroll-behavior: none; }
 body.fin-settings-open{overflow:hidden!important;position:fixed;width:100%;height:100%;}
 body.fin-settings-open #app{pointer-events:none;}
 .cal-d.has-plan .dot,.cal-d.has-plan{box-shadow:inset 0 0 0 2px rgba(94,200,255,.55)}
+.week-strip .wd.has-plan{box-shadow:inset 0 0 0 1.5px rgba(94,200,255,.55)}
+#dlgLayer{z-index:90!important;}
 html.fin-tour-scroll .card{content-visibility:visible!important;contain:none!important}
 </style></head><body class="has-bnav"><div class="topbar">
   <div class="top-left">
@@ -646,7 +648,7 @@ html.fin-tour-scroll .card{content-visibility:visible!important;contain:none!imp
     <span>Платежи</span>
   </button>
 </nav>
-<div class="fab-wrap"><div class="radial" id="radial"><button data-act="income"><span class="ic">➕</span> Доход</button><button data-act="expense"><span class="ic">➖</span> Расход</button><button data-act="reserve"><span class="ic">🏦</span> Резерв</button><button data-act="debt"><span class="ic">📉</span> Долг</button><button data-act="oblig"><span class="ic">📅</span> Обязательный</button></div><button class="fab" id="fab" aria-label="Добавить"><span aria-hidden="true">+</span></button></div><div class="modal-bg" id="modalBg"></div><div class="toast" id="toast"></div><script src="app.js?v=2026082313"></script><script src="profile.js?v=2026082313"></script><script src="onboard.js?v=2026082313"></script><script src="cloud.js?v=2026082313"></script><script src="products.js?v=2026082313"></script><script src="engine.js?v=2026082313"></script><script src="ai.js?v=2026082313"></script><script src="assistant-v2.js?v=2026082313"></script><script src="voice.js?v=2026082313"></script><script src="finn3d.js?v=2026082313"></script><script src="finn-wake.js?v=2026082313"></script><script>window.__kopeykaBuild='2026082313';window.__FIN_NATIVE=true;</script><script>
+<div class="fab-wrap"><div class="radial" id="radial"><button data-act="income"><span class="ic">➕</span> Доход</button><button data-act="expense"><span class="ic">➖</span> Расход</button><button data-act="reserve"><span class="ic">🏦</span> Резерв</button><button data-act="debt"><span class="ic">📉</span> Долг</button><button data-act="oblig"><span class="ic">📅</span> Обязательный</button></div><button class="fab" id="fab" aria-label="Добавить"><span aria-hidden="true">+</span></button></div><div class="modal-bg" id="modalBg"></div><div class="modal-bg" id="dlgLayer"></div><div class="toast" id="toast"></div><script src="app.js?v=2026082314"></script><script src="profile.js?v=2026082314"></script><script src="onboard.js?v=2026082314"></script><script src="cloud.js?v=2026082314"></script><script src="products.js?v=2026082314"></script><script src="engine.js?v=2026082314"></script><script src="ai.js?v=2026082314"></script><script src="assistant-v2.js?v=2026082314"></script><script src="voice.js?v=2026082314"></script><script src="finn3d.js?v=2026082314"></script><script src="finn-wake.js?v=2026082314"></script><script>window.__kopeykaBuild='2026082314';window.__FIN_NATIVE=true;</script><script>
 (function(){
   function tryTestPush(){
     try{
@@ -721,7 +723,7 @@ html.fin-tour-scroll .card{content-visibility:visible!important;contain:none!imp
       if((top && dy>0) || (bot && dy<0) || (top && bot)){ e.preventDefault(); }
       return;
     }
-    if(t.closest('.modal-bg.show') || t.closest('.ka-bg') || t.closest('#finTour') || t.closest('.modal-card') || t.closest('.ka-chat')){
+    if(t.closest('.modal-bg.show') || t.closest('#dlgLayer') || t.closest('.ka-bg') || t.closest('#finTour') || t.closest('.modal-card') || t.closest('.ka-chat')){
       var sc2=t.closest('.modal-scroll, .modal-card, .ka-chat, .ka-card');
       if(sc2){
         var y2=e.touches[0]?e.touches[0].clientY:lastY;

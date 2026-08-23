@@ -1,6 +1,6 @@
 {
-  "versionCode": 43,
-  "versionName": "3.6.3",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v3.6.3/Fin.apk",
-  "notes": "3.6.3 — обновление Финна (versionCode 43)"
+  "versionCode": 44,
+  "versionName": "3.6.4",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v3.6.4/Fin.apk",
+  "notes": "3.6.4 — календарь больше не сбрасывает покупки; планы в облаке; прогноз и лимит совпадают; проверка обновлений работает; экран не перезагружается при возврате"
 }

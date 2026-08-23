@@ -246,7 +246,7 @@ function describe(a){
   return t;
 }
 function clone(){return JSON.parse(JSON.stringify(window.STATE||{}));}
-function save(s){if(typeof window.setAppState!=='function')throw Error('Копейка ещё не готова');window.setAppState(s);}
+function save(s){if(typeof window.setAppState!=='function')throw Error('Финна ещё не готова');window.setAppState(s);}
 function stem(s){var q=norm(s);return q.replace(/(иями|ами|ями|ого|ему|ому|ыми|ими|ее|ие|ые|ое|ей|ий|ый|ой|ем|ом|ам|ям|ах|ях|ою|ею|у|ю|а|я|ы|и|е|о)$/,'');}
 function find(list,name,amount){
   var q=norm(name||''),st=stem(q),e;
