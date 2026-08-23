@@ -89,25 +89,15 @@ function open(opts){
       '<div class="ka-reply" id="kaReply" aria-live="polite"></div>'+
       '<div class="ka-stage" id="kaStage">'+
         '<div class="ka-center">'+
-          '<div class="ka-bubble" id="kaBubble">'+
+          '<div class="ka-bubble" id="kaBubble" role="button" aria-label="Нажми, чтобы говорить">'+
             '<div class="finn-avatar ka-orb-face" id="kaFinnAvatar" data-emotion="idle">'+
               '<span class="finn-aura"></span>'+avatarSvg+
             '</div>'+
             '<div class="ka-ring"></div>'+
             '<div class="ka-ring ka-ring2"></div>'+
           '</div>'+
-          '<button class="ka-x" id="kaClose" type="button" aria-label="Закрыть">×</button>'+
         '</div>'+
-        '<button class="ka-micbtn" id="kaOrb" type="button" aria-label="Микрофон">'+
-          '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+
-            '<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>'+
-            '<path d="M19 10v2a7 7 0 0 1-14 0v-2"/>'+
-            '<line x1="12" y1="19" x2="12" y2="23"/>'+
-            '<line x1="8" y1="23" x2="16" y2="23"/>'+
-          '</svg>'+
-          '<span class="ka-mic-pulse"></span>'+
-        '</button>'+
-        '<div class="ka-hint" id="kaStatus">Слушаю…</div>'+
+        '<div class="ka-hint" id="kaStatus">Нажми на меня, чтобы говорить</div>'+
       '</div>';
     document.body.appendChild(wrap);
 
@@ -144,15 +134,13 @@ function open(opts){
 
     var bd=document.getElementById('kaBackdrop');
     if(bd)bd.addEventListener('click',function(){close();});
-    var closeBtn=document.getElementById('kaClose');
-    if(closeBtn)closeBtn.onclick=function(e){e.preventDefault();e.stopPropagation();close();};
-    var orb=document.getElementById('kaOrb');
-    if(orb){
-      orb.addEventListener('click',function(e){
+    var bubbleTap=document.getElementById('kaBubble');
+    if(bubbleTap){
+      bubbleTap.addEventListener('click',function(e){
         e.preventDefault();e.stopPropagation();
         if(listening||wantListen||_micStarting){
           wantListen=false;_micStarting=false;stopListen();
-          status('Нажми микрофон');
+          status('Нажми на меня, чтобы говорить');
           kaEmo('idle');
         }else{
           startListen();
@@ -204,7 +192,7 @@ function style(){
   '.ka-stage{position:absolute;z-index:2;width:100%;left:0!important;height:180px;display:block;'+
   'will-change:transform,top,opacity;pointer-events:auto}'+
   '.ka-center{position:absolute;left:50%;top:0;transform:translateX(-50%);width:132px;height:132px}'+
-  '.ka-bubble{position:relative;width:132px;height:132px;border-radius:50%;'+
+  '.ka-bubble{position:relative;width:132px;height:132px;border-radius:50%;cursor:pointer;'+
   'background:radial-gradient(circle at 35% 30%,rgba(120,210,255,.4),rgba(14,22,40,.92) 55%,rgba(8,12,22,.98));'+
   'border:1.5px solid rgba(94,200,255,.5);'+
   'box-shadow:0 16px 48px rgba(0,0,0,.5),0 0 36px rgba(94,200,255,.26),inset 0 0 20px rgba(94,200,255,.12);'+
@@ -237,7 +225,7 @@ function style(){
   '@keyframes kaNod{0%{transform:rotate(0)}30%{transform:rotate(-8deg) translateY(2px)}60%{transform:rotate(5deg)}100%{transform:rotate(0)}}'+
   '@keyframes kaFaceShake{0%,100%{transform:rotate(0)}30%{transform:rotate(-10deg)}60%{transform:rotate(10deg)}}'+
   '@keyframes kaIdleSway{0%,100%{transform:rotate(-2deg)}50%{transform:rotate(2.5deg)}}'+
-  '.ka-micbtn{position:absolute;left:calc(50% + 86px);top:38px;width:48px;height:48px;border-radius:50%;border:1.5px solid rgba(94,200,255,.4);'+
+  ' .ka-micbtn{display:none!important;position:absolute;left:calc(50% + 86px);top:38px;width:48px;height:48px;border-radius:50%;border:1.5px solid rgba(94,200,255,.4);'+
   'background:linear-gradient(145deg,rgba(30,42,70,.95),rgba(14,22,40,.98));'+
   'color:#5EC8FF;display:flex;align-items:center;justify-content:center;'+
   'box-shadow:0 8px 28px rgba(0,0,0,.4),0 0 16px rgba(94,200,255,.15);'+
@@ -250,7 +238,7 @@ function style(){
   '.ka-mic-pulse{position:absolute;inset:-4px;border-radius:50%;border:2px solid rgba(94,200,255,.4);'+
   'opacity:0;pointer-events:none}'+
   '.ka-micbtn.listening .ka-mic-pulse{animation:kaRing 1.4s ease-out infinite;opacity:1}'+
-  '.ka-x{position:absolute;top:-36px;right:-4px;width:30px;height:30px;border-radius:50%;'+
+  ' .ka-x{display:none!important;position:absolute;top:-36px;right:-4px;width:30px;height:30px;border-radius:50%;'+
   'border:1px solid rgba(255,255,255,.12);background:rgba(20,28,44,.85);color:#9AA0B0;'+
   'font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;'+
   'pointer-events:auto;opacity:.85}'+
@@ -270,7 +258,15 @@ function style(){
   '.ka-reply .ka-act{padding:10px 18px;border-radius:14px;border:1px solid rgba(255,255,255,.12);'+
   'background:rgba(20,28,44,.88);color:#fff;font-weight:700;font-size:14px;backdrop-filter:blur(8px)}'+
   '.ka-reply .ka-act.ok{background:linear-gradient(135deg,#5EC8FF,#3A8FE8);color:#0A101C;border:0}'+
-  '.ka-hint{position:absolute;left:50%;top:150px;transform:translateX(-50%);z-index:3;font-size:12.5px;color:rgba(180,190,210,.9);text-align:center;'+
+  '.ka-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;width:min(92vw,340px);margin:0 auto;padding:6px 0 4px}'+
+'.ka-cal .ch{font-size:10px;color:rgba(180,190,210,.75);text-align:center;padding:2px 0}'+
+'.ka-cal .cd{aspect-ratio:1;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;font-weight:650;background:rgba(20,28,44,.75);border:1px solid rgba(255,255,255,.08);color:#E8ECF4;line-height:1.1}'+
+'.ka-cal .cd.day{background:rgba(94,200,255,.18);border-color:rgba(94,200,255,.35)}'+
+'.ka-cal .cd.night{background:rgba(167,139,250,.2);border-color:rgba(167,139,250,.4)}'+
+'.ka-cal .cd.off{background:rgba(255,255,255,.04);color:rgba(180,190,210,.7)}'+
+'.ka-cal .cd.today{box-shadow:0 0 0 2px rgba(251,191,36,.7)}'+
+'.ka-cal .cd .dt{font-size:8px;opacity:.8;margin-top:1px}'+
+'.ka-hint{position:absolute;left:50%;top:150px;transform:translateX(-50%);z-index:3;font-size:12.5px;color:rgba(180,190,210,.9);text-align:center;'+
   'text-shadow:0 1px 8px rgba(0,0,0,.55);pointer-events:none;'+
   'white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis;'+
   'min-height:18px;line-height:1.3;padding:0 8px}'+
@@ -342,9 +338,7 @@ function status(t){
 }
 
 function setListeningUI(on){
-  var o=document.getElementById('kaOrb');
   var b=document.getElementById('kaBubble');
-  if(o)o.classList.toggle('listening',!!on);
   if(on){
     if(b){b.classList.remove('thinking','happy','alert','angry');b.classList.add('listening');}
     kaEmo('listening');
@@ -408,12 +402,12 @@ function createRecognition(){
     if(code==='not-allowed'){wantListen=false;status('Нет доступа к микрофону');kaEmo('alert',1800);return;}
     if(code==='no-speech'||code==='aborted'){
       wantListen=false;
-      status('Нажми микрофон');
+      status('Нажми на меня, чтобы говорить');
       kaEmo('idle');
       return;
     }
     wantListen=false;
-    status('Нажми микрофон');
+    status('Нажми на меня, чтобы говорить');
     kaEmo('idle');
   };
   rec.onend=function(){
@@ -425,7 +419,7 @@ function createRecognition(){
     if(wantListen){
       // редкий случай: onend до onresult — один мягкий retry
       wantListen=false;
-      status('Нажми микрофон');
+      status('Нажми на меня, чтобы говорить');
       kaEmo('idle');
     }
   };
@@ -448,12 +442,70 @@ function stopListen(){
 function isMicLocked(){return false;}
 
 function maybeResumeListen(ms){
-  status('Нажми микрофон');
+  status('Нажми на меня, чтобы говорить');
   kaEmo('idle');
 }
 
 function confirmWord(t){return /^(да|ага|угу|подтверждаю|сделай|выполняй|верно|правильно|ок|окей|yes|удали)$/i.test(norm(t));}
 function cancelWord(t){return /^(нет|отмена|отменить|не надо|не делай|стоп)$/i.test(norm(t));}
+
+
+function showAssistantCalendar(month){
+  month=month||(window.today?window.today().slice(0,7):(new Date().toISOString().slice(0,7)));
+  try{
+    if(!month&&window.STATE&&window.STATE.settings)month=window.STATE.settings.month;
+  }catch(e){}
+  var p=String(month).split('-').map(Number);
+  var y=p[0],m=p[1];
+  var first=new Date(y,m-1,1),sw=(first.getDay()+6)%7,dim=new Date(y,m,0).getDate();
+  var t=new Date();var td=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+  var ov=(window.STATE&&window.STATE.shiftsOverride)||{};
+  var labels={day:'Д',night:'Н',off:'В'};
+  function sh(ds){
+    try{
+      if(typeof window.shift==='function')return window.shift(ds,ov);
+    }catch(e){}
+    var v=ov[ds];return (v==='day'||v==='night'||v==='off')?v:'day';
+  }
+  var html='<div class="ka-cal">';
+  ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].forEach(function(h){html+='<div class="ch">'+h+'</div>';});
+  for(var i=0;i<sw;i++)html+='<div class="cd" style="opacity:.2"></div>';
+  for(var d=1;d<=dim;d++){
+    var ds=month+'-'+String(d).padStart(2,'0');
+    var s=sh(ds);
+    html+='<div class="cd '+s+(ds===td?' today':'')+'">'+d+'<span class="dt">'+(labels[s]||'')+'</span></div>';
+  }
+  html+='</div>';
+  var el=document.getElementById('kaReply');
+  if(!el)return;
+  el.classList.remove('hide');el.classList.add('show');
+  el.innerHTML='<div style="font-size:13px;margin-bottom:6px;opacity:.9">Календарь смен · '+month+'</div>'+html;
+  el.scrollTop=0;
+  status('Нажми на меня, чтобы говорить');
+}
+
+function parseShiftVoice(cmd){
+  var t=norm(cmd);
+  if(/календар/.test(t)||/покажи\s*смен/.test(t)||/какие\s*смен/.test(t))return{showCal:true};
+  if(!/(смен|выходн|дневн|ночн)/.test(t))return null;
+  var shiftType=null;
+  if(/выходн/.test(t))shiftType='off';
+  else if(/ноч/.test(t))shiftType='night';
+  else if(/дневн|день/.test(t))shiftType='day';
+  if(!shiftType)return null;
+  var days=[];
+  var re=/(\d{1,2})/g,m;
+  while((m=re.exec(t))){
+    var n=parseInt(m[1],10);
+    if(n>=1&&n<=31)days.push(n);
+  }
+  if(!days.length)return null;
+  var month=(window.STATE&&window.STATE.settings&&window.STATE.settings.month)||new Date().toISOString().slice(0,7);
+  var actions=days.map(function(d){
+    return{type:'change_shift',date:month+'-'+String(d).padStart(2,'0'),shift:shiftType};
+  });
+  return{actions:actions,summary:'Смены: '+days.join(', ')+' → '+(shiftType==='day'?'день':shiftType==='night'?'ночь':'выходной')};
+}
 
 function handle(text){
   var raw=String(text||'').trim();
@@ -465,6 +517,15 @@ function handle(text){
   // не показываем речь пользователя — только растворяем старый ответ
   clearReply();
   history.push({role:'user',content:cmd});saveHistory();
+  var localShift=parseShiftVoice(cmd);
+  if(localShift&&localShift.showCal){showAssistantCalendar();maybeResumeListen(200);return;}
+  if(localShift&&localShift.actions&&localShift.actions.length){
+    pending=localShift.actions;
+    showReply(localShift.summary,pending);
+    status('Скажи «да» или «нет»');
+    setTimeout(function(){if(pending)startListen();},350);
+    return;
+  }
   if(pending&&(confirmWord(cmd)||cancelWord(cmd))){
     if(confirmWord(cmd))confirmPending();else cancelPending();
     return;
@@ -501,7 +562,7 @@ function handle(text){
       /сети|fetch/i.test(msg)?'Нет сети. Проверь интернет.':
       ('Финна: '+msg);
     history.push({role:'assistant',content:a});saveHistory();
-    showReply(a);status('Нажми микрофон');kaEmo('angry',1800);
+    showReply(a);status('Нажми на меня, чтобы говорить');kaEmo('angry',1800);
   });
 }
 

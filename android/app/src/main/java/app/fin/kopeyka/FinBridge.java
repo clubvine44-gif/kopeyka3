@@ -149,7 +149,7 @@ public class FinBridge {
         PendingIntent pi = PendingIntent.getActivity(context, 0, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         Uri sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
         NotificationCompat.Builder b = new NotificationCompat.Builder(context, CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentTitle(title != null && !title.isEmpty() ? title : "Финна")
                 .setContentText(message != null ? message : "")
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(message != null ? message : ""))
@@ -206,6 +206,6 @@ public class FinBridge {
         } catch(Exception e){ android.util.Log.e("FinReminders","schedule failed: "+e.getMessage(),e); }
     }
 
-    private long dateToMillis(String date) { try { String[] p=date.split("[-T:]", -1); if(p.length<5)return 0; Calendar c=Calendar.getInstance(); c.set(Calendar.YEAR,Integer.parseInt(p[0])); c.set(Calendar.MONTH,Integer.parseInt(p[1])-1); c.set(Calendar.DAY_OF_MONTH,Integer.parseInt(p[2])); c.set(Calendar.HOUR_OF_DAY,Integer.parseInt(p[3])); c.set(Calendar.MINUTE,Integer.parseInt(p[4])); c.set(Calendar.SECOND,0); c.set(Calendar.MILLISECOND,0); return c.getTimeInMillis(); } catch(Exception e){return 0;} }
+    private long dateToMillis(String date) { try { String[] p=date.split("[-T:]", -1); if(p.length<3)return 0; Calendar c=Calendar.getInstance(); c.set(Calendar.YEAR,Integer.parseInt(p[0])); c.set(Calendar.MONTH,Integer.parseInt(p[1])-1); c.set(Calendar.DAY_OF_MONTH,Integer.parseInt(p[2])); int hh=p.length>=4?Integer.parseInt(p[3]):9; int mm=p.length>=5?Integer.parseInt(p[4]):0; c.set(Calendar.HOUR_OF_DAY,hh); c.set(Calendar.MINUTE,mm); c.set(Calendar.SECOND,0); c.set(Calendar.MILLISECOND,0); return c.getTimeInMillis(); } catch(Exception e){return 0;} }
     private void postToast(String text){new Handler(Looper.getMainLooper()).post(()-> Toast.makeText(context,text,Toast.LENGTH_SHORT).show());}
 }
