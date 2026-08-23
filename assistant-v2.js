@@ -11,7 +11,7 @@ function open(opts){
   var already=!!document.getElementById('kopeykaAiDialog');
   if(!already){
     loadHistory();
-    document.body.insertAdjacentHTML('beforeend','<div id="kopeykaAiDialog" class="ka-bg"><div class="ka-card"><div class="ka-head"><div class="ka-head-left"><span class="ka-dot"></span><div><div class="ka-title">Финн</div><div class="ka-sub" id="kaCloud">Готов</div></div></div><button class="ka-close" id="kaClose" aria-label="Закрыть">×</button></div><div class="ka-chat" id="kaChat"></div><div class="ka-status" id="kaStatus">Готов</div><div class="ka-input-row"><input id="kaInput" autocomplete="off" placeholder="Спроси что угодно…"><button id="kaSend" aria-label="Отправить">➤</button><button class="ka-mic" id="kaOrb" aria-label="Микрофон"><svg class="ka-mic-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg><span class="ka-lock-hint">↑</span></button></div></div></div>');
+    document.body.insertAdjacentHTML('beforeend','<div id="kopeykaAiDialog" class="ka-bg"><div class="ka-card"><div class="ka-head"><div class="ka-head-left"><span class="ka-dot"></span><div><div class="ka-title">Фин</div><div class="ka-sub" id="kaCloud">Готов</div></div></div><button class="ka-close" id="kaClose" aria-label="Закрыть">×</button></div><div class="ka-chat" id="kaChat"></div><div class="ka-status" id="kaStatus">Готов</div><div class="ka-input-row"><input id="kaInput" autocomplete="off" placeholder="Спроси что угодно…"><button id="kaSend" aria-label="Отправить">➤</button><button class="ka-mic" id="kaOrb" aria-label="Микрофон"><svg class="ka-mic-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg><span class="ka-lock-hint">↑</span></button></div></div></div>');
     style();
     var bg=document.getElementById('kopeykaAiDialog');
     bg.addEventListener('click',function(e){if(e.target===bg)close();});
@@ -23,7 +23,14 @@ function open(opts){
     updateCloud();
   }
   if(opts.command) setTimeout(function(){handle(String(opts.command));},180);
-  /* hold-to-talk only */
+  else if(!already){
+    setTimeout(function(){
+      var c=document.getElementById('kaChat');
+      if(c&&!history.length){
+        bubble('ai','Привет, меня зовут Фин. Чем помочь?');
+      }
+    },120);
+  }
 }
 
 function close(){wantListen=false;stopListen();var e=document.getElementById('kopeykaAiDialog');if(e)e.remove();try{if(window.Finn3D&&window.Finn3D.deactivate)window.Finn3D.deactivate();}catch(x){}try{if(window.__finnWakeStart)window.__finnWakeStart();}catch(x){}}
@@ -68,18 +75,48 @@ function updateCloud(){var e=document.getElementById('kaCloud'),c=window.kopeyka
 function sendInput(){var i=document.getElementById('kaInput');if(!i)return;var x=i.value.trim();if(x){i.value='';handle(x);}}
 function toggleListen(){if(listening||wantListen){wantListen=false;stopListen();status('Готов. Нажми круг или скажи «Фин»');}else startListen();}
 function bindHoldMic(btn){if(!btn||btn._hb)return;btn._hb=true;
-var holding=false,locked=false,startY=0,moved=false;
-function setLocked(v){locked=v;btn.classList.toggle('locked',!!v);if(v){status('Слушаю постоянно · нажми, чтобы стоп');wantListen=true;if(!listening)startListen();}else{status('Готов');}}
+var holding=false,locked=false,startY=0;
+function setLocked(v){
+  locked=!!v;
+  btn.classList.toggle('locked',locked);
+  if(locked){wantListen=true;status('Слушаю постоянно · тап — стоп');if(!listening)startListen();}
+  else{wantListen=false;stopListen();status('Готов');}
+}
 function down(e){
   e.preventDefault();
-  if(locked){setLocked(false);stopListen();holding=false;btn.classList.remove('holding');return;}
+  if(locked){setLocked(false);holding=false;btn.classList.remove('holding');return;}
   if(holding)return;
-  holding=true;moved=false;
-  startY=(e.touches&&e.touches[0]?e.touches[0].clientY:(e.clientY||0));
+  holding=true;startY=(e.touches&&e.touches[0]?e.touches[0].clientY:(e.clientY||0));
   btn.classList.add('holding');
-  // slight delay avoids accidental taps
-  btn._holdTimer=setTimeout(function(){if(holding)startListen();},80);
+  wantListen=true;
+  startListen();
+  status('Слушаю… говори');
 }
+function move(e){
+  if(!holding||locked)return;
+  var y=(e.touches&&e.touches[0]?e.touches[0].clientY:(e.clientY||startY));
+  if(startY-y>56){holding=false;btn.classList.remove('holding');setLocked(true);}
+}
+function up(e){
+  if(e)e.preventDefault();
+  if(locked)return;
+  if(!holding)return;
+  holding=false;btn.classList.remove('holding');
+  // stop mic immediately on release — final result may still arrive
+  wantListen=false;
+  stopListen();
+  status('Готов');
+}
+btn.addEventListener('touchstart',down,{passive:false});
+btn.addEventListener('touchmove',move,{passive:false});
+btn.addEventListener('touchend',up,{passive:false});
+btn.addEventListener('touchcancel',up,{passive:false});
+btn.addEventListener('mousedown',down);
+btn.addEventListener('mousemove',move);
+btn.addEventListener('mouseup',up);
+btn.addEventListener('mouseleave',up);
+}
+
 function move(e){
   if(!holding||locked)return;
   var y=(e.touches&&e.touches[0]?e.touches[0].clientY:(e.clientY||startY));
@@ -106,7 +143,7 @@ btn.addEventListener('mouseleave',up);
 function startListen(){if(!SR){status('Нет распознавания речи');return;}if(listening)return;wantListen=true;restarts=0;createRecognition();}
 function createRecognition(){
   if(!wantListen||listening)return;
-  rec=new SR();rec.lang='ru-RU';rec.interimResults=true;rec.continuous=true;rec.maxAlternatives=3;
+  rec=new SR();rec.lang='ru-RU';rec.interimResults=true;rec.continuous=false;rec.maxAlternatives=3;
   rec.onstart=function(){listening=true;restarts=0;var o=document.getElementById('kaOrb');if(o)o.classList.add('listening');status('Слушаю…');
   };
   rec.onresult=function(e){
@@ -176,7 +213,7 @@ function handle(text){
       var lk2=document.getElementById('kaOrb')&&document.getElementById('kaOrb').classList.contains('locked');status(lk2?'Слушаю…':'Готов');if(lk2)setTimeout(startListen,500);
     }
   }).catch(function(e){
-    var a='Не получилось: '+(e&&e.message||'Ошибка');history.push({role:'assistant',content:a});saveHistory();bubble('ai',a);status('Ошибка');setTimeout(startListen,800);
+    var a=(e&&e.message&&/ключ|Groq|сети|Таймаут/i.test(e.message))?('Не получилось: '+e.message):('Попробуй ещё раз или переформулируй. '+(e&&e.message?e.message:''));history.push({role:'assistant',content:a});saveHistory();bubble('ai',a);status('Готов');
   });
 }
 function renderAction(summary,actions){

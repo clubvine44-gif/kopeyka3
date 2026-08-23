@@ -61,6 +61,7 @@ public class MainActivity extends AppCompatActivity {
     private final AtomicBoolean updateDialogShowing = new AtomicBoolean(false);
     private final AtomicBoolean updateCheckRunning = new AtomicBoolean(false);
     private final AtomicBoolean downloading = new AtomicBoolean(false);
+    private android.app.ProgressDialog progressDlg;
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -189,6 +190,16 @@ public class MainActivity extends AppCompatActivity {
         super.onPause();
     }
 
+    void forceCheckUpdate() {
+        // сброс snooze чтобы проверка была принудительной
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                .putInt(KEY_SKIP_CODE, 0)
+                .putLong(KEY_SKIP_UNTIL, 0L)
+                .apply();
+        updateCheckRunning.set(false);
+        checkForUpdate();
+    }
+
     private void checkForUpdate() {
         if (updateDialogShowing.get() || downloading.get()) return;
         if (!updateCheckRunning.compareAndSet(false, true)) return;
@@ -276,7 +287,19 @@ public class MainActivity extends AppCompatActivity {
     /** Прямое скачивание APK с проверкой ZIP-сигнатуры — без битых файлов DownloadManager. */
     private void downloadAndInstall(String apkUrl, String versionName) {
         if (!downloading.compareAndSet(false, true)) return;
-        Toast.makeText(this, "Скачиваю обновление…", Toast.LENGTH_SHORT).show();
+        runOnUiThread(() -> {
+            try {
+                if (progressDlg != null && progressDlg.isShowing()) progressDlg.dismiss();
+                progressDlg = new android.app.ProgressDialog(this);
+                progressDlg.setTitle("Обновление Фин " + (versionName != null ? versionName : ""));
+                progressDlg.setMessage("Загрузка…");
+                progressDlg.setProgressStyle(android.app.ProgressDialog.STYLE_HORIZONTAL);
+                progressDlg.setIndeterminate(true);
+                progressDlg.setCancelable(false);
+                progressDlg.setMax(100);
+                progressDlg.show();
+            } catch (Exception ignored) {}
+        });
 
         updateExecutor.execute(() -> {
             File dir = getExternalFilesDir(null);
@@ -299,14 +322,46 @@ public class MainActivity extends AppCompatActivity {
                     throw new IllegalStateException("Сервер вернул текст вместо APK. Релиз ещё не готов.");
 
                 long contentLen = c.getContentLengthLong();
+                final long finalLen = contentLen;
+                runOnUiThread(() -> {
+                    try {
+                        if (progressDlg != null) {
+                            if (finalLen > 0) {
+                                progressDlg.setIndeterminate(false);
+                                progressDlg.setMax(100);
+                                progressDlg.setProgress(0);
+                                progressDlg.setMessage("Загрузка… 0%");
+                            } else {
+                                progressDlg.setIndeterminate(true);
+                                progressDlg.setMessage("Загрузка…");
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                });
                 InputStream in = c.getInputStream();
                 FileOutputStream out = new FileOutputStream(apk);
                 byte[] buf = new byte[8192];
                 int n;
                 long total = 0;
+                int lastPct = -1;
                 while ((n = in.read(buf)) != -1) {
                     out.write(buf, 0, n);
                     total += n;
+                    if (contentLen > 0) {
+                        int pct = (int) Math.min(100, (total * 100) / contentLen);
+                        if (pct != lastPct) {
+                            lastPct = pct;
+                            final int p = pct;
+                            runOnUiThread(() -> {
+                                try {
+                                    if (progressDlg != null && progressDlg.isShowing()) {
+                                        progressDlg.setProgress(p);
+                                        progressDlg.setMessage("Загрузка… " + p + "%");
+                                    }
+                                } catch (Exception ignored) {}
+                            });
+                        }
+                    }
                 }
                 out.flush();
                 out.close();
@@ -326,16 +381,22 @@ public class MainActivity extends AppCompatActivity {
                     throw new IllegalStateException("Скачанный файл не APK. Возможно, релиз ещё не опубликован.");
                 }
 
-                runOnUiThread(() -> installApk(apk));
+                runOnUiThread(() -> {
+                    try { if (progressDlg != null && progressDlg.isShowing()) progressDlg.dismiss(); } catch (Exception ignored) {}
+                    installApk(apk);
+                });
             } catch (Exception e) {
                 android.util.Log.e("FinUpdate", "download failed: " + e.getMessage(), e);
                 if (apk.exists()) //noinspection ResultOfMethodCallIgnored
                     apk.delete();
                 final String msg = e.getMessage() != null ? e.getMessage() : "неизвестная ошибка";
-                runOnUiThread(() -> Toast.makeText(this,
+                runOnUiThread(() -> {
+                    try { if (progressDlg != null && progressDlg.isShowing()) progressDlg.dismiss(); } catch (Exception ignored) {}
+                    Toast.makeText(this,
                         "Не удалось обновить: " + msg
                                 + "\nСкачай APK вручную с GitHub Releases.",
-                        Toast.LENGTH_LONG).show());
+                        Toast.LENGTH_LONG).show();
+                });
             } finally {
                 if (c != null) c.disconnect();
                 downloading.set(false);

@@ -204,7 +204,7 @@ function showSettings(){
     '</div>'+
     '<div class="set-group"><div class="set-group-title">Ассистент</div>'+
       '<button type="button" class="set-row" id="setAi"><div class="set-main"><b>Голосовой помощник</b><span>Ключ для умных ответов Финна</span></div><span class="set-val" id="setAiStatus">—</span></button>'+
-      '<button type="button" class="set-row" id="setTestPush"><div class="set-main"><b>Проверить уведомление</b><span>Придёт через несколько секунд</span></div><span class="set-val">↗</span></button>'+
+      '<button type="button" class="set-row" id="setCheckUpdate"><div class="set-main"><b>Проверить обновления</b><span>Сверка с сервером прямо сейчас</span></div><span class="set-val">↻</span></button>'+'<button type="button" class="set-row" id="setTestPush"><div class="set-main"><b>Проверить уведомление</b><span>Придёт через несколько секунд</span></div><span class="set-val">↗</span></button>'+
     '</div>'+
     '<div class="set-group"><div class="set-group-title">Данные</div>'+
       '<button type="button" class="set-row" id="setUndo"><div class="set-main"><b>Отменить последнее</b><span>'+(undoStack.length?'Можно откатить действие':'Пока нечего отменять')+'</span></div><span class="set-val">'+(undoStack.length?'↩':'')+'</span></button>'+
@@ -262,6 +262,19 @@ function showSettings(){
         if(st2)st2.textContent=o?'Включён':'Выключен';
         toast(o?'Ключ сохранён':'Ключ удалён');
       });
+    };
+    document.getElementById('setCheckUpdate').onclick=function(){
+      try{
+        if(window.FinBridge&&window.FinBridge.checkUpdate){window.FinBridge.checkUpdate();toast('Проверяю обновления…');}
+        else if(window.FinBridge&&window.FinBridge.checkForUpdate){window.FinBridge.checkForUpdate();toast('Проверяю обновления…');}
+        else{
+          fetch('https://raw.githubusercontent.com/clubvine44-gif/kopeyka3/main/update.json?t='+Date.now()).then(function(r){return r.json();}).then(function(j){
+            var local=(window.FinBridge&&window.FinBridge.getVersionCode)?window.FinBridge.getVersionCode():0;
+            if(j.versionCode>local)toast('Доступна '+j.versionName+' — закрой и открой приложение или скачай APK');
+            else toast('У тебя актуальная версия'+(j.versionName?(' '+j.versionName):''));
+          }).catch(function(){toast('Не удалось проверить');});
+        }
+      }catch(e){toast('Не удалось проверить');}
     };
     document.getElementById('setTestPush').onclick=function(){
       try{
