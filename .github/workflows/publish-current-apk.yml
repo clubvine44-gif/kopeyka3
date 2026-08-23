@@ -1,29 +1,11 @@
 name: Publish current Fin APK
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'android/**'
-      - 'index.html'
-      - 'app.js'
-      - 'ai.js'
-      - 'assistant-v2.js'
-      - 'assistant.js'
-      - 'cloud.js'
-      - 'engine.js'
-      - 'finn-wake.js'
-      - 'finn3d.js'
-      - 'voice.js'
-      - 'onboard.js'
-      - 'products.js'
-      - 'sw.js'
-      - 'manifest.json'
-      - 'icon.svg'
-      - 'widget.html'
-      - 'ai-bootstrap.js'
-      - '.github/workflows/publish-current-apk.yml'
   workflow_dispatch:
+  # Автозапуск отключён: раньше триггерился на те же пуши, что и release-apk.yml,
+  # и обе джобы гонялись за один и тот же релиз-тег (race condition), из-за чего
+  # один из воркфлоу падал с ошибкой на публикации ассета. Публикацию делает
+  # release-apk.yml; этот воркфлоу оставлен только для ручного запуска при необходимости.
 
 permissions:
   contents: write

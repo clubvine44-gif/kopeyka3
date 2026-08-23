@@ -14,26 +14,36 @@ function svgMarkup(idPrefix, uid){
   return ''+
   '<svg class="finn-face" viewBox="0 0 64 64" fill="none">'+
     '<defs>'+
-      '<linearGradient id="finnCoin'+uid+'" x1="10" y1="8" x2="54" y2="56">'+
-        '<stop stop-color="#F8E0A8"/><stop offset=".45" stop-color="#E5A75E"/><stop offset="1" stop-color="#B86B2E"/>'+
+      '<linearGradient id="finnChassis'+uid+'" x1="8" y1="6" x2="56" y2="60">'+
+        '<stop stop-color="#232735"/><stop offset=".5" stop-color="#151824"/><stop offset="1" stop-color="#0B0D14"/>'+
       '</linearGradient>'+
-      '<filter id="finnSoft'+uid+'" x="-30%" y="-30%" width="160%" height="160%">'+
-        '<feGaussianBlur stdDeviation="1.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>'+
-      '</filter>'+
+      '<linearGradient id="finnEdge'+uid+'" x1="8" y1="6" x2="56" y2="60">'+
+        '<stop stop-color="#F8E0A8"/><stop offset=".5" stop-color="#E5A75E"/><stop offset="1" stop-color="#B86B2E"/>'+
+      '</linearGradient>'+
+      '<linearGradient id="finnVisor'+uid+'" x1="10" y1="24" x2="54" y2="42">'+
+        '<stop stop-color="#0E2233"/><stop offset="1" stop-color="#050A12"/>'+
+      '</linearGradient>'+
+      '<radialGradient id="finnTip'+uid+'" cx=".5" cy=".5" r=".5">'+
+        '<stop offset="0" stop-color="#BFF3FF"/><stop offset="1" stop-color="#5EC8FF"/>'+
+      '</radialGradient>'+
+      '<filter id="finnSoft'+uid+'" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="1.1" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>'+
     '</defs>'+
-    '<circle cx="32" cy="32" r="30" fill="#121018" stroke="#E5A75E" stroke-width="1.8" opacity=".95"/>'+
-    '<circle cx="32" cy="32" r="25" fill="url(#finnCoin'+uid+')" filter="url(#finnSoft'+uid+')"/>'+
-    '<circle cx="32" cy="32" r="20.5" fill="#1A1208"/>'+
-    '<path class="finn-brow finn-brow-l"'+eid('BrowL')+' d="M19.5 23c2.2-2.6 5.6-3.1 8-1.7" stroke="#F87171" stroke-width="2.3" stroke-linecap="round" fill="none" style="opacity:0;transform-origin:23px 22px;transition:opacity .18s,transform .18s"/>'+
-    '<path class="finn-brow finn-brow-r"'+eid('BrowR')+' d="M36.5 21.3c2.4-1.4 5.8-.9 8 1.7" stroke="#F87171" stroke-width="2.3" stroke-linecap="round" fill="none" style="opacity:0;transform-origin:41px 22px;transition:opacity .18s,transform .18s"/>'+
-    '<g class="finn-eye-g finn-eye-l"><circle class="finn-eye"'+eid('EyeL')+' cx="24.5" cy="28" r="3.6" fill="#4ADE80" style="transition:fill .2s"/></g>'+
-    '<g class="finn-eye-g finn-eye-r"><circle class="finn-eye"'+eid('EyeR')+' cx="39.5" cy="28" r="3.6" fill="#4ADE80" style="transition:fill .2s"/></g>'+
-    '<path class="finn-mouth finn-mouth-smile"'+eid('MouthSmile')+' d="M22 41c3.5 3.5 8 5 10 5s6.5-1.5 10-5" stroke="#E5A75E" stroke-width="2.2" stroke-linecap="round" fill="none" style="opacity:.9;transition:opacity .18s"/>'+
-    '<path class="finn-mouth finn-mouth-big" d="M20 40c4.5 5.2 9.4 7 12 7s7.5-1.8 12-7" stroke="#4ADE80" stroke-width="2.4" stroke-linecap="round" fill="none" style="opacity:0;transition:opacity .18s"/>'+
-    '<path class="finn-mouth finn-mouth-frown" d="M22.5 46.5c3.4-3.4 7.7-4.6 9.5-4.6s6.1 1.2 9.5 4.6" stroke="#F87171" stroke-width="2.2" stroke-linecap="round" fill="none" style="opacity:0;transition:opacity .18s"/>'+
-    '<path class="finn-mouth finn-mouth-neutral" d="M24 43.5h16" stroke="#5EC8FF" stroke-width="2.2" stroke-linecap="round" fill="none" style="opacity:0;transition:opacity .18s"/>'+
-    '<circle cx="17" cy="35" r="1.6" fill="#E5A75E" opacity=".35"/>'+
-    '<circle cx="47" cy="35" r="1.6" fill="#E5A75E" opacity=".35"/>'+
+    '<line x1="32" y1="8.5" x2="32" y2="2.5" stroke="#E5A75E" stroke-width="2.1" stroke-linecap="round"/>'+
+    '<circle class="finn-tip" cx="32" cy="2.4" r="2.5" fill="url(#finnTip'+uid+')"/>'+
+    '<rect x="5" y="8" width="54" height="54" rx="18" fill="url(#finnChassis'+uid+')" stroke="url(#finnEdge'+uid+')" stroke-width="2"/>'+
+    '<rect x="9" y="12" width="46" height="46" rx="14" fill="none" stroke="#E5A75E" stroke-opacity=".18" stroke-width="1"/>'+
+    '<rect x="8" y="47" width="6" height="3" rx="1.4" fill="#E5A75E" opacity=".4"/>'+
+    '<rect x="50" y="47" width="6" height="3" rx="1.4" fill="#E5A75E" opacity=".4"/>'+
+    '<path class="finn-brow finn-brow-l"'+eid('BrowL')+' d="M15 22.5h11" stroke="#F87171" stroke-width="3" stroke-linecap="round" fill="none" style="opacity:0;transform-origin:20.5px 22.5px;transition:opacity .18s,transform .18s"/>'+
+    '<path class="finn-brow finn-brow-r"'+eid('BrowR')+' d="M38 22.5h11" stroke="#F87171" stroke-width="3" stroke-linecap="round" fill="none" style="opacity:0;transform-origin:43.5px 22.5px;transition:opacity .18s,transform .18s"/>'+
+    '<rect x="11" y="25" width="42" height="18" rx="9" fill="url(#finnVisor'+uid+')" filter="url(#finnSoft'+uid+')"/>'+
+    '<path d="M14 29c6-3.5 30-3.5 36 0" stroke="#5EC8FF" stroke-width="1" stroke-opacity=".22" fill="none" stroke-linecap="round"/>'+
+    '<g class="finn-eye-g finn-eye-l"><rect class="finn-eye"'+eid('EyeL')+' x="18.5" y="29.5" width="9" height="11" rx="4.2" fill="#4ADE80" style="transition:fill .2s"/></g>'+
+    '<g class="finn-eye-g finn-eye-r"><rect class="finn-eye"'+eid('EyeR')+' x="36.5" y="29.5" width="9" height="11" rx="4.2" fill="#4ADE80" style="transition:fill .2s"/></g>'+
+    '<path class="finn-mouth finn-mouth-smile"'+eid('MouthSmile')+' d="M20 49c4 4 8.5 5.5 12 5.5s8-1.5 12-5.5" stroke="#E5A75E" stroke-width="3" stroke-linecap="round" fill="none" style="opacity:.9;transition:opacity .18s"/>'+
+    '<path class="finn-mouth finn-mouth-big" d="M18 48c5 5.6 10 7.5 14 7.5s9-1.9 14-7.5" stroke="#4ADE80" stroke-width="3.2" stroke-linecap="round" fill="none" style="opacity:0;transition:opacity .18s"/>'+
+    '<path class="finn-mouth finn-mouth-frown" d="M20.5 55.5c4-4 8.5-5.5 11.5-5.5s7.5 1.5 11.5 5.5" stroke="#F87171" stroke-width="3" stroke-linecap="round" fill="none" style="opacity:0;transition:opacity .18s"/>'+
+    '<path class="finn-mouth finn-mouth-neutral" d="M21 51.5h22" stroke="#5EC8FF" stroke-width="3" stroke-linecap="round" fill="none" style="opacity:0;transition:opacity .18s"/>'+
   '</svg>';
 }
 
