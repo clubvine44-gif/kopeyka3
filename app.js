@@ -9,7 +9,7 @@ var viewMonth=null,currentView='home',openSecs={ops:1,obl:1,an:0,res:0,debt:0},u
 function monthLabel(ym){var p=String(ym||'').split('-').map(Number);return (MONTHS_RU[(p[1]||1)-1]||'')+' '+(p[0]||'');}
 function shiftMonth(ym,delta){var p=String(ym).split('-').map(Number);var d=new Date(p[0],(p[1]||1)-1+delta,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
 function getViewMonth(){return viewMonth||(STATE.settings&&STATE.settings.month)||today().slice(0,7);}
-function goView(v){currentView=v||'home';window.__finView=currentView;try{history.pushState({view:currentView},'');}catch(e){}render();}
+function goView(v){try{if((currentView||'home')==='home'){window.__homeScroll=window.scrollY||document.documentElement.scrollTop||0;}}catch(e){}currentView=v||'home';window.__finView=currentView;try{history.pushState({view:currentView},'');}catch(e){}render();}
 function goHome(){currentView='home';window.__finView='home';render();}
 window.addEventListener('popstate',function(){currentView='home';render();});
 
@@ -60,7 +60,7 @@ function nextMonth(ym){var p=String(ym||'').split('-').map(Number);if(p.length<2
 function prevMonth(ym){var p=String(ym||'').split('-').map(Number);if(p.length<2||!p[0]||!p[1])return ym;var y=p[0],m=p[1]-1;if(m<1){m=12;y--;}return y+'-'+String(m).padStart(2,'0');}
 function cmpMonth(a,b){return String(a||'').localeCompare(String(b||''));}
 function openingForMonth(target){var anchor=(STATE.settings&&STATE.settings.month)||today().slice(0,7);var open=num(STATE.settings&&STATE.settings.openingBalance);target=String(target||anchor);if(target===anchor)return open;var guard=0;if(cmpMonth(target,anchor)>0){var m=anchor;while(m!==target&&guard++<240){open=open+monthOps(m).delta;m=nextMonth(m);}return open;}var m2=anchor;while(m2!==target&&guard++<240){m2=prevMonth(m2);open=open-monthOps(m2).delta;}return open;}
-function computeForMonth(month){month=String(month||today().slice(0,7));var ops=monthOps(month);var open=openingForMonth(month);var cash=open+ops.delta;var resT=0;(STATE.reserves||[]).forEach(function(r){resT+=num(r.saved);});var debt=0;(STATE.debts||[]).forEach(function(d){debt+=Math.max(0,num(d.total)-num(d.paid));});var obligDue=0,obligPaid=0;(STATE.obligations||[]).forEach(function(ob){if(ob.active===false)return;var paid=0;(STATE.obligationPays||[]).forEach(function(p){if(p.obligId===ob.id&&p.month===month)paid+=num(p.amount);});obligPaid+=paid;obligDue+=Math.max(0,num(ob.amount)-paid);});var avail=cash-debt-obligDue;var t=today(),p=month.split('-').map(Number);var last=new Date(p[0],p[1],0).getDate();var dayNum=Number(t.slice(8));var leftDays=month===t.slice(0,7)?Math.max(1,last-dayNum+1):last;var daily=avail>0?Math.floor(avail/leftDays):0;var by={};(STATE.expenses||[]).forEach(function(e){if(!inMonth(e.date,month))return;var cat=e.category||'Прочее';if(cat==='Долг'&&e.note)cat=e.note;by[cat]=(by[cat]||0)+num(e.amount);});var cats=Object.keys(by).map(function(k){return{name:k,amount:by[k]};}).sort(function(a,b){return b.amount-a.amount;});return{open:open,cash:cash,available:avail,incomeSum:ops.inc,expenseSum:ops.exp,depSum:ops.dep,wdSum:ops.wd,debtLeft:debt,reservesTotal:resT,obligDue:obligDue,obligPaid:obligPaid,daily:daily,daysLeft:leftDays,cats:cats,month:month};}
+function computeForMonth(month){month=String(month||today().slice(0,7));var ops=monthOps(month);var open=openingForMonth(month);var cash=open+ops.delta;var resT=0;(STATE.reserves||[]).forEach(function(r){resT+=num(r.saved);});var debt=0;(STATE.debts||[]).forEach(function(d){debt+=Math.max(0,num(d.total)-num(d.paid));});var obligDue=0,obligPaid=0;(STATE.obligations||[]).forEach(function(ob){if(ob.active===false)return;var paid=0;(STATE.obligationPays||[]).forEach(function(p){if(p.obligId===ob.id&&p.month===month)paid+=num(p.amount);});obligPaid+=paid;obligDue+=Math.max(0,num(ob.amount)-paid);});var avail=cash-debt-obligDue;var t=today(),p=month.split('-').map(Number);var last=new Date(p[0],p[1],0).getDate();var dayNum=Number(t.slice(8));var leftDays=month===t.slice(0,7)?Math.max(1,last-dayNum+1):last;var daily=avail>0?Math.floor(avail/leftDays):0;var manualL=STATE.settings&&STATE.settings.manualDailyLimit;if(manualL!=null&&manualL!==''&&isFinite(Number(manualL))){daily=Math.max(0,Math.round(Number(manualL)));}var by={};(STATE.expenses||[]).forEach(function(e){if(!inMonth(e.date,month))return;var cat=e.category||'Прочее';if(cat==='Долг'&&e.note)cat=e.note;by[cat]=(by[cat]||0)+num(e.amount);});var cats=Object.keys(by).map(function(k){return{name:k,amount:by[k]};}).sort(function(a,b){return b.amount-a.amount;});return{open:open,cash:cash,available:avail,incomeSum:ops.inc,expenseSum:ops.exp,depSum:ops.dep,wdSum:ops.wd,debtLeft:debt,reservesTotal:resT,obligDue:obligDue,obligPaid:obligPaid,daily:daily,daysLeft:leftDays,cats:cats,month:month};}
 function compute(){return computeForMonth(getViewMonth());}
 function ensureMonth(){var cur=today().slice(0,7);var st=(STATE.settings&&STATE.settings.month)||cur;if(!STATE.settings)STATE.settings={};if(st===cur)return;var guard=0,m=st,open=num(STATE.settings.openingBalance);while(m!==cur&&guard++<240){open=open+monthOps(m).delta;m=nextMonth(m);}STATE.settings.openingBalance=open;STATE.settings.month=cur;viewMonth=cur;save(true);toast('Новый месяц: остаток '+fmt(STATE.settings.openingBalance)+' перенесён');}
 function toast(m){var el=document.getElementById('toast');if(!el)return;el.textContent=m;el.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(function(){el.classList.remove('show');},2800);}window.toast=toast;
@@ -117,6 +117,79 @@ function appChoice(message, options, title){
   });
 }
 window.appAlert=appAlert;window.appConfirm=appConfirm;window.appPrompt=appPrompt;window.appChoice=appChoice;
+
+
+function appForm(title, fields, okLabel){
+  return new Promise(function(resolve){
+    var fieldsHtml=fields.map(function(f,i){
+      if(f.type==='chips'){
+        var chips=(f.options||[]).map(function(o){
+          var sel=o===f.value?' selected':'';
+          return '<button type="button" class="chip'+sel+'" data-chip="'+i+'" data-val="'+esc(o)+'">'+esc(o)+'</button>';
+        }).join('');
+        return '<div class="dlg-field" data-fi="'+i+'"><label>'+esc(f.label||'')+'</label><div class="chip-row" id="dlgChips'+i+'">'+chips+'</div><input type="hidden" id="dlgF'+i+'" value="'+esc(f.value||'')+'"></div>';
+      }
+      var inputMode=f.inputmode?' inputmode="'+f.inputmode+'"':'';
+      var typ=f.type||'text';
+      return '<div class="dlg-field" data-fi="'+i+'"><label>'+esc(f.label||'')+'</label><input id="dlgF'+i+'" type="'+typ+'" value="'+esc(f.value==null?'':String(f.value))+'" placeholder="'+esc(f.placeholder||'')+'" autocomplete="off"'+inputMode+'></div>';
+    }).join('');
+    var html='<div class="modal-card"><div class="modal-title">'+esc(title||'')+'</div>'+fieldsHtml+'<div class="dlg-actions"><button type="button" class="btn" id="dlgCancel">Отмена</button><button type="button" class="btn primary" id="dlgOk">'+(okLabel||'ОК')+'</button></div></div>';
+    openModal(html,function(){
+      var first=document.getElementById('dlgF0');
+      if(first&&first.tagName==='INPUT'){setTimeout(function(){first.focus();if(first.select)first.select();},60);}
+      Array.prototype.forEach.call(document.querySelectorAll('.chip'),function(ch){
+        ch.onclick=function(){
+          var fi=ch.getAttribute('data-chip');
+          var row=document.getElementById('dlgChips'+fi);
+          if(row)Array.prototype.forEach.call(row.querySelectorAll('.chip'),function(x){x.classList.remove('selected');});
+          ch.classList.add('selected');
+          var hid=document.getElementById('dlgF'+fi);
+          if(hid)hid.value=ch.getAttribute('data-val')||'';
+        };
+      });
+      document.getElementById('dlgCancel').onclick=function(){closeModal();resolve(null);};
+      function ok(){
+        var out={};
+        fields.forEach(function(f,i){
+          var el=document.getElementById('dlgF'+i);
+          out[f.name]=el?el.value:'';
+        });
+        closeModal();resolve(out);
+      }
+      document.getElementById('dlgOk').onclick=ok;
+      // Enter on last text field submits
+      fields.forEach(function(f,i){
+        if(f.type==='chips')return;
+        var el=document.getElementById('dlgF'+i);
+        if(el)el.addEventListener('keydown',function(e){
+          if(e.key==='Enter'){e.preventDefault();
+            var next=document.getElementById('dlgF'+(i+1));
+            if(next&&next.tagName==='INPUT'&&next.type!=='hidden')next.focus();
+            else ok();
+          }
+        });
+      });
+    });
+  });
+}
+window.appForm=appForm;
+
+
+function refreshFinnTipAI(fallback, attentionList){
+  var el=document.getElementById('finnTipBody');
+  if(!el)return;
+  if(!window.kopeykaAI||typeof window.kopeykaAI.askConversation!=='function')return;
+  var key=(window.kopeykaAI.getKey&&window.kopeykaAI.getKey())||'';
+  try{if(!key)key=localStorage.getItem('kopeyka_groq_key')||'';}catch(e){}
+  if(!key)return;
+  var snap=window.kopeykaEngine&&window.kopeykaEngine.snapshot?window.kopeykaEngine.snapshot():null;
+  var ctx=snap?JSON.stringify({available:snap.calculations&&snap.calculations.available,daily:snap.calculations&&snap.calculations.dailyBudget,cash:snap.calculations&&snap.calculations.cash,debts:snap.calculations&&snap.calculations.debtRemaining,daysLeft:snap.calculations&&snap.calculations.daysLeft,attention:attentionList||[]}):'';
+  var prompt='Напиши ОДИН короткий совет (1-2 предложения) на русском для пользователя Копейки. Учти данные: '+ctx+'. Без markdown, без приветствия, по делу, по-дружески.';
+  window.kopeykaAI.askConversation([],prompt).then(function(o){
+    var t=(o&&(o.text||o.summary)||'').trim();
+    if(t&&t.length>10&&t.length<400){el.textContent=t;}
+  }).catch(function(){});
+}
 
 function showSettings(){
   var cash=compute().cash;
@@ -384,7 +457,8 @@ homeHtml += '<div class="limit-head"><span>Лимит на сегодня</span>
 homeHtml += '<div class="limit-sub">До конца месяца '+c.daysLeft+' дн.</div>';
 var limitPct = c.daily>0 ? Math.min(100, Math.round( (spentToday||0)/c.daily *100 )) : 0;
 homeHtml += '<div class="limit-bar"><div class="limit-fill" style="width:'+limitPct+'%"></div></div>';
-homeHtml += '<div class="limit-modes"><span class="mode active" data-mode="auto">Авто</span><span class="mode" data-mode="manual">Ручной</span></div>';
+var isManual=STATE.settings&&STATE.settings.manualDailyLimit!=null&&STATE.settings.manualDailyLimit!=='';
+homeHtml += '<div class="limit-modes"><span class="mode'+(isManual?'':' active')+'" data-mode="auto">Авто</span><span class="mode'+(isManual?' active':'')+'" data-mode="manual">Ручной</span></div>';
 homeHtml += '</div>';
 
 // ===== 6. Главная кнопка добавить =====
@@ -399,12 +473,7 @@ homeHtml += '<button type="button" class="qcat more" data-cat="__all">Все к�
 homeHtml += '</div>';
 
 // ===== 15. Обрати внимание =====
-if(attention.length){
-  homeHtml += '<div class="card attention-card">';
-  homeHtml += '<div class="sec-title-sm">ОБРАТИ ВНИМАНИЕ</div>';
-  attention.slice(0,2).forEach(function(a){ homeHtml += '<div class="att-item">'+esc(a)+'</div>'; });
-  homeHtml += '</div>';
-}
+/* attention folded into Finn card */
 
 // ===== 9. Ближайшие платежи =====
 if(nearestObl.length){
@@ -492,9 +561,16 @@ homeHtml += '</div>';
 
 // ===== 17. Финн tip =====
 homeHtml += '<div class="card finn-tip-card" id="finnTipCard">';
-homeHtml += '<div class="finn-tip-head"><span class="finn-mini">🦊</span> Финн</div>';
-homeHtml += '<div class="finn-tip-body">'+esc(finnTip)+'</div>';
+homeHtml += '<div class="finn-tip-head"><span class="finn-mini">🦊</span> Финн · совет</div>';
+homeHtml += '<div class="finn-tip-body" id="finnTipBody">'+esc(finnTip)+'</div>';
+if(attention.length){
+  homeHtml += '<div class="finn-att">';
+  attention.slice(0,2).forEach(function(a){ homeHtml += '<div class="att-item">'+esc(a)+'</div>'; });
+  homeHtml += '</div>';
+}
 homeHtml += '</div>';
+// Merge attention into finn card if present - attention already separate; AI will enrich
+setTimeout(function(){try{refreshFinnTipAI(finnTip,attention);}catch(e){}},100);
 
 // month nav + cal (keep existing calendar)
 homeHtml += '<div class="card tight"><div class="month-nav"><button type="button" class="mnav" id="mPrev">‹</button><div class="month-title">'+monthLabel(month)+(isCurrent?'':' · просмотр')+'</div><button type="button" class="mnav" id="mNext">›</button></div>'+cal+'<button type="button" class="btn-shift" id="btnShiftPay">Смены и зарплата</button></div>';
@@ -513,7 +589,10 @@ if(currentView==='home'){
 } else {
   htmlOut = '<div class="view-title-bar"><h2>'+viewTitle+'</h2></div><div class="card"><div class="list">'+ (viewBody||'<div class="empty">Пусто</div>') +'</div></div>';
 }
+var prevScroll=(currentView==='home'&&window.__homeScroll)?window.__homeScroll:0;
+if(currentView!=='home'){try{var wrap=document.querySelector('.wrap')||document.scrollingElement;if(wrap)window.__homeScroll=window.scrollY||document.documentElement.scrollTop||0;}catch(e){}}
 app.innerHTML = htmlOut;
+if(currentView==='home'&&prevScroll>0){requestAnimationFrame(function(){window.scrollTo(0,prevScroll);requestAnimationFrame(function(){window.scrollTo(0,prevScroll);});});}
 
 try{if(window.FinBridge){if(window.FinBridge.updateWidgetDataFull){window.FinBridge.updateWidgetDataFull(fmt(c.daily),fmt(c.cash),fmt(c.available),sl,String(c.daysLeft));}else if(window.FinBridge.updateWidgetData){window.FinBridge.updateWidgetData(fmt(c.daily),fmt(c.cash),sl);}}}catch(e){}
 if(!app._bound){app._bound=true;app.addEventListener('click',function(e){var t=e.target.closest('[data-date],.item[data-id],.sec-head,#mPrev,#mNext,#btnShiftPay,.quick-nav,[data-view],#btnAddMain,.qcat,#limitCard,#ringTap,#finnTipCard,#btnFullCal,.link-more,.mode');if(!t||!app.contains(t))return;if(t.classList&&t.classList.contains('quick-nav')||t.dataset.view){goView(t.dataset.view);return;}
@@ -536,7 +615,8 @@ if(t.id==='ringTap'||t.closest&&t.closest('#ringTap')){
 }
 if(t.id==='limitCard'||t.closest('#limitCard')){
   var mode=t.dataset.mode;
-  if(mode){ /* toggle manual later */ toast(mode==='auto'?'Автоматический лимит':'Ручной лимит (скоро)'); return; }
+  if(mode==='auto'){if(STATE.settings){STATE.settings.manualDailyLimit=null;}save(true);render();toast('Автоматический лимит');return;}
+if(mode==='manual'){var cur=compute().daily;appPrompt('Лимит на день (₽)',String(cur),'Ручной лимит').then(function(v){if(v===null)return;if(!STATE.settings)STATE.settings={};STATE.settings.manualDailyLimit=num(v);save(true);render();toast('Ручной лимит: '+fmt(num(v)));});return;}
   var cc2=compute();var det2='Доступно сейчас — '+fmt(cc2.available)+' ₽\nОбязательства — '+fmt((cc2.obligDue||0)+(cc2.debtLeft||0))+' ₽\nОсталось дней — '+cc2.daysLeft+'\nРекомендуемый лимит — '+fmt(cc2.daily)+' ₽/день';
   appAlert(det2,'Лимит на сегодня');
   return;
@@ -566,12 +646,22 @@ else if(act===1){appPrompt('Название',ob.name,'Изменить').then(f
 else{var paid=0;STATE.obligationPays.forEach(function(p){if(p.obligId===id&&p.month===month)paid+=num(p.amount);});var left=Math.max(0,num(ob.amount)-paid);if(left<=0)return toast('Уже оплачено');appPrompt('Сумма (осталось '+left+')',String(left),'Оплата').then(function(av){var a=num(av);if(a<=0)return;if(a>left)a=left;pushUndo();STATE.obligationPays.push({id:uid(),obligId:id,month:month,amount:a,date:today()});STATE.expenses.push({id:uid(),amount:a,category:'Обязательные',note:ob.name,date:today(),obligId:id});save(true);render();toast('Оплата учтена');});}});return;}
 });}
 }
-function addIncome(){appPrompt('Сумма дохода','','Доход').then(function(a){if(a===null)return;a=num(a);if(a<=0)return toast('Укажи сумму');appPrompt('Комментарий','Доход','Комментарий').then(function(n){if(n===null)return;n=n||'Доход';pushUndo();STATE.income.push({id:uid(),amount:a,note:n,date:today()});save(true);render();toast('Доход добавлен');});});}
-function addExpense(){appPrompt('Сумма расхода','','Расход').then(function(a){if(a===null)return;a=num(a);if(a<=0)return toast('Укажи сумму');var pre=window.__prefillCat||'Продукты';window.__prefillCat=null;appPrompt('Категория',pre,'Категория').then(function(cat){if(cat===null)return;cat=cat||'Прочее';pushUndo();STATE.expenses.push({id:uid(),amount:a,category:cat,note:'',date:today()});save(true);render();toast('Расход добавлен');});});}
+function addIncome(){appForm('Доход',[
+    {name:'amount',label:'Сумма',value:'',placeholder:'0',inputmode:'decimal'},
+    {name:'note',label:'Комментарий',value:'Доход',placeholder:'Необязательно'}
+  ],'Добавить доход').then(function(v){if(!v)return;var a=num(v.amount);if(a<=0)return toast('Укажи сумму');pushUndo();STATE.income.push({id:uid(),amount:a,note:(v.note||'Доход'),date:today()});save(true);render();toast('Доход добавлен');});}
+function addExpense(){var pre=window.__prefillCat||'Продукты';window.__prefillCat=null;
+var cats=(typeof CATS!=='undefined'?CATS:['Продукты','Кафе','Проезд','Сигареты','Прочее']).slice();
+if(cats.indexOf(pre)<0)cats.unshift(pre);
+appForm('Расход',[
+  {name:'amount',label:'Сумма',value:'',placeholder:'0',inputmode:'decimal'},
+  {name:'category',label:'Категория',type:'chips',options:cats.slice(0,12),value:pre},
+  {name:'note',label:'Комментарий',value:'',placeholder:'Необязательно'}
+],'Добавить расход').then(function(v){if(!v)return;var a=num(v.amount);if(a<=0)return toast('Укажи сумму');var cat=v.category||pre||'Прочее';pushUndo();STATE.expenses.push({id:uid(),amount:a,category:cat,note:v.note||'',date:today()});save(true);render();toast('Расход добавлен');});}
 function addReserve(){appChoice('Категория резерва',RES_PRESETS,'Новый резерв').then(function(idx){if(idx===null)return;var name=RES_PRESETS[idx];function cont(nm){if(!nm)return;appPrompt('Цель (0 если без цели)','0','Цель').then(function(tv){var t=num(tv);appPrompt('Уже накоплено','0','Накоплено').then(function(sv){var s=num(sv);var id=uid();pushUndo();STATE.reserves.push({id:id,name:nm,category:nm,target:t,saved:s});if(s>0)STATE.reserveOps.push({id:uid(),reserveId:id,type:'deposit',amount:s,date:today()});save(true);render();toast('Резерв «'+nm+'» создан — переносится на все месяцы');});});}if(name==='Свой вариант'){appPrompt('Название','','Название резерва').then(cont);}else cont(name);});}
 function addDebt(){appPrompt('Название долга','','Долг').then(function(n){if(!n)return;appPrompt('Сумма','','Сумма долга').then(function(t){t=num(t);if(t<=0)return toast('Укажи сумму');pushUndo();STATE.debts.push({id:uid(),name:n,total:t,paid:0});save(true);render();toast('Долг добавлен');});});}
 function addObligation(){appPrompt('Название (Алименты, Аренда…)','','Платёж').then(function(n){if(!n)return;appPrompt('Сумма каждый месяц','','Сумма').then(function(a){a=num(a);if(a<=0)return toast('Укажи сумму');appPrompt('Число месяца (1–31)','25','День').then(function(d){d=num(d);if(d<1||d>31)return toast('День 1–31');pushUndo();STATE.obligations.push({id:uid(),name:n,amount:a,day:d,active:true});save(true);render();toast('Обязательный платёж добавлен');});});});}
 function setup(){var fab=document.getElementById('fab'),radial=document.getElementById('radial');if(radial){radial.querySelectorAll('button').forEach(function(btn){btn.onclick=function(){radial.classList.remove('show');if(fab)fab.classList.remove('open');var a=btn.dataset.act;if(a==='income')addIncome();else if(a==='expense')addExpense();else if(a==='reserve')addReserve();else if(a==='debt')addDebt();else if(a==='oblig')addObligation();};});}var bs=document.getElementById('btnSettings');if(bs)bs.onclick=function(){showSettings();};}
-function boot(){try{STATE=norm(STATE);ensureMonth();var c=compute();if(STATE.income.length===0&&STATE.expenses.length===0&&c.cash<0&&!STATE.obligations.length&&!STATE.reserves.length){STATE=def();save(true);}}catch(e){STATE=def();}setup();render();syncReminders();}
+function boot(){if(!window.__scrollSaveBound){window.__scrollSaveBound=true;var st=null;window.addEventListener('scroll',function(){if((window.__finView||currentView||'home')!=='home')return;if(st)return;st=setTimeout(function(){st=null;window.__homeScroll=window.scrollY||document.documentElement.scrollTop||0;},120);},{passive:true});}try{STATE=norm(STATE);ensureMonth();var c=compute();if(STATE.income.length===0&&STATE.expenses.length===0&&c.cash<0&&!STATE.obligations.length&&!STATE.reserves.length){STATE=def();save(true);}}catch(e){STATE=def();}setup();render();syncReminders();}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
 ;window.goView=goView;window.goHome=goHome;window.currentView=currentView;})();

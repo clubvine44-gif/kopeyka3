@@ -77,7 +77,8 @@ function down(e){
   holding=true;moved=false;
   startY=(e.touches&&e.touches[0]?e.touches[0].clientY:(e.clientY||0));
   btn.classList.add('holding');
-  startListen();
+  // slight delay avoids accidental taps
+  btn._holdTimer=setTimeout(function(){if(holding)startListen();},80);
 }
 function move(e){
   if(!holding||locked)return;
@@ -86,14 +87,11 @@ function move(e){
 }
 function up(e){
   if(e)e.preventDefault();
+  if(btn._holdTimer){clearTimeout(btn._holdTimer);btn._holdTimer=null;}
   if(locked)return;
   if(!holding)return;
   holding=false;btn.classList.remove('holding');
-  // release = stop listening (like WA send on release for voice - we stop and process via onresult)
-  // keep listening briefly if already got result; stopListen stops recognition
-  if(!moved){/* hold-to-talk: stop on release */}
-  stopListen();
-  status('Готов');
+  if(!moved){stopListen();status('Готов');}
 }
 btn.addEventListener('touchstart',down,{passive:false});
 btn.addEventListener('touchmove',move,{passive:false});
@@ -108,23 +106,48 @@ btn.addEventListener('mouseleave',up);
 function startListen(){if(!SR){status('Нет распознавания речи');return;}if(listening)return;wantListen=true;restarts=0;createRecognition();}
 function createRecognition(){
   if(!wantListen||listening)return;
-  rec=new SR();rec.lang='ru-RU';rec.interimResults=false;rec.continuous=false;rec.maxAlternatives=2;
+  rec=new SR();rec.lang='ru-RU';rec.interimResults=true;rec.continuous=true;rec.maxAlternatives=3;
   rec.onstart=function(){listening=true;restarts=0;var o=document.getElementById('kaOrb');if(o)o.classList.add('listening');status('Слушаю…');
   };
   rec.onresult=function(e){
-    var t='';for(var i=0;i<e.results.length;i++)t+=e.results[i][0].transcript+' ';
-    t=t.trim();var wasLocked=document.getElementById('kaOrb')&&document.getElementById('kaOrb').classList.contains('locked');if(!wasLocked){wantListen=false;stopListen();}else{/* keep locked listening */} 
-    if(!t){status('Не услышал — скажи «Фин»');return;}
-    if(isOnlyWake(t)){status('Да, слушаю…');setTimeout(startListen,300);return;}
+    var interim='', final='';
+    for(var i=e.resultIndex;i<e.results.length;i++){
+      var piece=e.results[i][0].transcript;
+      if(e.results[i].isFinal) final+=piece+' ';
+      else interim+=piece+' ';
+    }
+    if(interim) status('… '+interim.trim());
+    var t=final.trim();
+    if(!t) return;
+    var orb=document.getElementById('kaOrb');
+    var wasLocked=orb&&orb.classList.contains('locked');
+    if(!wasLocked){wantListen=false;stopListen();}
+    if(isOnlyWake(t)){status('Да, слушаю…');if(wasLocked||wantListen)setTimeout(startListen,250);return;}
     handle(t);
   };
   rec.onerror=function(e){
-    var code=e&&e.error||'';listening=false;var o=document.getElementById('kaOrb');if(o)o.classList.remove('listening');
+    var code=e&&e.error||'';
+    listening=false;
+    var o=document.getElementById('kaOrb');if(o)o.classList.remove('listening');
     try{rec.abort();}catch(x){}rec=null;
-    if(false){}
-    else{wantListen=false;status(code==='not-allowed'?'Нет доступа к микрофону':'Скажи «Фин» или нажми круг');}
+    var locked=o&&o.classList.contains('locked');
+    if(code==='no-speech'||code==='aborted'){
+      if(locked||wantListen){setTimeout(createRecognition,300);return;}
+      status('Готов');return;
+    }
+    if(code==='not-allowed'){wantListen=false;status('Нет доступа к микрофону');return;}
+    if(locked||wantListen){setTimeout(createRecognition,400);return;}
+    status('Скажи «Фин» или нажми микрофон');
   };
-  rec.onend=function(){listening=false;};
+  rec.onend=function(){
+    listening=false;
+    var o=document.getElementById('kaOrb');
+    if(o&&!o.classList.contains('locked'))o.classList.remove('listening');
+    rec=null;
+    if(wantListen||(o&&o.classList.contains('locked'))){
+      setTimeout(function(){if(wantListen||(document.getElementById('kaOrb')&&document.getElementById('kaOrb').classList.contains('locked')))createRecognition();},280);
+    }
+  };
   try{rec.start();}catch(e){rec=null;listening=false;wantListen=false;status('Микрофон не запустился');}
 }
 function stopListen(){wantListen=false;if(rec){try{rec.stop();}catch(e){try{rec.abort();}catch(x){}}rec=null;}listening=false;var o=document.getElementById('kaOrb');if(o)o.classList.remove('listening');}
