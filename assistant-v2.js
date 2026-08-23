@@ -17,8 +17,10 @@ function open(opts){
     wrap.id='kopeykaAiDialog';
     wrap.className='ka-bg';
     wrap.style.cssText='position:fixed;inset:0;z-index:10050;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(6,8,12,.62);';
-    wrap.innerHTML='<div class="ka-card"><div class="ka-head"><div class="ka-head-left"><span class="ka-dot"></span><div><div class="ka-title">Финна</div><div class="ka-sub" id="kaCloud">Готов</div></div></div><button class="ka-close" id="kaClose" type="button" aria-label="Закрыть">×</button></div><div class="ka-chat" id="kaChat"></div><div class="ka-status" id="kaStatus">Готов</div><div class="ka-input-row"><input id="kaInput" autocomplete="off" placeholder="Спроси что угодно…"><button id="kaSend" type="button" aria-label="Отправить">➤</button><button class="ka-mic" id="kaOrb" type="button" aria-label="Микрофон"><svg class="ka-mic-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg><span class="ka-lock-hint">↑</span></button></div></div>';
+    var avatarSvg=(window.FinnChar?window.FinnChar.svgMarkup('kaFinn','C'):'');
+    wrap.innerHTML='<div class="ka-card"><div class="ka-head"><button class="ka-close" id="kaClose" type="button" aria-label="Закрыть">×</button><div class="finn-avatar ka-avatar" id="kaFinnAvatar" data-emotion="idle" title="Финна"><span class="finn-aura"></span>'+avatarSvg+'</div><div class="ka-title">Финна</div><div class="ka-sub" id="kaCloud">Готов</div></div><div class="ka-chat" id="kaChat"></div><div class="ka-status" id="kaStatus">Готов</div><div class="ka-input-row"><input id="kaInput" autocomplete="off" placeholder="Спроси что угодно…"><button id="kaSend" type="button" aria-label="Отправить">➤</button><button class="ka-mic" id="kaOrb" type="button" aria-label="Микрофон"><svg class="ka-mic-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg><span class="ka-lock-hint">↑</span></button></div></div>';
     document.body.appendChild(wrap);
+    try{ if(window.FinnChar) window.FinnChar.scheduleBlink(document.getElementById('kaFinnAvatar')); }catch(x){}
     wrap.addEventListener('click',function(e){if(e.target===wrap)close();});
     var closeBtn=document.getElementById('kaClose');
     if(closeBtn)closeBtn.onclick=function(e){e.preventDefault();e.stopPropagation();close();};
@@ -50,14 +52,14 @@ function style(){if(document.getElementById('kaStyle'))return;var s=document.cre
 '.ka-card{width:min(100%,380px);max-height:min(88vh,640px);display:flex;flex-direction:column;'+
 'background:rgba(14,22,40,.94);border:1px solid rgba(94,200,255,.2);'+
 'border-radius:18px;box-shadow:0 20px 50px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.03);overflow:hidden;color:#F2F3F7}'+
-'.ka-head{display:flex;align-items:center;justify-content:space-between;padding:12px 12px 8px;'+
+'.ka-head{display:flex;flex-direction:column;align-items:center;position:relative;padding:16px 12px 10px;'+
 'border-bottom:1px solid rgba(255,255,255,.06)}'+
-'.ka-head-left{display:flex;align-items:center;gap:9px;min-width:0}'+
-'.ka-dot{width:7px;height:7px;border-radius:50%;background:#5EC8FF;box-shadow:0 0 10px rgba(94,200,255,.55);flex-shrink:0}'+
-'.ka-title{font-size:15px;font-weight:750;letter-spacing:-.01em}'+
-'.ka-sub{font-size:11px;color:#9AA0B0;margin-top:1px}'+
-'.ka-close{width:32px;height:32px;border-radius:9px;border:1px solid rgba(255,255,255,.08);'+
-'background:#1C1F28;color:#F2F3F7;font-size:18px;line-height:1}'+
+'.ka-avatar{width:56px;height:56px;margin-bottom:8px}'+
+'.ka-avatar svg{width:48px;height:48px}'+
+'.ka-title{font-size:15px;font-weight:750;letter-spacing:-.01em;text-align:center}'+
+'.ka-sub{font-size:11px;color:#9AA0B0;margin-top:1px;text-align:center}'+
+'.ka-close{position:absolute;top:10px;right:10px;width:30px;height:30px;border-radius:9px;border:1px solid rgba(255,255,255,.08);'+
+'background:#1C1F28;color:#F2F3F7;font-size:17px;line-height:1;z-index:2}'+
 '.ka-chat{flex:1;min-height:120px;max-height:52vh;overflow:auto;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;padding:10px 12px;display:flex;flex-direction:column;gap:7px}'+
 '.ka-empty{margin:auto;text-align:center;color:#9AA0B0;font-size:12.5px;line-height:1.5;padding:10px}'+
 '.ka-msg{max-width:92%;padding:9px 11px;border-radius:13px;font-size:13px;line-height:1.42;white-space:pre-wrap}'+
@@ -78,6 +80,7 @@ function style(){if(document.getElementById('kaStyle'))return;var s=document.cre
 '.ka-input-row #kaSend{width:38px;height:38px;border:0;border-radius:11px;'+
 'background:linear-gradient(135deg,#5EC8FF,#3A8FE8);color:#0A101C;font-weight:900;font-size:15px;flex-shrink:0}';
 document.head.appendChild(s);}
+function kaEmo(emotion,duration){try{if(window.FinnChar)window.FinnChar.flashEmotion(document.getElementById('kaFinnAvatar'),emotion,duration);}catch(x){}}
 function bubble(role,text){var c=document.getElementById('kaChat');if(!c)return;var e=document.createElement('div');e.className='ka-msg '+(role==='user'?'ka-user':'ka-ai');e.textContent=text;c.appendChild(e);c.scrollTop=c.scrollHeight;}
 function renderHistory(){var c=document.getElementById('kaChat');if(!c)return;c.innerHTML='';if(!history.length){var e=document.createElement('div');e.className='ka-empty';e.textContent='Скажи «Привет, Финна» — я слушаю. Например: «сколько можно тратить».';c.appendChild(e);return;}history.slice(-40).forEach(function(x){bubble(x.role,x.content);});}
 function status(t){var e=document.getElementById('kaStatus');if(e)e.textContent=t;}
@@ -183,20 +186,20 @@ function handle(text){
   if(!cmd){if(isOnlyWake(raw)){status('Да, слушаю…');setTimeout(startListen,250);return;}cmd=raw;}
   bubble('user',cmd);history.push({role:'user',content:cmd});saveHistory();
   if(pending&&(confirmWord(cmd)||cancelWord(cmd))){if(confirmWord(cmd))confirmPending();else cancelPending();return;}
-  if(!window.kopeykaAI||typeof window.kopeykaAI.askConversation!=='function'){status('ИИ-модуль не загружен');return;}
-  status('Думаю…');
+  if(!window.kopeykaAI||typeof window.kopeykaAI.askConversation!=='function'){status('ИИ-модуль не загружен');kaEmo('angry',1600);return;}
+  status('Думаю…');kaEmo('thinking');
   var h=history.slice(0,-1).slice(-20);
   window.kopeykaAI.askConversation(h,cmd).then(function(o){
     if(o.mode==='action'){
       var acts=(o.actions||[]).filter(function(a){return a&&a.type;});
       if(!acts.length){
         var msg=o.text||o.summary||'Не понял. Скажи: «удали долг ёжику».';
-        history.push({role:'assistant',content:msg});saveHistory();bubble('ai',msg);
+        history.push({role:'assistant',content:msg});saveHistory();bubble('ai',msg);kaEmo('alert',1600);
         var lk=document.getElementById('kaOrb')&&document.getElementById('kaOrb').classList.contains('locked');status(lk?'Слушаю…':'Готов');if(lk)setTimeout(startListen,400);return;
       }
-      pending=acts;renderAction(o.summary||o.text||'Нужно выполнить действие',pending);
+      kaEmo('idle');pending=acts;renderAction(o.summary||o.text||'Нужно выполнить действие',pending);
     }else{
-      var a=o.text||'Не смог ответить.';history.push({role:'assistant',content:a});saveHistory();bubble('ai',a);updateCloud();
+      var a=o.text||'Не смог ответить.';history.push({role:'assistant',content:a});saveHistory();bubble('ai',a);updateCloud();kaEmo('happy',1300);
       var lk2=document.getElementById('kaOrb')&&document.getElementById('kaOrb').classList.contains('locked');status(lk2?'Слушаю…':'Готов');if(lk2)setTimeout(startListen,500);
     }
   }).catch(function(e){
@@ -206,7 +209,7 @@ function handle(text){
       /Таймаут|abort/i.test(msg)?'ИИ не ответил вовремя. Попробуй ещё раз.':
       /сети|fetch/i.test(msg)?'Нет сети. Проверь интернет.':
       ('Финна: '+msg);
-    history.push({role:'assistant',content:a});saveHistory();bubble('ai',a);status('Готов');
+    history.push({role:'assistant',content:a});saveHistory();bubble('ai',a);status('Готов');kaEmo('angry',1800);
   });
 }
 function renderAction(summary,actions){
@@ -296,8 +299,8 @@ function confirmPending(){
   if(!pending)return;
   var list=pending.filter(function(a){return a&&a.type;});pending=null;
   if(!list.length){bubble('ai','Нечего выполнять.');status('Скажи «Финна»');setTimeout(startListen,500);return;}
-  try{list.forEach(execute);var t='Готово. Изменения внесены.';history.push({role:'assistant',content:t});saveHistory();bubble('ai',t);updateCloud();status('Готово. Скажи «Финна»');setTimeout(startListen,600);}
-  catch(e){var msg='Не внёс изменения: '+(e.message||e);history.push({role:'assistant',content:msg});saveHistory();bubble('ai',msg);status('Ошибка');setTimeout(startListen,700);}
+  try{list.forEach(execute);var t='Готово. Изменения внесены.';history.push({role:'assistant',content:t});saveHistory();bubble('ai',t);updateCloud();status('Готово. Скажи «Финна»');kaEmo('happy',1400);setTimeout(startListen,600);}
+  catch(e){var msg='Не внёс изменения: '+(e.message||e);history.push({role:'assistant',content:msg});saveHistory();bubble('ai',msg);status('Ошибка');kaEmo('angry',1800);setTimeout(startListen,700);}
 }
 function cancelPending(){pending=null;var t='Отменил.';history.push({role:'assistant',content:t});saveHistory();bubble('ai',t);status('Скажи «Финна»');setTimeout(startListen,500);}
 window.kopeykaAssistant={open:open,close:close,startListen:startListen};

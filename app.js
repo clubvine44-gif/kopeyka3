@@ -730,7 +730,7 @@ homeHtml += '</div>';
 
 // ===== Finn tip (верхняя зона) =====
 homeHtml += '<div class="card finn-tip-card" id="finnTipCard">';
-homeHtml += '<div class="finn-tip-head"><span class="finn-mini">🦊</span> Финна · совет</div>';
+homeHtml += '<div class="finn-tip-head"><span class="finn-mini finn-mini-face">'+(window.FinnChar?window.FinnChar.svgMarkup('','M'):'')+'</span> Финна · совет</div>';
 homeHtml += '<div class="finn-tip-body" id="finnTipBody">'+esc(finnTip)+'</div>';
 homeHtml += '<div class="finn-tip-hint">Зажми кнопку <b>+</b> внизу справа — откроется Финна</div>';
 if(attention.length){

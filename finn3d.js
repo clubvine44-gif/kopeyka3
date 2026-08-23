@@ -117,6 +117,7 @@ else boot();
       av.classList.add('show-tip');
       clearTimeout(av._tipT);
       av._tipT=setTimeout(function(){ av.classList.remove('show-tip'); }, 3400);
+      try{ if(window.FinnChar) window.FinnChar.flashEmotion(av, 'angry', 850); }catch(x){}
     });
     updateStatus();
     setInterval(updateStatus, 5000);
