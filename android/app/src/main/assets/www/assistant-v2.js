@@ -7,120 +7,216 @@ function isOnlyWake(s){var t=norm(s);return /^(привет\s+)?(финн?|фе�
 function loadHistory(){try{var h=JSON.parse(localStorage.getItem(HKEY)||'[]');if(Array.isArray(h))history=h.slice(-40);}catch(e){history=[];}}function saveHistory(){try{localStorage.setItem(HKEY,JSON.stringify(history.slice(-40)));}catch(e){}}
 function open(opts){
   opts=opts||{};
-  try{if(window.__finnWakeStop)window.__finnWakeStop();}catch(x){}
-  var already=!!document.getElementById('kopeykaAiDialog');
-  if(!already){
-    loadHistory();
-    document.body.insertAdjacentHTML('beforeend','<div id="kopeykaAiDialog" class="ka-bg"><div class="ka-card"><div class="ka-head"><div class="ka-head-left"><span class="ka-dot"></span><div><div class="ka-title">Финн</div><div class="ka-sub" id="kaCloud">Готов</div></div></div><button class="ka-close" id="kaClose" aria-label="Закрыть">×</button></div><div class="ka-chat" id="kaChat"></div><div class="ka-status" id="kaStatus">Готов</div><div class="ka-input-row"><button class="ka-mic" id="kaOrb" aria-label="Говорить">◉</button><input id="kaInput" autocomplete="off" placeholder="Спроси что угодно…"><button id="kaSend" aria-label="Отправить">➤</button></div></div></div>');
+  try{
+    try{if(window.__finnWakeStop)window.__finnWakeStop();}catch(x){}
     style();
-    var bg=document.getElementById('kopeykaAiDialog');
-    bg.addEventListener('click',function(e){if(e.target===bg)close();});
-    document.getElementById('kaClose').onclick=close;
-    document.getElementById('kaOrb').onclick=function(e){e.preventDefault();};bindHoldMic(document.getElementById('kaOrb'));
-    document.getElementById('kaSend').onclick=sendInput;
-    document.getElementById('kaInput').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();sendInput();}});
-    renderHistory();
-    updateCloud();
+    var existing=document.getElementById('kopeykaAiDialog');
+    if(existing){existing.style.display='flex';existing.style.zIndex='10050';return;}
+    loadHistory();
+    var wrap=document.createElement('div');
+    wrap.id='kopeykaAiDialog';
+    wrap.className='ka-bg';
+    wrap.style.cssText='position:fixed;inset:0;z-index:10050;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(6,8,12,.62);';
+    var avatarSvg=(window.FinnChar?window.FinnChar.svgMarkup('kaFinn','C'):'');
+    wrap.innerHTML='<div class="ka-card"><div class="ka-head"><button class="ka-close" id="kaClose" type="button" aria-label="Закрыть">×</button><div class="finn-avatar ka-avatar" id="kaFinnAvatar" data-emotion="idle" title="Финна"><span class="finn-aura"></span>'+avatarSvg+'</div><div class="ka-title">Финна</div><div class="ka-sub" id="kaCloud">Готов</div></div><div class="ka-chat" id="kaChat"></div><div class="ka-status" id="kaStatus">Готов</div><div class="ka-input-row"><input id="kaInput" autocomplete="off" placeholder="Спроси что угодно…"><button id="kaSend" type="button" aria-label="Отправить">➤</button><button class="ka-mic" id="kaOrb" type="button" aria-label="Микрофон"><svg class="ka-mic-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg><span class="ka-lock-hint">↑</span></button></div></div>';
+    document.body.appendChild(wrap);
+    try{ if(window.FinnChar) window.FinnChar.scheduleBlink(document.getElementById('kaFinnAvatar')); }catch(x){}
+    wrap.addEventListener('click',function(e){if(e.target===wrap)close();});
+    var closeBtn=document.getElementById('kaClose');
+    if(closeBtn)closeBtn.onclick=function(e){e.preventDefault();e.stopPropagation();close();};
+    var orb=document.getElementById('kaOrb');
+    if(orb){orb.onclick=function(e){e.preventDefault();};try{bindHoldMic(orb);}catch(x){}}
+    var send=document.getElementById('kaSend');
+    if(send)send.onclick=sendInput;
+    var inp=document.getElementById('kaInput');
+    if(inp)inp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();sendInput();}});
+    try{renderHistory();}catch(x){}
+    try{updateCloud();}catch(x){}
+    if(opts.command) setTimeout(function(){try{handle(String(opts.command));}catch(x){}},180);
+    else setTimeout(function(){
+      try{
+        var c=document.getElementById('kaChat');
+        if(c&&!history.length) bubble('ai','Привет, меня зовут Финна. Чем помочь?');
+      }catch(x){}
+    },80);
+  }catch(err){
+    console.error('open Fin',err);
+    try{alert('Фин: '+(err&&err.message||err));}catch(x){}
   }
-  if(opts.command) setTimeout(function(){handle(String(opts.command));},180);
-  /* hold-to-talk only */
 }
 
 function close(){wantListen=false;stopListen();var e=document.getElementById('kopeykaAiDialog');if(e)e.remove();try{if(window.Finn3D&&window.Finn3D.deactivate)window.Finn3D.deactivate();}catch(x){}try{if(window.__finnWakeStart)window.__finnWakeStart();}catch(x){}}
 function style(){if(document.getElementById('kaStyle'))return;var s=document.createElement('style');s.id='kaStyle';s.textContent=''+
-'.ka-bg{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;'+
+'.ka-bg{position:fixed;inset:0;z-index:10050;display:flex;align-items:center;justify-content:center;padding:16px;'+
 'background:rgba(6,8,12,.52);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}'+
-'.ka-card{width:min(100%,380px);max-height:min(72vh,520px);display:flex;flex-direction:column;'+
-'background:linear-gradient(165deg,#171A22 0%,#0F1118 100%);border:1px solid rgba(229,167,94,.2);'+
+'.ka-card{width:min(100%,380px);max-height:min(88vh,640px);display:flex;flex-direction:column;'+
+'background:rgba(14,22,40,.94);border:1px solid rgba(94,200,255,.2);'+
 'border-radius:18px;box-shadow:0 20px 50px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.03);overflow:hidden;color:#F2F3F7}'+
-'.ka-head{display:flex;align-items:center;justify-content:space-between;padding:12px 12px 8px;'+
+'.ka-head{display:flex;flex-direction:column;align-items:center;position:relative;padding:16px 12px 10px;'+
 'border-bottom:1px solid rgba(255,255,255,.06)}'+
-'.ka-head-left{display:flex;align-items:center;gap:9px;min-width:0}'+
-'.ka-dot{width:7px;height:7px;border-radius:50%;background:#E5A75E;box-shadow:0 0 8px rgba(229,167,94,.5);flex-shrink:0}'+
-'.ka-title{font-size:15px;font-weight:750;letter-spacing:-.01em}'+
-'.ka-sub{font-size:11px;color:#9AA0B0;margin-top:1px}'+
-'.ka-close{width:32px;height:32px;border-radius:9px;border:1px solid rgba(255,255,255,.08);'+
-'background:#1C1F28;color:#F2F3F7;font-size:18px;line-height:1}'+
-'.ka-chat{flex:1;min-height:120px;max-height:38vh;overflow:auto;padding:10px 12px;display:flex;flex-direction:column;gap:7px}'+
+'.ka-avatar{width:56px;height:56px;margin-bottom:8px}'+
+'.ka-avatar svg{width:48px;height:48px}'+
+'.ka-title{font-size:15px;font-weight:750;letter-spacing:-.01em;text-align:center}'+
+'.ka-sub{font-size:11px;color:#9AA0B0;margin-top:1px;text-align:center}'+
+'.ka-close{position:absolute;top:10px;right:10px;width:30px;height:30px;border-radius:9px;border:1px solid rgba(255,255,255,.08);'+
+'background:#1C1F28;color:#F2F3F7;font-size:17px;line-height:1;z-index:2}'+
+'.ka-chat{flex:1;min-height:120px;max-height:52vh;overflow:auto;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;padding:10px 12px;display:flex;flex-direction:column;gap:7px}'+
 '.ka-empty{margin:auto;text-align:center;color:#9AA0B0;font-size:12.5px;line-height:1.5;padding:10px}'+
 '.ka-msg{max-width:92%;padding:9px 11px;border-radius:13px;font-size:13px;line-height:1.42;white-space:pre-wrap}'+
-'.ka-user{align-self:flex-end;background:rgba(229,167,94,.13);border:1px solid rgba(229,167,94,.2);border-bottom-right-radius:4px}'+
+'.ka-user{align-self:flex-end;background:rgba(94,200,255,.13);border:1px solid rgba(94,200,255,.2);border-bottom-right-radius:4px}'+
 '.ka-ai{align-self:flex-start;background:#1C1F28;border:1px solid rgba(255,255,255,.06);border-bottom-left-radius:4px}'+
 '.ka-actions{display:flex;gap:7px;margin-top:8px}'+
 '.ka-act{flex:1;padding:9px;border-radius:10px;border:1px solid rgba(255,255,255,.08);font-weight:700;background:#252a34;color:#fff;font-size:13px}'+
-'.ka-act.ok{background:linear-gradient(135deg,#F0C384,#E5A75E);color:#1A1208;border:0}'+
+'.ka-act.ok{background:linear-gradient(135deg,#5EC8FF,#3A8FE8);color:#0A101C;border:0}'+
 '.ka-status{text-align:center;color:#9AA0B0;font-size:11px;padding:0 12px 6px;min-height:15px}'+
 '.ka-input-row{display:flex;gap:7px;padding:8px 10px 10px;border-top:1px solid rgba(255,255,255,.06);align-items:center}'+
-'.ka-mic.holding{background:linear-gradient(135deg,#F0C384,#E5A75E);color:#1A1208;transform:scale(1.06);box-shadow:0 0 0 4px rgba(229,167,94,.25)}.ka-mic{width:38px;height:38px;border-radius:11px;border:1px solid rgba(229,167,94,.32);'+
-'background:#1C1F28;color:#E5A75E;font-size:15px;flex-shrink:0}'+
-'.ka-mic.listening{background:rgba(229,167,94,.16);box-shadow:0 0 0 3px rgba(229,167,94,.12);animation:kaMic 1.1s ease-in-out infinite}'+
-'@keyframes kaMic{50%{box-shadow:0 0 0 6px rgba(229,167,94,.07)}}'+
+'.ka-mic.holding{background:linear-gradient(135deg,#5EC8FF,#3A8FE8);color:#0A101C;transform:scale(1.06);box-shadow:0 0 0 4px rgba(94,200,255,.25)}.ka-mic{width:38px;height:38px;border-radius:11px;border:1px solid rgba(94,200,255,.32);'+
+'background:#1C1F28;color:#5EC8FF;font-size:15px;flex-shrink:0}'+
+'.ka-mic.listening{background:rgba(94,200,255,.16);box-shadow:0 0 0 3px rgba(94,200,255,.12);animation:kaMic 1.1s ease-in-out infinite}'+
+'@keyframes kaMic{50%{box-shadow:0 0 0 6px rgba(94,200,255,.07)}}'+
 '.ka-input-row input{flex:1;min-width:0;background:#1C1F28;border:1px solid rgba(255,255,255,.07);'+
 'border-radius:11px;padding:10px 11px;color:#fff;outline:none;font-size:13.5px}'+
-'.ka-input-row input:focus{border-color:rgba(229,167,94,.38)}'+
+'.ka-input-row input:focus{border-color:rgba(94,200,255,.38)}'+
 '.ka-input-row #kaSend{width:38px;height:38px;border:0;border-radius:11px;'+
-'background:linear-gradient(135deg,#F0C384,#E5A75E);color:#1A1208;font-weight:900;font-size:15px;flex-shrink:0}';
+'background:linear-gradient(135deg,#5EC8FF,#3A8FE8);color:#0A101C;font-weight:900;font-size:15px;flex-shrink:0}';
 document.head.appendChild(s);}
+function kaEmo(emotion,duration){try{if(window.FinnChar)window.FinnChar.flashEmotion(document.getElementById('kaFinnAvatar'),emotion,duration);}catch(x){}}
 function bubble(role,text){var c=document.getElementById('kaChat');if(!c)return;var e=document.createElement('div');e.className='ka-msg '+(role==='user'?'ka-user':'ka-ai');e.textContent=text;c.appendChild(e);c.scrollTop=c.scrollHeight;}
-function renderHistory(){var c=document.getElementById('kaChat');if(!c)return;c.innerHTML='';if(!history.length){var e=document.createElement('div');e.className='ka-empty';e.textContent='Скажи «Привет, Финн» — я слушаю. Например: «сколько можно тратить».';c.appendChild(e);return;}history.slice(-40).forEach(function(x){bubble(x.role,x.content);});}
+function renderHistory(){var c=document.getElementById('kaChat');if(!c)return;c.innerHTML='';if(!history.length){var e=document.createElement('div');e.className='ka-empty';e.textContent='Скажи «Привет, Финна» — я слушаю. Например: «сколько можно тратить».';c.appendChild(e);return;}history.slice(-40).forEach(function(x){bubble(x.role,x.content);});}
 function status(t){var e=document.getElementById('kaStatus');if(e)e.textContent=t;}
 function updateCloud(){var e=document.getElementById('kaCloud'),c=window.kopeykaEngine&&window.kopeykaEngine.snapshot?window.kopeykaEngine.snapshot().cloud:null;if(e)e.textContent=c&&c.connected?'Облако подключено':c&&c.online?'Онлайн · локально':'Офлайн';}
 function sendInput(){var i=document.getElementById('kaInput');if(!i)return;var x=i.value.trim();if(x){i.value='';handle(x);}}
-function toggleListen(){if(listening||wantListen){wantListen=false;stopListen();status('Готов. Нажми круг или скажи «Фин»');}else startListen();}
-function bindHoldMic(btn){if(!btn||btn._hb)return;btn._hb=true;var holding=false;
-function down(e){e.preventDefault();if(holding)return;holding=true;btn.classList.add('holding');startListen();}
-function up(e){if(e)e.preventDefault();if(!holding)return;holding=false;btn.classList.remove('holding');stopListen();}
-btn.addEventListener('touchstart',down,{passive:false});btn.addEventListener('touchend',up,{passive:false});
-btn.addEventListener('touchcancel',up,{passive:false});btn.addEventListener('mousedown',down);btn.addEventListener('mouseup',up);btn.addEventListener('mouseleave',up);}
+function toggleListen(){if(listening||wantListen){wantListen=false;stopListen();status('Готов. Нажми круг или скажи «Финна»');}else startListen();}
+function bindHoldMic(btn){if(!btn||btn._hb)return;btn._hb=true;
+var holding=false,locked=false,startY=0;
+function setLocked(v){
+  locked=!!v;
+  btn.classList.toggle('locked',locked);
+  if(locked){wantListen=true;status('Слушаю постоянно · тап — стоп');if(!listening)startListen();}
+  else{wantListen=false;stopListen();status('Готов');}
+}
+function down(e){
+  e.preventDefault();
+  if(locked){setLocked(false);holding=false;btn.classList.remove('holding');return;}
+  if(holding)return;
+  holding=true;startY=(e.touches&&e.touches[0]?e.touches[0].clientY:(e.clientY||0));
+  btn.classList.add('holding');
+  wantListen=true;
+  startListen();
+  status('Слушаю… говори');
+}
+function move(e){
+  if(!holding||locked)return;
+  var y=(e.touches&&e.touches[0]?e.touches[0].clientY:(e.clientY||startY));
+  if(startY-y>56){holding=false;btn.classList.remove('holding');setLocked(true);}
+}
+function up(e){
+  if(e)e.preventDefault();
+  if(locked)return;
+  if(!holding)return;
+  holding=false;btn.classList.remove('holding');
+  // stop mic immediately on release — final result may still arrive
+  wantListen=false;
+  stopListen();
+  status('Готов');
+}
+btn.addEventListener('touchstart',down,{passive:false});
+btn.addEventListener('touchmove',move,{passive:false});
+btn.addEventListener('touchend',up,{passive:false});
+btn.addEventListener('touchcancel',up,{passive:false});
+btn.addEventListener('mousedown',down);
+btn.addEventListener('mousemove',move);
+btn.addEventListener('mouseup',up);
+btn.addEventListener('mouseleave',up);
+}
+
 function startListen(){if(!SR){status('Нет распознавания речи');return;}if(listening)return;wantListen=true;restarts=0;createRecognition();}
 function createRecognition(){
   if(!wantListen||listening)return;
-  rec=new SR();rec.lang='ru-RU';rec.interimResults=false;rec.continuous=false;rec.maxAlternatives=2;
+  rec=new SR();rec.lang='ru-RU';rec.interimResults=true;rec.continuous=false;rec.maxAlternatives=3;
   rec.onstart=function(){listening=true;restarts=0;var o=document.getElementById('kaOrb');if(o)o.classList.add('listening');status('Слушаю…');
   };
   rec.onresult=function(e){
-    var t='';for(var i=0;i<e.results.length;i++)t+=e.results[i][0].transcript+' ';
-    t=t.trim();wantListen=false;stopListen();
-    if(!t){status('Не услышал — скажи «Фин»');return;}
-    if(isOnlyWake(t)){status('Да, слушаю…');setTimeout(startListen,300);return;}
+    var interim='', final='';
+    for(var i=e.resultIndex;i<e.results.length;i++){
+      var piece=e.results[i][0].transcript;
+      if(e.results[i].isFinal) final+=piece+' ';
+      else interim+=piece+' ';
+    }
+    if(interim) status('… '+interim.trim());
+    var t=final.trim();
+    if(!t) return;
+    var orb=document.getElementById('kaOrb');
+    var wasLocked=orb&&orb.classList.contains('locked');
+    if(!wasLocked){wantListen=false;stopListen();}
+    if(isOnlyWake(t)){status('Да, слушаю…');if(wasLocked)setTimeout(startListen,250);return;}
     handle(t);
   };
   rec.onerror=function(e){
-    var code=e&&e.error||'';listening=false;var o=document.getElementById('kaOrb');if(o)o.classList.remove('listening');
+    var code=e&&e.error||'';
+    listening=false;
+    var o=document.getElementById('kaOrb');if(o)o.classList.remove('listening');
     try{rec.abort();}catch(x){}rec=null;
-    if(false){}
-    else{wantListen=false;status(code==='not-allowed'?'Нет доступа к микрофону':'Скажи «Фин» или нажми круг');}
+    var locked=o&&o.classList.contains('locked');
+    if(code==='no-speech'||code==='aborted'){
+      if(locked||wantListen){setTimeout(createRecognition,300);return;}
+      status('Готов');return;
+    }
+    if(code==='not-allowed'){wantListen=false;status('Нет доступа к микрофону');return;}
+    if(locked||wantListen){setTimeout(createRecognition,400);return;}
+    status('Скажи «Финна» или нажми микрофон');
   };
-  rec.onend=function(){listening=false;};
+  rec.onend=function(){
+    listening=false;
+    var o=document.getElementById('kaOrb');
+    if(o&&!o.classList.contains('locked'))o.classList.remove('listening');
+    rec=null;
+    if(wantListen||(o&&o.classList.contains('locked'))){
+      setTimeout(function(){if(wantListen||(document.getElementById('kaOrb')&&document.getElementById('kaOrb').classList.contains('locked')))createRecognition();},280);
+    }
+  };
   try{rec.start();}catch(e){rec=null;listening=false;wantListen=false;status('Микрофон не запустился');}
 }
 function stopListen(){wantListen=false;if(rec){try{rec.stop();}catch(e){try{rec.abort();}catch(x){}}rec=null;}listening=false;var o=document.getElementById('kaOrb');if(o)o.classList.remove('listening');}
+/** Перезапуск микрофона только в режиме «замок» (удержание вверх). Без замка сам не включается. */
+function isMicLocked(){var o=document.getElementById('kaOrb');return !!(o&&o.classList.contains('locked'));}
+function maybeResumeListen(ms){
+  ms=ms||450;
+  if(!isMicLocked()){status('Готов');return;}
+  setTimeout(function(){if(isMicLocked())startListen();},ms);
+}
 function confirmWord(t){return /^(да|ага|угу|подтверждаю|сделай|выполняй|верно|правильно|ок|окей|yes|удали)$/i.test(norm(t));}
 function cancelWord(t){return /^(нет|отмена|отменить|не надо|не делай|стоп)$/i.test(norm(t));}
 function handle(text){
   var raw=String(text||'').trim();
   var cmd=stripWake(raw);
-  if(!cmd){if(isOnlyWake(raw)){status('Да, слушаю…');setTimeout(startListen,250);return;}cmd=raw;}
+  if(!cmd){if(isOnlyWake(raw)){status(isMicLocked()?'Да, слушаю…':'Скажи или напиши запрос');if(isMicLocked())setTimeout(startListen,250);return;}cmd=raw;}
   bubble('user',cmd);history.push({role:'user',content:cmd});saveHistory();
   if(pending&&(confirmWord(cmd)||cancelWord(cmd))){if(confirmWord(cmd))confirmPending();else cancelPending();return;}
-  if(!window.kopeykaAI||typeof window.kopeykaAI.askConversation!=='function'){status('ИИ-модуль не загружен');return;}
-  status('Думаю…');
+  if(!window.kopeykaAI||typeof window.kopeykaAI.askConversation!=='function'){status('ИИ-модуль не загружен');kaEmo('angry',1600);return;}
+  status('Думаю…');kaEmo('thinking');
   var h=history.slice(0,-1).slice(-20);
   window.kopeykaAI.askConversation(h,cmd).then(function(o){
     if(o.mode==='action'){
       var acts=(o.actions||[]).filter(function(a){return a&&a.type;});
       if(!acts.length){
         var msg=o.text||o.summary||'Не понял. Скажи: «удали долг ёжику».';
-        history.push({role:'assistant',content:msg});saveHistory();bubble('ai',msg);
-        status('Скажи «Фин»');setTimeout(startListen,600);return;
+        history.push({role:'assistant',content:msg});saveHistory();bubble('ai',msg);kaEmo('alert',1600);
+        maybeResumeListen(400);return;
       }
-      pending=acts;renderAction(o.summary||o.text||'Нужно выполнить действие',pending);
+      kaEmo('idle');pending=acts;renderAction(o.summary||o.text||'Нужно выполнить действие',pending);
     }else{
-      var a=o.text||'Не смог ответить.';history.push({role:'assistant',content:a});saveHistory();bubble('ai',a);updateCloud();
-      status('Скажи «Фин»');setTimeout(startListen,700);
+      var a=o.text||'Не смог ответить.';history.push({role:'assistant',content:a});saveHistory();bubble('ai',a);updateCloud();kaEmo('happy',1300);
+      maybeResumeListen(400);
     }
   }).catch(function(e){
-    var a='Не получилось: '+(e&&e.message||'Ошибка');history.push({role:'assistant',content:a});saveHistory();bubble('ai',a);status('Ошибка');setTimeout(startListen,800);
+    var msg=(e&&e.message)?String(e.message):'ошибка сети';
+    var a=/ключ|401/i.test(msg)?'Нужен ключ Groq в настройках.':
+      /429|много запросов/i.test(msg)?'Слишком много запросов. Подожди полминуты.':
+      /Таймаут|abort/i.test(msg)?'ИИ не ответил вовремя. Попробуй ещё раз.':
+      /сети|fetch/i.test(msg)?'Нет сети. Проверь интернет.':
+      ('Финна: '+msg);
+    history.push({role:'assistant',content:a});saveHistory();bubble('ai',a);status('Готов');kaEmo('angry',1800);
   });
 }
 function renderAction(summary,actions){
@@ -133,7 +229,7 @@ function renderAction(summary,actions){
   ok.textContent=actions.some(function(a){return /^delete_/.test(a.type);})?'Удалить':'Подтвердить';ok.onclick=confirmPending;
   var no=document.createElement('button');no.className='ka-act';no.textContent='Отмена';no.onclick=cancelPending;
   row.appendChild(ok);row.appendChild(no);box.appendChild(row);d.appendChild(box);c.appendChild(d);c.scrollTop=c.scrollHeight;
-  status('Скажи «да» или «нет»');setTimeout(startListen,500);
+  status('Скажи «да» или «нет»');window.__finConfirmListen=true;setTimeout(function(){if(pending)startListen();},400);
 }
 function describe(a){
   var t=a&&a.type;if(!t)return 'Неизвестное действие';
@@ -160,7 +256,7 @@ function describe(a){
   return t;
 }
 function clone(){return JSON.parse(JSON.stringify(window.STATE||{}));}
-function save(s){if(typeof window.setAppState!=='function')throw Error('Копейка ещё не готова');window.setAppState(s);}
+function save(s){if(typeof window.setAppState!=='function')throw Error('Финна ещё не готова');window.setAppState(s);}
 function stem(s){var q=norm(s);return q.replace(/(иями|ами|ями|ого|ему|ому|ыми|ими|ее|ие|ые|ое|ей|ий|ый|ой|ем|ом|ам|ям|ах|ях|ою|ею|у|ю|а|я|ы|и|е|о)$/,'');}
 function find(list,name,amount){
   var q=norm(name||''),st=stem(q),e;
@@ -177,13 +273,13 @@ function execute(a){
   if(!a||!a.type)throw Error('Пустое действие');
   var s=clone(),t=a.type,amt=n(a.amount),d,idx,r,o,cat=classify(a.name,a.category||'Прочее');
   s.expenses=s.expenses||[];s.income=s.income||[];s.debts=s.debts||[];s.reserves=s.reserves||[];s.reserveOps=s.reserveOps||[];s.obligations=s.obligations||[];s.obligationPays=s.obligationPays||[];
-  if(t==='add_expense'){if(amt<=0)throw Error('Сумма расхода > 0');s.expenses.push({id:id(),amount:amt,category:cat,note:canonicalName(a.name||cat),date:dateOf(a)});}
-  else if(t==='add_income'){if(amt<=0)throw Error('Сумма дохода > 0');s.income.push({id:id(),amount:amt,note:String(a.name||'Доход'),date:dateOf(a)});}
-  else if(t==='add_debt'){if(amt<=0)throw Error('Сумма долга > 0');s.debts.push({id:id(),name:String(a.name||'Долг'),total:amt,paid:0});}
+  if(t==='add_expense'){if(amt<=0)throw Error('Сумма расхода > 0');var _nid=id();s.expenses.push({id:_nid,amount:amt,category:cat,note:canonicalName(a.name||cat),date:dateOf(a)});s.lastOp={kind:'expense',id:_nid};}
+  else if(t==='add_income'){if(amt<=0)throw Error('Сумма дохода > 0');var _iid=id();s.income.push({id:_iid,amount:amt,note:String(a.name||'Доход'),date:dateOf(a)});s.lastOp={kind:'income',id:_iid};}
+  else if(t==='add_debt'){if(amt<=0)throw Error('Сумма долга > 0');var _did=id();s.debts.push({id:_did,name:String(a.name||'Долг'),total:amt,paid:0});s.lastOp={kind:'debt',id:_did};}
   else if(t==='pay_debt'||t==='increase_debt'){
     d=find(s.debts,a.name,0);if(!d)throw Error('Долг не найден: '+(a.name||''));if(amt<=0)throw Error('Сумма > 0');
     if(t==='increase_debt')d.total=n(d.total)+amt;
-    else{var left=Math.max(0,n(d.total)-n(d.paid));if(amt>left)throw Error('Осталось '+fmt(left));d.paid=n(d.paid)+amt;s.expenses.push({id:id(),amount:amt,category:'Долг',note:d.name,date:dateOf(a)});}
+    else{var left=Math.max(0,n(d.total)-n(d.paid));if(amt>left)throw Error('Осталось '+fmt(left));d.paid=n(d.paid)+amt;var _pid=id();s.expenses.push({id:_pid,amount:amt,category:'Долг',note:d.name,date:dateOf(a),debtId:d.id});s.lastOp={kind:'expense',id:_pid};}
   }
   else if(t==='reserve_deposit'||t==='reserve_withdraw'){
     r=find(s.reserves,a.reserve||a.name,0);if(!r)throw Error('Резерв не найден');if(amt<=0)throw Error('Сумма > 0');
@@ -197,7 +293,33 @@ function execute(a){
   else if(t==='delete_obligation'){o=find(s.obligations,a.name,a.amount);if(!o)throw Error('Обязательный не найден');s.obligations=s.obligations.filter(function(x){return x.id!==o.id;});s.obligationPays=s.obligationPays.filter(function(x){return x.obligId!==o.id;});}
   else if(t==='delete_expense'){var q=norm(a.name||'');idx=-1;for(var i=s.expenses.length-1;i>=0;i--){if(!q||norm(s.expenses[i].note||s.expenses[i].category).indexOf(q)!==-1){idx=i;break;}}if(idx<0)throw Error('Расход не найден');s.expenses.splice(idx,1);}
   else if(t==='delete_income'){var qi=norm(a.name||'');idx=-1;for(var j=s.income.length-1;j>=0;j--){if(!qi||norm(s.income[j].note).indexOf(qi)!==-1){idx=j;break;}}if(idx<0)throw Error('Доход не найден');s.income.splice(idx,1);}
-  else if(t==='delete_last'){var target=a.target||'any',lastE=s.expenses[s.expenses.length-1],lastI=s.income[s.income.length-1];if(target==='expense'&&lastE)s.expenses.pop();else if(target==='income'&&lastI)s.income.pop();else if(lastE||lastI){var de=lastE&&lastE.date||'',di=lastI&&lastI.date||'';if(!lastI||de>=di)s.expenses.pop();else s.income.pop();}else throw Error('Нечего удалять');}
+  else if(t==='delete_last'){
+    var removed=false, last=s.lastOp||null;
+    function newest(arr){if(!arr||!arr.length)return null;var best=null;for(var i=0;i<arr.length;i++){var x=arr[i];if(!x)continue;if(!best){best=x;continue;}var xd=String(x.date||''),bd=String(best.date||'');if(xd>bd||(xd===bd&&String(x.id||'')>String(best.id||'')))best=x;}return best;}
+    if(last&&last.id&&last.kind){
+      if(last.kind==='expense'){var be=s.expenses.length;s.expenses=s.expenses.filter(function(x){return x.id!==last.id;});removed=s.expenses.length<be;}
+      else if(last.kind==='income'){var bi=s.income.length;s.income=s.income.filter(function(x){return x.id!==last.id;});removed=s.income.length<bi;}
+      else if(last.kind==='debt'){var bd=s.debts.length;s.debts=s.debts.filter(function(x){return x.id!==last.id;});removed=s.debts.length<bd;}
+      else if(last.kind==='reserve'){var br=s.reserves.length;s.reserves=s.reserves.filter(function(x){return x.id!==last.id;});s.reserveOps=(s.reserveOps||[]).filter(function(x){return x.reserveId!==last.id;});removed=s.reserves.length<br;}
+      else if(last.kind==='obligation'){var bo=s.obligations.length;s.obligations=s.obligations.filter(function(x){return x.id!==last.id;});removed=s.obligations.length<bo;}
+      s.lastOp=null;
+    }
+    if(!removed){
+      var target=a.target||'any';
+      var ne=newest(s.expenses),ni=newest(s.income),pick=null,kind=null;
+      if(target==='expense'&&ne){pick=ne;kind='expense';}
+      else if(target==='income'&&ni){pick=ni;kind='income';}
+      else {
+        if(ne&&ni){var nde=String(ne.date||''),ndi=String(ni.date||'');if(nde>ndi||(nde===ndi&&String(ne.id)>String(ni.id))){pick=ne;kind='expense';}else{pick=ni;kind='income';}}
+        else if(ne){pick=ne;kind='expense';}
+        else if(ni){pick=ni;kind='income';}
+      }
+      if(!pick)throw Error('Нечего удалять');
+      if(kind==='expense')s.expenses=s.expenses.filter(function(x){return x.id!==pick.id;});
+      else s.income=s.income.filter(function(x){return x.id!==pick.id;});
+      s.lastOp=null;
+    }
+  }
   else if(t==='change_last'){var target2=a.target||'expense',arr=target2==='income'?s.income:s.expenses;if(!arr.length)throw Error('Нет операции');if(amt<=0)throw Error('Сумма > 0');arr[arr.length-1].amount=amt;if(a.name)arr[arr.length-1].note=String(a.name);}
   else if(t==='set_opening_balance'){s.settings=s.settings||{};s.settings.openingBalance=amt;}
   else if(t==='set_day_rate'){s.settings=s.settings||{};s.settings.dayRate=amt;}
@@ -209,11 +331,11 @@ function execute(a){
 function confirmPending(){
   if(!pending)return;
   var list=pending.filter(function(a){return a&&a.type;});pending=null;
-  if(!list.length){bubble('ai','Нечего выполнять.');status('Скажи «Фин»');setTimeout(startListen,500);return;}
-  try{list.forEach(execute);var t='Готово. Изменения внесены.';history.push({role:'assistant',content:t});saveHistory();bubble('ai',t);updateCloud();status('Готово. Скажи «Фин»');setTimeout(startListen,600);}
-  catch(e){var msg='Не внёс изменения: '+(e.message||e);history.push({role:'assistant',content:msg});saveHistory();bubble('ai',msg);status('Ошибка');setTimeout(startListen,700);}
+  if(!list.length){bubble('ai','Нечего выполнять.');maybeResumeListen(400);return;}
+  try{list.forEach(execute);var t='Готово. Изменения внесены.';history.push({role:'assistant',content:t});saveHistory();bubble('ai',t);updateCloud();kaEmo('happy',1400);maybeResumeListen(500);}
+  catch(e){var msg='Не внёс изменения: '+(e.message||e);history.push({role:'assistant',content:msg});saveHistory();bubble('ai',msg);status('Ошибка');kaEmo('angry',1800);maybeResumeListen(500);}
 }
-function cancelPending(){pending=null;var t='Отменил.';history.push({role:'assistant',content:t});saveHistory();bubble('ai',t);status('Скажи «Фин»');setTimeout(startListen,500);}
+function cancelPending(){pending=null;var t='Отменил.';history.push({role:'assistant',content:t});saveHistory();bubble('ai',t);maybeResumeListen(400);}
 window.kopeykaAssistant={open:open,close:close,startListen:startListen};
 window.kopeykaVoice=window.kopeykaAssistant;
 })();

@@ -1,6 +1,6 @@
 {
-  "versionCode": 20,
-  "versionName": "3.0.0",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v3.0.0/Fin.apk",
-  "notes": "Финн 3.0.0: без спама микрофона (hold-to-talk), подсветка +, новая иконка."
+  "versionCode": 50,
+  "versionName": "3.7.0",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v3.7.0/Fin.apk",
+  "notes": "3.7.0 — долг: возврат в кассу при сбросе paid; выбор модели в шапке; без двойных ₽"
 }

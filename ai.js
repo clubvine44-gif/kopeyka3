@@ -1,7 +1,37 @@
 (function(){
 'use strict';
-var GROQ_KEY='kopeyka_groq_key',GROQ_URL='https://api.groq.com/openai/v1/chat/completions',MODEL='openai/gpt-oss-20b';var MODELS=['openai/gpt-oss-20b','openai/gpt-oss-120b','qwen/qwen3.6-27b'];
+var GROQ_KEY='kopeyka_groq_key',GROQ_URL='https://api.groq.com/openai/v1/chat/completions',MODEL_KEY='finna_groq_model';
+var MODEL_CATALOG=[
+  {id:'openai/gpt-oss-20b', title:'Быстрая', sub:'GPT-OSS 20B · мгновенные ответы'},
+  {id:'llama-3.1-8b-instant', title:'Молния', sub:'Llama 3.1 8B · самая быстрая'},
+  {id:'openai/gpt-oss-120b', title:'Умная', sub:'GPT-OSS 120B · глубже думает'},
+  {id:'llama-3.3-70b-versatile', title:'Универсал', sub:'Llama 3.3 70B · баланс качества'},
+  {id:'qwen/qwen3-32b', title:'Альтернатива', sub:'Qwen 3 32B · другой стиль'}
+];
+var MODELS=MODEL_CATALOG.map(function(m){return m.id;});
+var MODEL='openai/gpt-oss-20b';
 var _aiLastCall=0,_aiBackoffUntil=0,_aiMinGap=900,_aiInflight=null,_aiModelIdx=0;
+function getModel(){
+  try{
+    var saved=(localStorage.getItem(MODEL_KEY)||'').trim();
+    if(saved&&MODELS.indexOf(saved)>=0)return saved;
+  }catch(e){}
+  return MODEL;
+}
+function setModel(id){
+  id=String(id||'').trim();
+  if(MODELS.indexOf(id)<0)id=MODEL;
+  try{localStorage.setItem(MODEL_KEY,id);}catch(e){}
+  _aiModelIdx=Math.max(0,MODELS.indexOf(id));
+  try{if(typeof window.__finnaModelChanged==='function')window.__finnaModelChanged(id);}catch(e){}
+  return id;
+}
+function modelMeta(id){
+  id=id||getModel();
+  for(var i=0;i<MODEL_CATALOG.length;i++)if(MODEL_CATALOG[i].id===id)return MODEL_CATALOG[i];
+  return MODEL_CATALOG[0];
+}
+function listModels(){return MODEL_CATALOG.slice();}
 function getKey(){try{var k=(localStorage.getItem(GROQ_KEY)||'').trim();if(k)return k;}catch(e){}return (function(){try{return atob(['Z3NrX3N0','VVZMNHJF','VFJFQk56','OGs3ZWV2','V0dkeWIz','RllIeUMx','ZHJUbk1j','ZWU3TzBC','eHk4N0E3','M08='].join(''));}catch(e){return '';}})();}
 function setKey(key){try{key=String(key||'').trim();if(key)localStorage.setItem(GROQ_KEY,key);else localStorage.removeItem(GROQ_KEY);}catch(e){}}
 function hasKey(){return !!getKey();}
@@ -204,14 +234,20 @@ function askConversation(history,userText){
     messages.push({role:'user',content:String(userText||'')});
     var controller=typeof AbortController!=='undefined'?new AbortController():null;
     var timer=setTimeout(function(){try{if(controller)controller.abort();}catch(e){}reject(new Error('Groq не ответил за 20 секунд'));},20000);
-    fetch(GROQ_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model:(MODELS[_aiModelIdx%MODELS.length]||MODEL),temperature:0.25,max_completion_tokens:600,messages:messages}),signal:controller?controller.signal:undefined}).then(function(response){
+    fetch(GROQ_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model:getModel(),temperature:0.25,max_completion_tokens:600,messages:messages}),signal:controller?controller.signal:undefined}).then(function(response){
       return response.text().then(function(body){
         clearTimeout(timer);
         var data;try{data=JSON.parse(body);}catch(e){throw new Error('Groq вернул некорректный ответ ('+response.status+')');}
         if(!response.ok){
           var message=data&&data.error&&data.error.message?data.error.message:('HTTP '+response.status);
           if(response.status===401)message='Неверный ключ Groq';
-          if(response.status===429){_aiModelIdx++;_aiBackoffUntil=Date.now()+12000;message='ИИ перегружен. Подожди 10–15 сек и повтори.';}
+          if(response.status===429){
+            var cur=getModel(), idx=MODELS.indexOf(cur);
+            var next=MODELS[(idx+1)%MODELS.length];
+            if(next&&next!==cur){setModel(next);}
+            _aiBackoffUntil=Date.now()+12000;
+            message='ИИ перегружен. Подожди 10–15 сек'+(next&&next!==cur?' · переключил модель':'')+'.';
+          }
           throw new Error(message);
         }
         var content=data&&data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content;
@@ -231,5 +267,5 @@ function askConversation(history,userText){
 function askAgent(text){return askConversation([],text);}
 function ask(text){return askAgent(text).then(function(result){return result.mode==='answer'?(result.text||''):(result.summary||result.text||'');});}
 function testKey(){return askAgent('Ответь одним словом: готово').then(function(){return 'Ключ работает ✓';});}
-window.kopeykaAI={getKey:getKey,setKey:setKey,hasKey:hasKey,ask:ask,askAgent:askAgent,askConversation:askConversation,testKey:testKey,buildContext:getContext,isCoolingDown:function(){return Date.now()<_aiBackoffUntil;}};
+window.kopeykaAI={getKey:getKey,setKey:setKey,hasKey:hasKey,getModel:getModel,setModel:setModel,listModels:listModels,modelMeta:modelMeta,ask:ask,askAgent:askAgent,askConversation:askConversation,testKey:testKey,buildContext:getContext,isCoolingDown:function(){return Date.now()<_aiBackoffUntil;}};
 })();

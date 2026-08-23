@@ -45,7 +45,43 @@ button,input,select{font:inherit;color:inherit;border:none;outline:none;backgrou
 .top-title{
   flex:1;text-align:center;font-weight:700;font-size:17px;letter-spacing:.02em;
   color:var(--text);opacity:.95;
+  position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-width:0;cursor:pointer;user-select:none;-webkit-user-select:none;
+  padding:2px 8px;border-radius:12px;
 }
+.top-title:active{background:rgba(255,255,255,.06)}
+.top-title .tt-name{display:flex;align-items:center;gap:5px;line-height:1.15}
+.top-title .tt-chev{font-size:10px;opacity:.55;transition:transform .2s}
+.top-title.open .tt-chev{transform:rotate(180deg);opacity:.9}
+.top-title .tt-model{
+  font-size:10px;font-weight:600;letter-spacing:.03em;color:var(--muted);
+  margin-top:1px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.model-menu{
+  position:absolute;top:calc(100% + 8px);left:50%;transform:translateX(-50%);
+  width:min(280px,86vw);z-index:80;
+  background:rgba(14,22,40,.98);border:1px solid rgba(120,180,255,.28);
+  border-radius:16px;padding:8px;box-shadow:0 16px 40px rgba(0,0,0,.5);
+  display:none;text-align:left;
+}
+.top-title.open .model-menu{display:block}
+.model-menu .mm-head{
+  font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);
+  font-weight:700;padding:6px 10px 8px;
+}
+.model-menu .mm-item{
+  width:100%;display:flex;flex-direction:column;align-items:flex-start;gap:2px;
+  padding:11px 12px;border-radius:12px;border:1px solid transparent;
+  background:transparent;color:var(--text);text-align:left;cursor:pointer;
+}
+.model-menu .mm-item:active{background:rgba(255,255,255,.06)}
+.model-menu .mm-item.active{
+  background:rgba(94,200,255,.12);border-color:rgba(94,200,255,.35);
+}
+.model-menu .mm-item b{font-size:14px;font-weight:700}
+.model-menu .mm-item span{font-size:11px;color:var(--muted);line-height:1.3}
+.model-menu .mm-item.active b{color:var(--accent)}
+
 .finn-avatar{
   width:44px;height:44px;border-radius:50%;
   display:flex;align-items:center;justify-content:center;
@@ -662,7 +698,14 @@ html.fin-tour-scroll .card{content-visibility:visible!important;contain:none!imp
       <div class="finn-tip-tooltip">Нажми, чтобы поговорить с Финной</div>
     </div>
   </div>
-  <div class="top-title">Финна</div>
+  <div class="top-title" id="finTitle" role="button" aria-label="Выбор модели ИИ">
+    <div class="tt-name">Финна <span class="tt-chev">▾</span></div>
+    <div class="tt-model" id="finModelLabel">модель…</div>
+    <div class="model-menu" id="finModelMenu" aria-hidden="true">
+      <div class="mm-head">Модель ИИ</div>
+      <div id="finModelList"></div>
+    </div>
+  </div>
   <div class="top-actions">
     <button class="icon-btn" id="btnCloud" title="Облако">☁</button>
     <button class="icon-btn" id="btnNotif" title="Уведомления" style="display:none">🔔</button>
@@ -691,7 +734,7 @@ html.fin-tour-scroll .card{content-visibility:visible!important;contain:none!imp
     <span>Платежи</span>
   </button>
 </nav>
-<div class="fab-wrap"><div class="radial" id="radial"><button data-act="income"><span class="ic">➕</span> Доход</button><button data-act="expense"><span class="ic">➖</span> Расход</button><button data-act="reserve"><span class="ic">🏦</span> Резерв</button><button data-act="debt"><span class="ic">📉</span> Долг</button><button data-act="oblig"><span class="ic">📅</span> Обязательный</button></div><button class="fab" id="fab" aria-label="Добавить"><span aria-hidden="true">+</span></button></div><div class="modal-bg" id="modalBg"></div><div class="modal-bg" id="dlgLayer"></div><div class="toast" id="toast"></div><script src="finn-char.js?v=2026082316"></script><script src="app.js?v=2026082316"></script><script src="profile.js?v=2026082316"></script><script src="onboard.js?v=2026082316"></script><script src="cloud.js?v=2026082316"></script><script src="products.js?v=2026082316"></script><script src="engine.js?v=2026082316"></script><script src="ai.js?v=2026082316"></script><script src="assistant-v2.js?v=2026082316"></script><script src="voice.js?v=2026082316"></script><script src="finn3d.js?v=2026082316"></script><script src="finn-wake.js?v=2026082316"></script><script>window.__kopeykaBuild='2026082316';window.__FIN_NATIVE=true;</script><script>
+<div class="fab-wrap"><div class="radial" id="radial"><button data-act="income"><span class="ic">➕</span> Доход</button><button data-act="expense"><span class="ic">➖</span> Расход</button><button data-act="reserve"><span class="ic">🏦</span> Резерв</button><button data-act="debt"><span class="ic">📉</span> Долг</button><button data-act="oblig"><span class="ic">📅</span> Обязательный</button></div><button class="fab" id="fab" aria-label="Добавить"><span aria-hidden="true">+</span></button></div><div class="modal-bg" id="modalBg"></div><div class="modal-bg" id="dlgLayer"></div><div class="toast" id="toast"></div><script src="finn-char.js?v=2026082318"></script><script src="app.js?v=2026082318"></script><script src="profile.js?v=2026082318"></script><script src="onboard.js?v=2026082318"></script><script src="cloud.js?v=2026082318"></script><script src="products.js?v=2026082318"></script><script src="engine.js?v=2026082318"></script><script src="ai.js?v=2026082318"></script><script src="assistant-v2.js?v=2026082318"></script><script src="voice.js?v=2026082318"></script><script src="finn3d.js?v=2026082318"></script><script src="finn-wake.js?v=2026082318"></script><script>window.__kopeykaBuild='2026082318';window.__FIN_NATIVE=true;</script><script>
 (function(){
   function tryTestPush(){
     try{
@@ -782,4 +825,96 @@ html.fin-tour-scroll .card{content-visibility:visible!important;contain:none!imp
   }, {passive:false});
 })();
 </script>
+
+<script>
+(function(){
+  function meta(id){
+    try{if(window.kopeykaAI&&window.kopeykaAI.modelMeta)return window.kopeykaAI.modelMeta(id);}catch(e){}
+    return {id:id||'',title:'Модель',sub:''};
+  }
+  function current(){
+    try{if(window.kopeykaAI&&window.kopeykaAI.getModel)return window.kopeykaAI.getModel();}catch(e){}
+    try{return localStorage.getItem('finna_groq_model')||'openai/gpt-oss-20b';}catch(e){return 'openai/gpt-oss-20b';}
+  }
+  function label(){
+    var el=document.getElementById('finModelLabel');
+    if(!el)return;
+    var m=meta(current());
+    el.textContent=m.title||'Модель';
+  }
+  function closeMenu(){
+    var t=document.getElementById('finTitle');
+    if(t)t.classList.remove('open');
+    var m=document.getElementById('finModelMenu');
+    if(m)m.setAttribute('aria-hidden','true');
+  }
+  function renderList(){
+    var box=document.getElementById('finModelList');
+    if(!box)return;
+    var list=[];
+    try{if(window.kopeykaAI&&window.kopeykaAI.listModels)list=window.kopeykaAI.listModels();}catch(e){}
+    if(!list||!list.length){
+      list=[
+        {id:'openai/gpt-oss-20b',title:'Быстрая',sub:'GPT-OSS 20B · мгновенные ответы'},
+        {id:'llama-3.1-8b-instant',title:'Молния',sub:'Llama 3.1 8B · самая быстрая'},
+        {id:'openai/gpt-oss-120b',title:'Умная',sub:'GPT-OSS 120B · глубже думает'},
+        {id:'llama-3.3-70b-versatile',title:'Универсал',sub:'Llama 3.3 70B · баланс качества'},
+        {id:'qwen/qwen3-32b',title:'Альтернатива',sub:'Qwen 3 32B · другой стиль'}
+      ];
+    }
+    var cur=current();
+    box.innerHTML='';
+    list.forEach(function(m){
+      var b=document.createElement('button');
+      b.type='button';
+      b.className='mm-item'+(m.id===cur?' active':'');
+      b.innerHTML='<b>'+m.title+'</b><span>'+m.sub+'</span>';
+      b.onclick=function(e){
+        e.preventDefault();e.stopPropagation();
+        try{if(window.kopeykaAI&&window.kopeykaAI.setModel)window.kopeykaAI.setModel(m.id);
+        else localStorage.setItem('finna_groq_model',m.id);}catch(x){}
+        label();
+        closeMenu();
+        try{if(window.toast)window.toast('Модель: '+m.title);}catch(x){}
+      };
+      box.appendChild(b);
+    });
+  }
+  function toggle(e){
+    if(e){e.preventDefault();e.stopPropagation();}
+    var t=document.getElementById('finTitle');
+    if(!t)return;
+    var open=t.classList.contains('open');
+    if(open){closeMenu();return;}
+    renderList();
+    t.classList.add('open');
+    var m=document.getElementById('finModelMenu');
+    if(m)m.setAttribute('aria-hidden','false');
+  }
+  function boot(){
+    label();
+    var t=document.getElementById('finTitle');
+    if(t&&!t._bound){
+      t._bound=true;
+      t.addEventListener('click',function(e){
+        if(e.target.closest&&e.target.closest('.model-menu'))return;
+        toggle(e);
+      });
+    }
+    document.addEventListener('click',function(e){
+      var t=document.getElementById('finTitle');
+      if(!t||!t.classList.contains('open'))return;
+      if(t.contains(e.target))return;
+      closeMenu();
+    });
+    window.__finnaModelChanged=function(){label();};
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){setTimeout(boot,80);});
+  else setTimeout(boot,80);
+  // ai.js may load a bit later
+  setTimeout(label,400);
+  setTimeout(label,1200);
+})();
+</script>
+
 </body></html>

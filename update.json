@@ -1,6 +1,6 @@
 {
-  "versionCode": 49,
-  "versionName": "3.6.9",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v3.6.9/Fin.apk",
-  "notes": "3.6.9 — обновление Финна (versionCode 49)"
+  "versionCode": 50,
+  "versionName": "3.7.0",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v3.7.0/Fin.apk",
+  "notes": "3.7.0 — долг: возврат в кассу при сбросе paid; выбор модели в шапке; без двойных ₽"
 }

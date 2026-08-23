@@ -16,7 +16,12 @@ window.addEventListener('popstate',function(){currentView='home';render();});
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
 function today(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function fmt(n){n=Math.round(+n||0);return(n<0?'−':'')+Math.abs(n).toLocaleString('ru-RU')+' ₽';}
-function num(v){var n=Number(v);return(!isFinite(n)||n!==n)?0:Math.round(n);}
+function num(v){
+  if(typeof v==='number')return isFinite(v)?Math.round(v):0;
+  var s=String(v==null?'':v).trim().replace(/\s/g,'').replace(',','.');
+  var n=Number(s);
+  return(!isFinite(n)||n!==n)?0:Math.round(n);
+}
 function sane(v){return num(v);}
 function esc(s){return String(s==null?'':s).replace(/&/g,'&'+'amp;').replace(/</g,'&'+'lt;').replace(/>/g,'&'+'gt;').replace(/\"/g,'&'+'quot;').replace(/'/g,'&#39;');}
 function pd(s){var p=String(s||'').split('-').map(Number);return new Date(p[0],(p[1]||1)-1,p[2]||1);}
@@ -49,34 +54,54 @@ function load(){try{var r=localStorage.getItem(KEY);return r?norm(JSON.parse(r))
 var STATE=load();
 function pushUndo(){try{undoStack.push(JSON.stringify(STATE));if(undoStack.length>UNDO_MAX)undoStack.shift();}catch(e){}}
 function trackLastOp(kind,id){try{STATE.lastOp={kind:kind,id:id,at:Date.now()};}catch(e){}}
-function syncDebtPaid(d, newPaid){
+function debtExpenseLinked(e, d, nameHint){
+  if(!e||!d)return false;
+  if(e.debtId&&e.debtId===d.id)return true;
+  if(e.category!=='Долг')return false;
+  var note=String(e.note||'').toLowerCase().replace(/ё/g,'е').trim();
+  var nm=String(nameHint||d.name||'').toLowerCase().replace(/ё/g,'е').trim();
+  if(!note||!nm)return false;
+  return note===nm||note.indexOf(nm)>=0||nm.indexOf(note)>=0;
+}
+/** Сводит кассу и расходы к newPaid.
+ *  Уменьшение paid → касса растёт (снимаем расходы или добавляем доход-возврат).
+ *  Увеличение paid → касса падает (добавляем расход). */
+function syncDebtPaid(d, newPaid, nameHint){
   if(!d)return;
   newPaid=num(newPaid);
   if(newPaid<0)newPaid=0;
   var tot=num(d.total);
   if(newPaid>tot)newPaid=tot;
   var oldPaid=num(d.paid);
-  var delta=newPaid-oldPaid;
   d.paid=newPaid;
-  if(!delta)return;
+  var cashDelta=newPaid-oldPaid; // >0 нужно списать с кассы, <0 вернуть в кассу
+  if(!cashDelta)return;
   if(!STATE.expenses)STATE.expenses=[];
-  if(delta>0){
+  if(!STATE.income)STATE.income=[];
+  var matchName=nameHint!=null?nameHint:d.name;
+  if(cashDelta>0){
     var opId=uid();
-    STATE.expenses.push({id:opId,amount:delta,category:'Долг',note:d.name,date:today(),debtId:d.id});
+    STATE.expenses.push({id:opId,amount:cashDelta,category:'Долг',note:d.name,date:today(),debtId:d.id});
     trackLastOp('expense',opId);
-  } else {
-    var need=-delta;
-    var drop={};
-    for(var i=STATE.expenses.length-1;i>=0 && need>0;i--){
-      var e=STATE.expenses[i];
-      if(!e)continue;
-      var linked=(e.debtId&&e.debtId===d.id)||(e.category==='Долг'&&String(e.note||'')===String(d.name));
-      if(!linked)continue;
-      var a=num(e.amount);
-      if(a<=need){drop[e.id]=1;need-=a;}
-      else{e.amount=a-need;need=0;}
-    }
-    if(Object.keys(drop).length)STATE.expenses=STATE.expenses.filter(function(x){return !drop[x.id];});
+    return;
+  }
+  // Возврат в кассу: сначала пытаемся убрать связанные расходы, остаток — доходом
+  var need=-cashDelta;
+  var drop={};
+  for(var i=STATE.expenses.length-1;i>=0&&need>0;i--){
+    var e=STATE.expenses[i];
+    if(!debtExpenseLinked(e,d,matchName))continue;
+    var a=num(e.amount);
+    if(a<=0)continue;
+    if(a<=need){drop[e.id]=1;need-=a;}
+    else{e.amount=a-need;need=0;}
+  }
+  if(Object.keys(drop).length)STATE.expenses=STATE.expenses.filter(function(x){return !drop[x.id];});
+  // Всегда возвращаем остаток доходом — даже если расходов не нашли
+  if(need>0){
+    var iid=uid();
+    STATE.income.push({id:iid,amount:need,note:'Возврат по долгу «'+d.name+'»',date:today(),debtId:d.id,fromDebtAdjust:true});
+    trackLastOp('income',iid);
   }
 }
 
@@ -755,9 +780,9 @@ if(c.available <= 0){
 // Блок «Обрати внимание»
 var attention = [];
 if(nearestObl.length && nearestObl[0].overdue){
-  attention.push('Платёж «'+nearestObl[0].name+'» просрочен на '+Math.abs(nearestObl[0].daysUntil)+' дн. Осталось '+fmt(nearestObl[0].amount)+' ₽.');
+  attention.push('Платёж «'+nearestObl[0].name+'» просрочен на '+Math.abs(nearestObl[0].daysUntil)+' дн. Осталось '+fmt(nearestObl[0].amount)+'.');
 }else if(nearestObl.length && nearestObl[0].daysUntil <= 3){
-  attention.push('До платежа «'+nearestObl[0].name+'» осталось '+nearestObl[0].daysUntil+' дн. Нужно '+fmt(nearestObl[0].amount)+' ₽.');
+  attention.push('До платежа «'+nearestObl[0].name+'» осталось '+nearestObl[0].daysUntil+' дн. Нужно '+fmt(nearestObl[0].amount)+'.');
 }
 if(c.available > 0 && pacePerDay > c.daily * 1.2 && daysPassed > 3){
   attention.push('Текущий темп расходов выше безопасного на '+Math.round((pacePerDay/c.daily-1)*100)+'%.');
@@ -803,7 +828,7 @@ homeHtml += '</div>';
 
 // ===== 5. Лимит на сегодня =====
 homeHtml += '<div class="card tight limit-card" id="limitCard">';
-homeHtml += '<div class="limit-head"><span>Лимит на сегодня</span><b class="limit-val">'+fmt(c.daily)+' ₽</b></div>';
+homeHtml += '<div class="limit-head"><span>Лимит на сегодня</span><b class="limit-val">'+fmt(c.daily)+'</b></div>';
 homeHtml += '<div class="limit-sub">До конца месяца '+c.daysLeft+' дн.</div>';
 var limitPct = c.daily>0 ? Math.min(100, Math.round( (spentToday||0)/c.daily *100 )) : 0;
 homeHtml += '<div class="limit-bar"><div class="limit-fill" style="width:'+limitPct+'%"></div></div>';
@@ -874,7 +899,7 @@ var resTargetTotal = 0;
 var resPct = resTargetTotal>0 ? Math.min(100,Math.round(c.reservesTotal/resTargetTotal*100)) : 0;
 homeHtml += '<div class="card tight">';
 homeHtml += '<div class="sec-title-sm">РЕЗЕРВЫ</div>';
-homeHtml += '<div class="res-total">'+fmt(c.reservesTotal)+(resTargetTotal?' / '+fmt(resTargetTotal):'')+' ₽</div>';
+homeHtml += '<div class="res-total">'+fmt(c.reservesTotal)+(resTargetTotal?' / '+fmt(resTargetTotal):'')+'</div>';
 homeHtml += '<div class="limit-bar"><div class="limit-fill" style="width:'+resPct+'%;background:var(--green)"></div></div>';
 var topRes = (STATE.reserves||[]).slice().sort(function(a,b){return num(b.saved)-num(a.saved);}).slice(0,2);
 topRes.forEach(function(r){
@@ -987,7 +1012,7 @@ if(t.id==='limitCard'||t.closest('#limitCard')){
   var mode=t.dataset.mode;
   if(mode==='auto'){if(STATE.settings){STATE.settings.manualDailyLimit=null;}save(true);render();toast('Автоматический лимит');return;}
 if(mode==='manual'){var cur=compute().daily;appPrompt('Лимит на день (₽)',String(cur),'Ручной лимит').then(function(v){if(v===null)return;if(!STATE.settings)STATE.settings={};STATE.settings.manualDailyLimit=num(v);save(true);render();toast('Ручной лимит: '+fmt(num(v)));});return;}
-  var cc2=compute();var det2='Доступно сейчас — '+fmt(cc2.available)+'\nОбязательства — '+fmt((cc2.obligDue||0)+(cc2.debtLeft||0))+'\nОсталось дней — '+cc2.daysLeft+'\nРекомендуемый лимит — '+fmt(cc2.daily)+' ₽/день';
+  var cc2=compute();var det2='Доступно сейчас — '+fmt(cc2.available)+'\nОбязательства — '+fmt((cc2.obligDue||0)+(cc2.debtLeft||0))+'\nОсталось дней — '+cc2.daysLeft+'\nРекомендуемый лимит — '+fmt(cc2.daily)+'/день';
   appAlert(det2,'Лимит на сегодня');
   return;
 }
@@ -1055,7 +1080,18 @@ if(k==='debt'){var d=STATE.debts.find(function(i){return i.id===id;});if(!d)retu
       var tot=num(v.total), pd=num(v.paid);
       if(tot<=0)return toast('Сумма долга должна быть больше 0');
       if(pd<0)pd=0;if(pd>tot)pd=tot;
-      pushUndo();d.name=name;d.total=tot;syncDebtPaid(d,pd);save(true);render();toast('Долг обновлён');
+      pushUndo();
+      var oldName=d.name;
+      // Сначала синхронизируем погашение со СТАРЫМ именем (чтобы найти расходы)
+      d.total=tot;
+      syncDebtPaid(d,pd,oldName);
+      d.name=name;
+      // Обновим подписи связанных расходов
+      (STATE.expenses||[]).forEach(function(e){
+        if(e&&e.debtId===d.id)e.note=name;
+        else if(e&&e.category==='Долг'&&String(e.note||'')===String(oldName))e.note=name;
+      });
+      save(true);render();toast('Долг обновлён');
     });
   } else {
     appPrompt('Сумма платежа','0','Платёж по долгу').then(function(av){
