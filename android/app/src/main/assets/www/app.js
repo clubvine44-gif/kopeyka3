@@ -1017,7 +1017,7 @@ if(mode==='manual'){var cur=compute().daily;appPrompt('Лимит на день 
   return;
 }
 if(t.id==='finnTipCard'){
-  openAssistant();
+  openAssistant({from:'avatar',fromEl:document.getElementById('finnAvatar')});
   return;
 }
 if(t.id==='btnFullCal'){
@@ -1183,7 +1183,7 @@ function bindFabHold(){
       fab.classList.remove('holding');
       if(radial){radial.classList.remove('show');fab.classList.remove('open');}
       try{if(navigator.vibrate)navigator.vibrate(30);}catch(x){}
-      try{openAssistant();}catch(x){console.error(x);}
+      try{openAssistant({from:'fab',fromEl:fab});}catch(x){console.error(x);}
     },420);
   }
   function onMove(e){
@@ -1219,7 +1219,7 @@ function setup(){
   var av=document.getElementById('finnAvatar');
   if(av&&!av._bound){
     av._bound=true;
-    av.addEventListener('click',function(){openAssistant();});
+    av.addEventListener('click',function(){openAssistant({from:'avatar',fromEl:av});});
   }
   var bs=document.getElementById('btnSettings');
   if(bs)bs.onclick=function(){showSettings();};
