@@ -367,10 +367,16 @@ public class MainActivity extends AppCompatActivity {
 
     private void installApk(File apk) {
         try {
+            // Не спамим диалогом сразу после попытки установки
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                    .putInt(KEY_SKIP_CODE, 999999)
+                    .putLong(KEY_SKIP_UNTIL, System.currentTimeMillis() + 30L * 60L * 1000L)
+                    .apply();
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !getPackageManager().canRequestPackageInstalls()) {
                 startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                         Uri.parse("package:" + getPackageName())));
-                Toast.makeText(this, "Разреши установку из этого источника и снова нажми «Установить».", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "Разреши установку из этого источника, вернись в Финн и снова нажми «Установить».", Toast.LENGTH_LONG).show();
                 return;
             }
             Uri apkUri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", apk);
@@ -378,6 +384,7 @@ public class MainActivity extends AppCompatActivity {
             install.setDataAndType(apkUri, "application/vnd.android.package-archive");
             install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(install);
+            Toast.makeText(this, "В установщике нажми «Установить». Если ошибки — удали старое приложение и поставь APK заново (сначала «Сохранить копию» в настройках).", Toast.LENGTH_LONG).show();
         } catch (Exception e) {
             Toast.makeText(this, "Не удалось открыть установщик: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }

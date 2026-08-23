@@ -133,11 +133,13 @@ jobs:
           python3 - <<'PY'
           import json, os
           from pathlib import Path
+          vn = os.environ['RELEASE_VERSION_NAME']
+          vc = int(os.environ['RELEASE_VERSION_CODE'])
           data = {
-            'versionCode': int(os.environ['RELEASE_VERSION_CODE']),
-            'versionName': os.environ['RELEASE_VERSION_NAME'],
-            'apkUrl': 'https://github.com/clubvine44-gif/kopeyka3/releases/latest/download/Fin.apk',
-            'notes': '3.4.3 — фикс скролла без pull-to-refresh, моргание Финна, новое приветственное обучение'
+            'versionCode': vc,
+            'versionName': vn,
+            'apkUrl': f'https://github.com/clubvine44-gif/kopeyka3/releases/download/v{vn}/Fin.apk',
+            'notes': f'{vn} — обновление Финна (versionCode {vc})'
           }
           Path('update.json').write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
           PY
