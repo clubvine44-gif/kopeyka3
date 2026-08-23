@@ -2,6 +2,7 @@ package app.fin.kopeyka;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -48,6 +49,7 @@ public class MainActivity extends AppCompatActivity {
     private static final int REQ_MIC = 1001;
     private static final int REQ_FILE_CHOOSER = 2002;
     private static final String UPDATE_URL = "https://raw.githubusercontent.com/clubvine44-gif/kopeyka3/main/update.json";
+    private static final String RELEASES_PAGE_URL = "https://github.com/clubvine44-gif/kopeyka3/releases/latest";
     private static final String PREFS = "fin_update";
     private static final String KEY_SKIP_CODE = "skip_code";
     private static final String KEY_SKIP_UNTIL = "skip_until";
@@ -453,8 +455,23 @@ public class MainActivity extends AppCompatActivity {
             Intent install = new Intent(Intent.ACTION_VIEW);
             install.setDataAndType(apkUri, "application/vnd.android.package-archive");
             install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(install);
-            Toast.makeText(this, "В установщике нажми «Установить». Если ошибки — удали старое приложение и поставь APK заново (сначала «Сохранить копию» в настройках).", Toast.LENGTH_LONG).show();
+            try {
+                startActivity(install);
+                Toast.makeText(this, "В установщике нажми «Установить». Если ошибки — удали старое приложение и поставь APK заново (сначала «Сохранить копию» в настройках).", Toast.LENGTH_LONG).show();
+            } catch (ActivityNotFoundException nf) {
+                // Систему не удалось напрямую открыть установщик пакетов (часто из-за
+                // ограничений видимости пакетов на Android 11+). Открываем страницу
+                // релиза в браузере — там открытие/установка apk всегда работает.
+                android.util.Log.e("FinUpdate", "installer intent not resolved: " + nf.getMessage(), nf);
+                try {
+                    Intent openReleases = new Intent(Intent.ACTION_VIEW, Uri.parse(RELEASES_PAGE_URL));
+                    openReleases.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(openReleases);
+                    Toast.makeText(this, "Не нашёл установщик пакетов на устройстве. Открыл страницу релиза в браузере — скачай APK там и открой файл.", Toast.LENGTH_LONG).show();
+                } catch (Exception e2) {
+                    Toast.makeText(this, "Не удалось открыть установщик. Скачай APK вручную: " + RELEASES_PAGE_URL, Toast.LENGTH_LONG).show();
+                }
+            }
         } catch (Exception e) {
             Toast.makeText(this, "Не удалось открыть установщик: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
