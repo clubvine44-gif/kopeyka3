@@ -71,7 +71,7 @@ function closeModal(){var bg=document.getElementById('modalBg');if(!bg)return;bg
 
 function appAlert(message, title){
   return new Promise(function(resolve){
-    var html='<div class="modal-card"><div class="modal-title">'+(title||'Фин')+'</div><div class="dlg-msg">'+esc(String(message||''))+'</div><div class="dlg-actions"><button type="button" class="btn primary" id="dlgOk">ОК</button></div></div>';
+    var html='<div class="modal-card"><div class="modal-title">'+(title||'Финна')+'</div><div class="dlg-msg">'+esc(String(message||''))+'</div><div class="dlg-actions"><button type="button" class="btn primary" id="dlgOk">ОК</button></div></div>';
     openModal(html,function(){
       var ok=document.getElementById('dlgOk');
       function done(){closeModal();resolve();}
@@ -261,8 +261,9 @@ function showSettings(){
     '<div class="set-group"><div class="set-group-title">Деньги</div>'+
       '<button type="button" class="set-row" id="setOpen"><div class="set-main"><b>Начальный остаток</b><span>Сумма, с которой ведётся касса</span></div><span class="set-val">'+fmt(STATE.settings.openingBalance)+'</span></button>'+
       '<button type="button" class="set-row" id="setCashNow"><div class="set-main"><b>Подстроить кассу</b><span>Если фактическая сумма другая</span></div><span class="set-val">'+fmt(cash)+'</span></button>'+
-      '<button type="button" class="set-row" id="setDay"><div class="set-main"><b>Оплата за день</b><span>Ставка дневной смены</span></div><span class="set-val">'+fmt(STATE.settings.dayRate)+'</span></button>'+
-      '<button type="button" class="set-row" id="setNight"><div class="set-main"><b>Оплата за ночь</b><span>Ставка ночной смены</span></div><span class="set-val">'+fmt(STATE.settings.nightRate)+'</span></button>'+
+      (function(){try{if(window.FinnaProfile&&window.FinnaProfile.showRates&&!window.FinnaProfile.showRates())return '';}catch(e){}
+        return '<button type="button" class="set-row" id="setDay"><div class="set-main"><b>Оплата за день</b><span>Ставка дневной смены</span></div><span class="set-val">'+fmt(STATE.settings.dayRate)+'</span></button>'+
+      '<button type="button" class="set-row" id="setNight"><div class="set-main"><b>Оплата за ночь</b><span>Ставка ночной смены</span></div><span class="set-val">'+fmt(STATE.settings.nightRate)+'</span></button>';})()+
     '</div>'+
     '<div class="set-group"><div class="set-group-title">Ассистент</div>'+
       '<button type="button" class="set-row" id="setAi"><div class="set-main"><b>Голосовой помощник</b><span>Ключ для умных ответов Финна</span></div><span class="set-val" id="setAiStatus">—</span></button>'+
@@ -302,12 +303,14 @@ function showSettings(){
         if(o===null)return;var want=num(o);var month=(STATE.settings&&STATE.settings.month)||today().slice(0,7);var delta=monthOps(month).delta;pushUndo();STATE.settings.openingBalance=want-delta;STATE.settings.month=month;save(true);render();toast('Касса: '+fmt(want));
       });
     };
-    document.getElementById('setDay').onclick=function(){
+    var setDayEl=document.getElementById('setDay');
+    if(setDayEl)setDayEl.onclick=function(){
       appPrompt('Оплата за дневную смену',String(num(STATE.settings.dayRate)),'Дневная ставка').then(function(o){
         if(o===null)return;pushUndo();STATE.settings.dayRate=num(o);save(true);render();toast('День: '+fmt(num(o)));
       });
     };
-    document.getElementById('setNight').onclick=function(){
+    var setNightEl=document.getElementById('setNight');
+    if(setNightEl)setNightEl.onclick=function(){
       appPrompt('Оплата за ночную смену',String(num(STATE.settings.nightRate)),'Ночная ставка').then(function(o){
         if(o===null)return;pushUndo();STATE.settings.nightRate=num(o);save(true);render();toast('Ночь: '+fmt(num(o)));
       });
@@ -544,7 +547,7 @@ homeHtml += '</div>';
 
 // ===== Finn tip (верхняя зона) =====
 homeHtml += '<div class="card finn-tip-card" id="finnTipCard">';
-homeHtml += '<div class="finn-tip-head"><span class="finn-mini">🦊</span> Фин · совет</div>';
+homeHtml += '<div class="finn-tip-head"><span class="finn-mini">🦊</span> Финна · совет</div>';
 homeHtml += '<div class="finn-tip-body" id="finnTipBody">'+esc(finnTip)+'</div>';
 homeHtml += '<div class="finn-tip-hint">Зажми кнопку <b>+</b> внизу справа — откроется Фин</div>';
 if(attention.length){
@@ -635,12 +638,16 @@ for(var wd=0;wd<7;wd++){
   weekHtml += '<div class="wd'+(isTod?' today':'')+' '+ws+'"><span class="wd-d">'+['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][wdt.getDay()]+'</span><span class="wd-s">'+wlab+'</span></div>';
 }
 weekHtml += '</div>';
-homeHtml += '<div class="card tight">';
-homeHtml += '<div class="sec-title-sm">МОИ СМЕНЫ</div>';
-homeHtml += weekHtml;
-homeHtml += '<div class="shift-summary">'+ (shCounts.day||0)+' дневных · '+(shCounts.night||0)+' ночных · '+(shCounts.off||0)+' выходных</div>';
-homeHtml += '<button type="button" class="link-more" id="btnFullCal">Полный календарь →</button>';
-homeHtml += '</div>';
+var showShifts=true;
+try{if(window.FinnaProfile&&typeof window.FinnaProfile.showShifts==='function')showShifts=window.FinnaProfile.showShifts();}catch(e){}
+if(showShifts){
+  homeHtml += '<div class="card tight" id="shiftsCard">';
+  homeHtml += '<div class="sec-title-sm">МОИ СМЕНЫ</div>';
+  homeHtml += weekHtml;
+  homeHtml += '<div class="shift-summary">'+ (shCounts.day||0)+' дневных · '+(shCounts.night||0)+' ночных · '+(shCounts.off||0)+' выходных</div>';
+  homeHtml += '<button type="button" class="link-more" id="btnFullCal">Полный календарь →</button>';
+  homeHtml += '</div>';
+}
 
 
 // month nav + cal (keep existing calendar)
@@ -742,8 +749,8 @@ function openAssistant(opts){
       window.kopeykaVoice.open(opts||{});
       return true;
     }
-    toast('Фин ещё загружается — подожди секунду');
-  }catch(e){console.error(e);toast('Не удалось открыть Фина');}
+    toast('Финна ещё загружается — подожди секунду');
+  }catch(e){console.error(e);toast('Не удалось открыть Финнуну');}
   return false;
 }
 window.openAssistant=openAssistant;

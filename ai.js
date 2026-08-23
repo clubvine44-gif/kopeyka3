@@ -135,7 +135,7 @@ function askConversation(history,userText){
     if(!key){reject(new Error('Нет ключа Groq. Открой настройки Копейки и укажи ключ Groq.'));return;}
     var debtNames=debts().map(function(d){return d.name;}).join(', ')||'нет';
     var system=[
-      'Тебя зовут Фин (не Финн и не Фина). Ты дружелюбный ассистент приложения Копейка.',
+      'Тебя зовут Финна (не Финн и не Фина). Ты дружелюбный ассистент приложения Копейка.',
       'Отвечай только по-русски, коротко и по делу.',
       'Ты можешь отвечать на ЛЮБЫЕ вопросы пользователя: финансы, общие знания, быт, шутки — без отказов «я только про деньги».',
       'Если вопрос не про Копейку — просто ответь как умный помощник в mode answer.',
@@ -145,7 +145,7 @@ function askConversation(history,userText){
       'Бери точные имена из списка долгов/резервов. Никогда не удаляй доход вместо долга.',
       'Формат JSON строго: {"mode":"answer","text":"...","summary":null,"actions":[]} или {"mode":"action","text":null,"summary":"...","actions":[{"type":"..."}]}.',
       'type: add_expense, add_income, add_debt, pay_debt, increase_debt, reserve_deposit, reserve_withdraw, add_obligation, delete_debt, delete_income, delete_expense, delete_reserve, delete_obligation, delete_last, change_last, set_opening_balance, set_day_rate, set_night_rate, change_shift.',
-      'На вопрос «как тебя зовут» отвечай: «Меня зовут Фин».'
+      'На вопрос «как тебя зовут» отвечай: «Меня зовут Финна».'
     ].join('\n');
     var messages=[{role:'system',content:system+'\n\nКОНТЕКСТ:\n'+getContext()}];
     (history||[]).slice(-12).forEach(function(item){messages.push({role:item.role==='assistant'?'assistant':'user',content:String(item.content||'')});});

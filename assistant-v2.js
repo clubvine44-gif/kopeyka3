@@ -17,7 +17,7 @@ function open(opts){
     wrap.id='kopeykaAiDialog';
     wrap.className='ka-bg';
     wrap.style.cssText='position:fixed;inset:0;z-index:10050;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(6,8,12,.62);';
-    wrap.innerHTML='<div class="ka-card"><div class="ka-head"><div class="ka-head-left"><span class="ka-dot"></span><div><div class="ka-title">Фин</div><div class="ka-sub" id="kaCloud">Готов</div></div></div><button class="ka-close" id="kaClose" type="button" aria-label="Закрыть">×</button></div><div class="ka-chat" id="kaChat"></div><div class="ka-status" id="kaStatus">Готов</div><div class="ka-input-row"><input id="kaInput" autocomplete="off" placeholder="Спроси что угодно…"><button id="kaSend" type="button" aria-label="Отправить">➤</button><button class="ka-mic" id="kaOrb" type="button" aria-label="Микрофон"><svg class="ka-mic-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg><span class="ka-lock-hint">↑</span></button></div></div>';
+    wrap.innerHTML='<div class="ka-card"><div class="ka-head"><div class="ka-head-left"><span class="ka-dot"></span><div><div class="ka-title">Финна</div><div class="ka-sub" id="kaCloud">Готов</div></div></div><button class="ka-close" id="kaClose" type="button" aria-label="Закрыть">×</button></div><div class="ka-chat" id="kaChat"></div><div class="ka-status" id="kaStatus">Готов</div><div class="ka-input-row"><input id="kaInput" autocomplete="off" placeholder="Спроси что угодно…"><button id="kaSend" type="button" aria-label="Отправить">➤</button><button class="ka-mic" id="kaOrb" type="button" aria-label="Микрофон"><svg class="ka-mic-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg><span class="ka-lock-hint">↑</span></button></div></div>';
     document.body.appendChild(wrap);
     wrap.addEventListener('click',function(e){if(e.target===wrap)close();});
     var closeBtn=document.getElementById('kaClose');
@@ -34,7 +34,7 @@ function open(opts){
     else setTimeout(function(){
       try{
         var c=document.getElementById('kaChat');
-        if(c&&!history.length) bubble('ai','Привет, меня зовут Фин. Чем помочь?');
+        if(c&&!history.length) bubble('ai','Привет, меня зовут Финна. Чем помочь?');
       }catch(x){}
     },80);
   }catch(err){
@@ -79,11 +79,11 @@ function style(){if(document.getElementById('kaStyle'))return;var s=document.cre
 'background:linear-gradient(135deg,#5EC8FF,#3A8FE8);color:#0A101C;font-weight:900;font-size:15px;flex-shrink:0}';
 document.head.appendChild(s);}
 function bubble(role,text){var c=document.getElementById('kaChat');if(!c)return;var e=document.createElement('div');e.className='ka-msg '+(role==='user'?'ka-user':'ka-ai');e.textContent=text;c.appendChild(e);c.scrollTop=c.scrollHeight;}
-function renderHistory(){var c=document.getElementById('kaChat');if(!c)return;c.innerHTML='';if(!history.length){var e=document.createElement('div');e.className='ka-empty';e.textContent='Скажи «Привет, Финн» — я слушаю. Например: «сколько можно тратить».';c.appendChild(e);return;}history.slice(-40).forEach(function(x){bubble(x.role,x.content);});}
+function renderHistory(){var c=document.getElementById('kaChat');if(!c)return;c.innerHTML='';if(!history.length){var e=document.createElement('div');e.className='ka-empty';e.textContent='Скажи «Привет, Финна» — я слушаю. Например: «сколько можно тратить».';c.appendChild(e);return;}history.slice(-40).forEach(function(x){bubble(x.role,x.content);});}
 function status(t){var e=document.getElementById('kaStatus');if(e)e.textContent=t;}
 function updateCloud(){var e=document.getElementById('kaCloud'),c=window.kopeykaEngine&&window.kopeykaEngine.snapshot?window.kopeykaEngine.snapshot().cloud:null;if(e)e.textContent=c&&c.connected?'Облако подключено':c&&c.online?'Онлайн · локально':'Офлайн';}
 function sendInput(){var i=document.getElementById('kaInput');if(!i)return;var x=i.value.trim();if(x){i.value='';handle(x);}}
-function toggleListen(){if(listening||wantListen){wantListen=false;stopListen();status('Готов. Нажми круг или скажи «Фин»');}else startListen();}
+function toggleListen(){if(listening||wantListen){wantListen=false;stopListen();status('Готов. Нажми круг или скажи «Финна»');}else startListen();}
 function bindHoldMic(btn){if(!btn||btn._hb)return;btn._hb=true;
 var holding=false,locked=false,startY=0;
 function setLocked(v){
@@ -116,29 +116,6 @@ function up(e){
   wantListen=false;
   stopListen();
   status('Готов');
-}
-btn.addEventListener('touchstart',down,{passive:false});
-btn.addEventListener('touchmove',move,{passive:false});
-btn.addEventListener('touchend',up,{passive:false});
-btn.addEventListener('touchcancel',up,{passive:false});
-btn.addEventListener('mousedown',down);
-btn.addEventListener('mousemove',move);
-btn.addEventListener('mouseup',up);
-btn.addEventListener('mouseleave',up);
-}
-
-function move(e){
-  if(!holding||locked)return;
-  var y=(e.touches&&e.touches[0]?e.touches[0].clientY:(e.clientY||startY));
-  if(startY-y>48){moved=true;setLocked(true);btn.classList.remove('holding');holding=false;}
-}
-function up(e){
-  if(e)e.preventDefault();
-  if(btn._holdTimer){clearTimeout(btn._holdTimer);btn._holdTimer=null;}
-  if(locked)return;
-  if(!holding)return;
-  holding=false;btn.classList.remove('holding');
-  if(!moved){stopListen();status('Готов');}
 }
 btn.addEventListener('touchstart',down,{passive:false});
 btn.addEventListener('touchmove',move,{passive:false});
@@ -184,7 +161,7 @@ function createRecognition(){
     }
     if(code==='not-allowed'){wantListen=false;status('Нет доступа к микрофону');return;}
     if(locked||wantListen){setTimeout(createRecognition,400);return;}
-    status('Скажи «Фин» или нажми микрофон');
+    status('Скажи «Финна» или нажми микрофон');
   };
   rec.onend=function(){
     listening=false;
@@ -312,11 +289,11 @@ function execute(a){
 function confirmPending(){
   if(!pending)return;
   var list=pending.filter(function(a){return a&&a.type;});pending=null;
-  if(!list.length){bubble('ai','Нечего выполнять.');status('Скажи «Фин»');setTimeout(startListen,500);return;}
-  try{list.forEach(execute);var t='Готово. Изменения внесены.';history.push({role:'assistant',content:t});saveHistory();bubble('ai',t);updateCloud();status('Готово. Скажи «Фин»');setTimeout(startListen,600);}
+  if(!list.length){bubble('ai','Нечего выполнять.');status('Скажи «Финна»');setTimeout(startListen,500);return;}
+  try{list.forEach(execute);var t='Готово. Изменения внесены.';history.push({role:'assistant',content:t});saveHistory();bubble('ai',t);updateCloud();status('Готово. Скажи «Финна»');setTimeout(startListen,600);}
   catch(e){var msg='Не внёс изменения: '+(e.message||e);history.push({role:'assistant',content:msg});saveHistory();bubble('ai',msg);status('Ошибка');setTimeout(startListen,700);}
 }
-function cancelPending(){pending=null;var t='Отменил.';history.push({role:'assistant',content:t});saveHistory();bubble('ai',t);status('Скажи «Фин»');setTimeout(startListen,500);}
+function cancelPending(){pending=null;var t='Отменил.';history.push({role:'assistant',content:t});saveHistory();bubble('ai',t);status('Скажи «Финна»');setTimeout(startListen,500);}
 window.kopeykaAssistant={open:open,close:close,startListen:startListen};
 window.kopeykaVoice=window.kopeykaAssistant;
 })();

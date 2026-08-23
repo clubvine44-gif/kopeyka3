@@ -1,6 +1,6 @@
 {
-  "versionCode": 39,
-  "versionName": "3.5.9",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v3.5.9/Fin.apk",
-  "notes": "3.5.9 — обновление Финна (versionCode 39)"
+  "versionCode": 40,
+  "versionName": "3.6.0",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v3.6.0/Fin.apk",
+  "notes": "3.6.0 — Финна: фикс запуска ассистента, обучение со скроллом, опрос под сценарий жизни, иконка и имя Финна"
 }
