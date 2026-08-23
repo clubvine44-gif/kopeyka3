@@ -2,5 +2,5 @@
   "versionCode": 32,
   "versionName": "3.5.2",
   "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/latest/download/Fin.apk",
-  "notes": "3.5.2 — фикс пустого главного экрана"
+  "notes": "3.4.3 — фикс скролла без pull-to-refresh, моргание Финна, новое приветственное обучение"
 }
