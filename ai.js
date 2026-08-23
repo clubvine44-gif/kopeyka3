@@ -1,6 +1,6 @@
 (function(){
 'use strict';
-var GROQ_KEY='kopeyka_groq_key',GROQ_URL='https://api.groq.com/openai/v1/chat/completions',MODEL='llama-3.1-8b-instant';var MODELS=['llama-3.3-70b-versatile','llama-3.1-8b-instant','gemma2-9b-it'];
+var GROQ_KEY='kopeyka_groq_key',GROQ_URL='https://api.groq.com/openai/v1/chat/completions',MODEL='openai/gpt-oss-20b';var MODELS=['openai/gpt-oss-20b','openai/gpt-oss-120b','qwen/qwen3.6-27b'];
 function getKey(){try{var k=(localStorage.getItem(GROQ_KEY)||'').trim();if(k)return k;}catch(e){}return (function(){try{return atob(['Z3NrX3N0','VVZMNHJF','VFJFQk56','OGs3ZWV2','V0dkeWIz','RllIeUMx','ZHJUbk1j','ZWU3TzBC','eHk4N0E3','M08='].join(''));}catch(e){return '';}})();}
 function setKey(key){try{key=String(key||'').trim();if(key)localStorage.setItem(GROQ_KEY,key);else localStorage.removeItem(GROQ_KEY);}catch(e){}}
 function hasKey(){return !!getKey();}

@@ -298,45 +298,38 @@ function dayPlanEditor(ds, onDone){
         if(t===null)return;
         var title=(t&&String(t).trim())||(type==='purchase'?'Покупка':(type==='income'?'Доход':'Долг'));
         pushUndo();
-        // Apply to real ledger when day is today or past
-        var apply=ds<=today();
+        // Всегда пишем в реальные операции (расчёт кассы / списки)
+        if(!STATE.expenses) STATE.expenses=[];
+        if(!STATE.income) STATE.income=[];
+        if(!STATE.debts) STATE.debts=[];
+        var opId=uid();
         if(type==='purchase'){
-          if(apply){
-            STATE.expenses=STATE.expenses||[];
-            STATE.expenses.push({id:uid(),amount:amount,category:title,note:title,date:ds});
-          }
+          STATE.expenses.push({id:opId,amount:amount,category:title,note:title,date:ds,fromPlan:true});
         } else if(type==='income'){
-          if(apply){
-            STATE.income=STATE.income||[];
-            STATE.income.push({id:uid(),amount:amount,note:title,date:ds});
-          }
+          STATE.income.push({id:opId,amount:amount,note:title,date:ds,fromPlan:true});
         } else if(type==='debt'){
-          if(apply){
-            // try match debt by name, else create debt and mark paid partially
-            var debts=STATE.debts||[];
-            var found=null;
-            var q=String(title).toLowerCase();
-            for(var di=0;di<debts.length;di++){
-              if(String(debts[di].name||'').toLowerCase().indexOf(q)>=0 || q.indexOf(String(debts[di].name||'').toLowerCase())>=0){found=debts[di];break;}
-            }
-            if(found){
-              found.paid=num(found.paid)+amount;
-              if(found.paid>num(found.total)) found.paid=num(found.total);
-            } else {
-              STATE.debts.push({id:uid(),name:title,total:amount,paid:amount});
-            }
-            // also record as expense for cash flow
-            STATE.expenses=STATE.expenses||[];
-            STATE.expenses.push({id:uid(),amount:amount,category:'Долг',note:'Долг: '+title,date:ds});
+          var debts=STATE.debts;
+          var found=null;
+          var q=String(title).toLowerCase();
+          for(var di=0;di<debts.length;di++){
+            var nm=String(debts[di].name||'').toLowerCase();
+            if(nm && (nm.indexOf(q)>=0 || q.indexOf(nm)>=0)){ found=debts[di]; break; }
           }
+          if(found){
+            found.paid=num(found.paid)+amount;
+            if(found.paid>num(found.total)) found.paid=num(found.total);
+          } else {
+            STATE.debts.push({id:uid(),name:title,total:amount,paid:amount});
+          }
+          STATE.expenses.push({id:opId,amount:amount,category:'Долг',note:title,date:ds,fromPlan:true});
         }
         list=STATE.dayPlans[ds]||[];
-        list.push({id:uid(),type:type,amount:amount,title:title,date:ds,applied:!!apply});
+        list.push({id:uid(),type:type,amount:amount,title:title,date:ds,applied:true,opId:opId});
         STATE.dayPlans[ds]=list;
         save(true);
         if(onDone)onDone();
-        toast(apply?('Учтено в операциях · '+fmt(amount)):('Запланировано на '+ds));
-        if(typeof render==='function')render();
+        toast('В операциях: '+fmt(amount)+' · '+title);
+        try{ if(typeof render==='function') render(); }catch(e){}
       });
     });
   });
