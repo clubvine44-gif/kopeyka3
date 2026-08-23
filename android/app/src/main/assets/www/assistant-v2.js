@@ -153,9 +153,8 @@ function close(){
 }
 
 function style(){
-  if(document.getElementById('kaStyle'))return;
-  var s=document.createElement('style');
-  s.id='kaStyle';
+  var s=document.getElementById('kaStyle');
+  if(!s){s=document.createElement('style');s.id='kaStyle';document.head.appendChild(s);}
   s.textContent=''+
   '.ka-float{position:fixed;inset:0;z-index:10050;pointer-events:none}'+
   '.ka-float.ka-show{pointer-events:auto}'+
@@ -164,26 +163,42 @@ function style(){
   'opacity:0;transition:opacity .4s ease}'+
   '.ka-show .ka-backdrop{opacity:1}'+
   '.ka-hide .ka-backdrop{opacity:0}'+
-  '.ka-stage{position:absolute;z-index:2;display:flex;flex-direction:column;align-items:center;gap:14px;'+
+  '.ka-stage{position:absolute;z-index:2;display:flex;flex-direction:column;align-items:center;gap:22px;'+
   'will-change:transform,left,top,opacity;pointer-events:auto}'+
-  '.ka-row{position:relative;display:flex;align-items:center;justify-content:center;gap:18px}'+
-  '.ka-bubble{position:relative;width:100px;height:100px;border-radius:50%;'+
-  'background:radial-gradient(circle at 35% 30%,rgba(120,210,255,.38),rgba(14,22,40,.92) 55%,rgba(8,12,22,.98));'+
-  'border:1.5px solid rgba(94,200,255,.48);'+
-  'box-shadow:0 14px 44px rgba(0,0,0,.48),0 0 32px rgba(94,200,255,.24),inset 0 0 18px rgba(94,200,255,.1);'+
+  '.ka-row{position:relative;display:flex;align-items:center;justify-content:center;gap:30px}'+
+  '.ka-bubble{position:relative;width:132px;height:132px;border-radius:50%;'+
+  'background:radial-gradient(circle at 35% 30%,rgba(120,210,255,.4),rgba(14,22,40,.92) 55%,rgba(8,12,22,.98));'+
+  'border:1.5px solid rgba(94,200,255,.5);'+
+  'box-shadow:0 16px 48px rgba(0,0,0,.5),0 0 36px rgba(94,200,255,.26),inset 0 0 20px rgba(94,200,255,.12);'+
   'display:flex;align-items:center;justify-content:center;'+
-  'animation:kaBob 3.2s ease-in-out infinite}'+
-  '.ka-bubble.thinking{animation:kaPulse 1.1s ease-in-out infinite}'+
-  '.ka-bubble.listening{box-shadow:0 14px 44px rgba(0,0,0,.48),0 0 0 7px rgba(94,200,255,.18),0 0 36px rgba(94,200,255,.38)}'+
-  '.ka-orb-face{width:78px!important;height:78px!important;border:0!important;background:transparent!important;box-shadow:none!important;animation:none!important}'+
-  '.ka-orb-face svg{width:70px;height:70px}'+
+  'animation:kaBob 3.2s ease-in-out infinite;transform-origin:center center}'+
+  '.ka-bubble.thinking{animation:kaThink 1.4s ease-in-out infinite}'+
+  '.ka-bubble.listening{animation:kaListen 2s ease-in-out infinite;'+
+  'box-shadow:0 16px 48px rgba(0,0,0,.5),0 0 0 8px rgba(94,200,255,.16),0 0 40px rgba(94,200,255,.4)}'+
+  '.ka-bubble.happy{animation:kaHappy 0.7s ease}'+
+  '.ka-bubble.alert,.ka-bubble.angry{animation:kaShake 0.5s ease}'+
+  '.ka-orb-face{width:108px!important;height:108px!important;border:0!important;background:transparent!important;box-shadow:none!important;'+
+  'animation:none!important;transition:transform .35s ease}'+
+  '.ka-orb-face svg{width:98px;height:98px;transition:transform .4s ease}'+
   '.ka-orb-face::before{display:none!important}'+
-  '.ka-ring,.ka-ring2{position:absolute;inset:-8px;border-radius:50%;border:1.5px solid rgba(94,200,255,.35);'+
+  '.ka-orb-face[data-emotion="thinking"] svg{animation:kaTilt 2.2s ease-in-out infinite}'+
+  '.ka-orb-face[data-emotion="listening"] svg{animation:kaTilt 1.8s ease-in-out infinite}'+
+  '.ka-orb-face[data-emotion="happy"] svg{animation:kaNod 0.65s ease}'+
+  '.ka-orb-face[data-emotion="angry"] svg,.ka-orb-face[data-emotion="alert"] svg{animation:kaFaceShake .45s ease}'+
+  '.ka-orb-face[data-emotion="idle"] svg{animation:kaIdleSway 4s ease-in-out infinite}'+
+  '.ka-ring,.ka-ring2{position:absolute;inset:-10px;border-radius:50%;border:1.5px solid rgba(94,200,255,.32);'+
   'animation:kaRing 2.4s ease-out infinite;pointer-events:none}'+
-  '.ka-ring2{inset:-18px;animation-delay:.7s;opacity:.55}'+
-  '@keyframes kaRing{0%{transform:scale(.85);opacity:.7}100%{transform:scale(1.25);opacity:0}}'+
-  '@keyframes kaBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}'+
-  '@keyframes kaPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}'+
+  '.ka-ring2{inset:-22px;animation-delay:.7s;opacity:.5}'+
+  '@keyframes kaRing{0%{transform:scale(.85);opacity:.65}100%{transform:scale(1.28);opacity:0}}'+
+  '@keyframes kaBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}'+
+  '@keyframes kaThink{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-4px) scale(1.04)}}'+
+  '@keyframes kaListen{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-3px) scale(1.03)}}'+
+  '@keyframes kaHappy{0%{transform:scale(1)}40%{transform:scale(1.08)}70%{transform:scale(.97)}100%{transform:scale(1)}}'+
+  '@keyframes kaShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}'+
+  '@keyframes kaTilt{0%,100%{transform:rotate(-6deg)}50%{transform:rotate(7deg)}}'+
+  '@keyframes kaNod{0%{transform:rotate(0)}30%{transform:rotate(-8deg) translateY(2px)}60%{transform:rotate(5deg)}100%{transform:rotate(0)}}'+
+  '@keyframes kaFaceShake{0%,100%{transform:rotate(0)}30%{transform:rotate(-10deg)}60%{transform:rotate(10deg)}}'+
+  '@keyframes kaIdleSway{0%,100%{transform:rotate(-2deg)}50%{transform:rotate(2.5deg)}}'+
   '.ka-micbtn{position:relative;width:56px;height:56px;border-radius:50%;border:1.5px solid rgba(94,200,255,.4);'+
   'background:linear-gradient(145deg,rgba(30,42,70,.95),rgba(14,22,40,.98));'+
   'color:#5EC8FF;display:flex;align-items:center;justify-content:center;'+
@@ -197,12 +212,12 @@ function style(){
   '.ka-mic-pulse{position:absolute;inset:-4px;border-radius:50%;border:2px solid rgba(94,200,255,.4);'+
   'opacity:0;pointer-events:none}'+
   '.ka-micbtn.listening .ka-mic-pulse{animation:kaRing 1.4s ease-out infinite;opacity:1}'+
-  '.ka-x{position:absolute;top:-36px;right:-6px;width:30px;height:30px;border-radius:50%;'+
+  '.ka-x{position:absolute;top:-40px;right:-8px;width:30px;height:30px;border-radius:50%;'+
   'border:1px solid rgba(255,255,255,.12);background:rgba(20,28,44,.85);color:#9AA0B0;'+
   'font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;'+
   'pointer-events:auto;opacity:.85}'+
   '.ka-x:active{transform:scale(.9)}'+
-  '.ka-reply{position:absolute;left:50%;bottom:calc(22% + 130px);transform:translateX(-50%);'+
+  '.ka-reply{position:absolute;left:50%;bottom:calc(22% + 168px);transform:translateX(-50%);'+
   'width:min(88vw,340px);z-index:3;text-align:center;pointer-events:none;'+
   'font-size:16px;line-height:1.45;font-weight:560;color:#F2F3F7;'+
   'text-shadow:0 2px 16px rgba(0,0,0,.65),0 0 24px rgba(0,0,0,.4);'+
@@ -216,28 +231,26 @@ function style(){
   '.ka-hint{position:relative;z-index:3;font-size:12.5px;color:rgba(180,190,210,.9);text-align:center;'+
   'text-shadow:0 1px 8px rgba(0,0,0,.55);pointer-events:none;'+
   'white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis;'+
-  'min-height:18px;line-height:1.3;padding:0 8px}'+
+  'min-height:18px;line-height:1.3;padding:10px 8px 0;margin-top:4px}'+
   '';
-  document.head.appendChild(s);
 }
 
 function kaEmo(emotion,duration){
+  emotion=emotion||'idle';
   try{
     var root=document.getElementById('kaFinnAvatar');
     if(window.FinnChar&&root){
       if(duration&&duration>0)window.FinnChar.flashEmotion(root,emotion,duration);
-      else{
-        // устойчивая эмоция без автосброса в idle
-        if(window.FinnChar.setEmotion)window.FinnChar.setEmotion(root,emotion);
-        else window.FinnChar.flashEmotion(root,emotion,duration||999999);
-      }
+      else if(window.FinnChar.setEmotion)window.FinnChar.setEmotion(root,emotion);
+      else window.FinnChar.flashEmotion(root,emotion,999999);
     }
   }catch(x){}
   var b=document.getElementById('kaBubble');
   if(!b)return;
-  b.classList.remove('thinking','listening');
-  if(emotion==='thinking')b.classList.add('thinking');
-  if(emotion==='listening'){b.classList.add('listening');}
+  b.classList.remove('thinking','listening','happy','alert','angry');
+  if(emotion==='thinking'||emotion==='listening')b.classList.add(emotion==='listening'?'listening':'thinking');
+  else if(emotion==='happy')b.classList.add('happy');
+  else if(emotion==='alert'||emotion==='angry')b.classList.add(emotion);
 }
 
 function showReply(text,actions){
@@ -288,11 +301,12 @@ function setListeningUI(on){
   var o=document.getElementById('kaOrb');
   var b=document.getElementById('kaBubble');
   if(o)o.classList.toggle('listening',!!on);
-  if(b){
-    b.classList.toggle('listening',!!on);
-    if(on)b.classList.remove('thinking');
+  if(on){
+    if(b){b.classList.remove('thinking','happy','alert','angry');b.classList.add('listening');}
+    kaEmo('listening');
+  }else{
+    if(b)b.classList.remove('listening');
   }
-  if(on)kaEmo('thinking'); // «слушает» — заинтересованное лицо
 }
 
 function startListen(){
