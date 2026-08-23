@@ -12,6 +12,42 @@ function stripWake(s){return norm(s).replace(/^(привет\s+)?(финн?|фе
 function isOnlyWake(s){var t=norm(s);return /^(привет\s+)?(финн?|фенн?|фынн?|fin+n?)$/i.test(t);}
 function loadHistory(){try{var h=JSON.parse(localStorage.getItem(HKEY)||'[]');if(Array.isArray(h))history=h.slice(-40);}catch(e){history=[];}}
 function saveHistory(){try{localStorage.setItem(HKEY,JSON.stringify(history.slice(-40)));}catch(e){}}
+function playOpenSound(){
+  try{
+    var AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;
+    var ctx=playOpenSound._ctx||(playOpenSound._ctx=new AC());
+    if(ctx.state==='suspended')ctx.resume();
+    var now=ctx.currentTime;
+    function tone(freq,start,dur,type,vol,freqEnd){
+      var o=ctx.createOscillator(),g=ctx.createGain();
+      o.type=type||'sine';o.frequency.setValueAtTime(freq,now+start);
+      if(freqEnd)o.frequency.exponentialRampToValueAtTime(Math.max(40,freqEnd),now+start+dur);
+      g.gain.setValueAtTime(0.0001,now+start);
+      g.gain.exponentialRampToValueAtTime(vol||0.22,now+start+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001,now+start+dur);
+      o.connect(g);g.connect(ctx.destination);o.start(now+start);o.stop(now+start+dur+0.02);
+    }
+    // пузырь: мягкий pop + короткий chime
+    tone(180,0,0.12,'sine',0.28,90);
+    tone(520,0.04,0.16,'triangle',0.16,420);
+    tone(780,0.09,0.22,'sine',0.12,650);
+  }catch(e){}
+}
+function cleanReplyText(s){
+  s=String(s==null?'':s);
+  s=s.replace(/```[\s\S]*?```/g,function(m){return m.replace(/```\w*\n?/g,'').replace(/```/g,'');});
+  s=s.replace(/\*\*([^*]+)\*\*/g,'$1');
+  s=s.replace(/__([^_]+)__/g,'$1');
+  s=s.replace(/\*([^*]+)\*/g,'$1');
+  s=s.replace(/_([^_]+)_/g,'$1');
+  s=s.replace(/`([^`]+)`/g,'$1');
+  s=s.replace(/^#{1,6}\s*/gm,'');
+  s=s.replace(/^\s*[-*]\s+/gm,'• ');
+  s=s.replace(/\[([^\]]+)\]\([^)]*\)/g,'$1');
+  s=s.replace(/[*]{1,3}/g,'');
+  s=s.replace(/\n{3,}/g,'\n\n');
+  return s.trim();
+}
 
 function originRect(opts){
   opts=opts||{};
@@ -52,7 +88,7 @@ function open(opts){
       '<div class="ka-backdrop" id="kaBackdrop"></div>'+
       '<div class="ka-reply" id="kaReply" aria-live="polite"></div>'+
       '<div class="ka-stage" id="kaStage">'+
-        '<div class="ka-row" id="kaRow">'+
+        '<div class="ka-center">'+
           '<div class="ka-bubble" id="kaBubble">'+
             '<div class="finn-avatar ka-orb-face" id="kaFinnAvatar" data-emotion="idle">'+
               '<span class="finn-aura"></span>'+avatarSvg+
@@ -60,38 +96,40 @@ function open(opts){
             '<div class="ka-ring"></div>'+
             '<div class="ka-ring ka-ring2"></div>'+
           '</div>'+
-          '<button class="ka-micbtn" id="kaOrb" type="button" aria-label="Микрофон">'+
-            '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+
-              '<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>'+
-              '<path d="M19 10v2a7 7 0 0 1-14 0v-2"/>'+
-              '<line x1="12" y1="19" x2="12" y2="23"/>'+
-              '<line x1="8" y1="23" x2="16" y2="23"/>'+
-            '</svg>'+
-            '<span class="ka-mic-pulse"></span>'+
-          '</button>'+
           '<button class="ka-x" id="kaClose" type="button" aria-label="Закрыть">×</button>'+
         '</div>'+
+        '<button class="ka-micbtn" id="kaOrb" type="button" aria-label="Микрофон">'+
+          '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+
+            '<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>'+
+            '<path d="M19 10v2a7 7 0 0 1-14 0v-2"/>'+
+            '<line x1="12" y1="19" x2="12" y2="23"/>'+
+            '<line x1="8" y1="23" x2="16" y2="23"/>'+
+          '</svg>'+
+          '<span class="ka-mic-pulse"></span>'+
+        '</button>'+
         '<div class="ka-hint" id="kaStatus">Слушаю…</div>'+
       '</div>';
     document.body.appendChild(wrap);
 
     var stage=document.getElementById('kaStage');
     if(stage){
-      stage.style.left=origin.x+'px';
+      stage.style.left='0';
+      stage.style.width='100%';
       stage.style.top=origin.y+'px';
       stage.style.bottom='auto';
-      stage.style.transform='translate(-50%,-50%) scale(0.32)';
+      stage.style.transform='translateY(-50%) scale(0.32)';
       stage.style.opacity='0';
     }
     openingAnim=true;
     void wrap.offsetWidth;
     wrap.classList.add('ka-show');
+    try{playOpenSound();}catch(x){}
     requestAnimationFrame(function(){
       if(!stage)return;
-      stage.style.transition='transform .55s cubic-bezier(.22,1.1,.36,1), left .55s cubic-bezier(.22,1.1,.36,1), top .55s cubic-bezier(.22,1.1,.36,1), opacity .35s ease';
-      stage.style.left=target.x+'px';
+      stage.style.transition='transform .55s cubic-bezier(.22,1.1,.36,1), top .55s cubic-bezier(.22,1.1,.36,1), opacity .35s ease';
+      stage.style.left='0';
       stage.style.top=target.y+'px';
-      stage.style.transform='translate(-50%,-50%) scale(1)';
+      stage.style.transform='translateY(-50%) scale(1)';
       stage.style.opacity='1';
       setTimeout(function(){openingAnim=false;},580);
     });
@@ -163,9 +201,9 @@ function style(){
   'opacity:0;transition:opacity .4s ease}'+
   '.ka-show .ka-backdrop{opacity:1}'+
   '.ka-hide .ka-backdrop{opacity:0}'+
-  '.ka-stage{position:absolute;z-index:2;display:flex;flex-direction:column;align-items:center;gap:22px;'+
-  'will-change:transform,left,top,opacity;pointer-events:auto}'+
-  '.ka-row{position:relative;display:flex;align-items:center;justify-content:center;gap:30px}'+
+  '.ka-stage{position:absolute;z-index:2;width:100%;left:0!important;height:180px;display:block;'+
+  'will-change:transform,top,opacity;pointer-events:auto}'+
+  '.ka-center{position:absolute;left:50%;top:0;transform:translateX(-50%);width:132px;height:132px}'+
   '.ka-bubble{position:relative;width:132px;height:132px;border-radius:50%;'+
   'background:radial-gradient(circle at 35% 30%,rgba(120,210,255,.4),rgba(14,22,40,.92) 55%,rgba(8,12,22,.98));'+
   'border:1.5px solid rgba(94,200,255,.5);'+
@@ -199,7 +237,7 @@ function style(){
   '@keyframes kaNod{0%{transform:rotate(0)}30%{transform:rotate(-8deg) translateY(2px)}60%{transform:rotate(5deg)}100%{transform:rotate(0)}}'+
   '@keyframes kaFaceShake{0%,100%{transform:rotate(0)}30%{transform:rotate(-10deg)}60%{transform:rotate(10deg)}}'+
   '@keyframes kaIdleSway{0%,100%{transform:rotate(-2deg)}50%{transform:rotate(2.5deg)}}'+
-  '.ka-micbtn{position:relative;width:56px;height:56px;border-radius:50%;border:1.5px solid rgba(94,200,255,.4);'+
+  '.ka-micbtn{position:absolute;left:calc(50% + 86px);top:38px;width:48px;height:48px;border-radius:50%;border:1.5px solid rgba(94,200,255,.4);'+
   'background:linear-gradient(145deg,rgba(30,42,70,.95),rgba(14,22,40,.98));'+
   'color:#5EC8FF;display:flex;align-items:center;justify-content:center;'+
   'box-shadow:0 8px 28px rgba(0,0,0,.4),0 0 16px rgba(94,200,255,.15);'+
@@ -212,26 +250,30 @@ function style(){
   '.ka-mic-pulse{position:absolute;inset:-4px;border-radius:50%;border:2px solid rgba(94,200,255,.4);'+
   'opacity:0;pointer-events:none}'+
   '.ka-micbtn.listening .ka-mic-pulse{animation:kaRing 1.4s ease-out infinite;opacity:1}'+
-  '.ka-x{position:absolute;top:-40px;right:-8px;width:30px;height:30px;border-radius:50%;'+
+  '.ka-x{position:absolute;top:-36px;right:-4px;width:30px;height:30px;border-radius:50%;'+
   'border:1px solid rgba(255,255,255,.12);background:rgba(20,28,44,.85);color:#9AA0B0;'+
   'font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;'+
   'pointer-events:auto;opacity:.85}'+
   '.ka-x:active{transform:scale(.9)}'+
-  '.ka-reply{position:absolute;left:50%;bottom:calc(22% + 168px);transform:translateX(-50%);'+
-  'width:min(88vw,340px);z-index:3;text-align:center;pointer-events:none;'+
-  'font-size:16px;line-height:1.45;font-weight:560;color:#F2F3F7;'+
+  '.ka-reply{position:absolute;left:50%;bottom:calc(22% + 188px);transform:translateX(-50%);'+
+  'width:min(90vw,360px);max-height:min(36vh,280px);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;'+
+  'z-index:3;text-align:center;pointer-events:auto;'+
+  'font-size:15.5px;line-height:1.5;font-weight:540;color:#F2F3F7;'+
   'text-shadow:0 2px 16px rgba(0,0,0,.65),0 0 24px rgba(0,0,0,.4);'+
-  'opacity:0;transition:opacity .35s ease,transform .35s ease}'+
+  'padding:4px 6px 8px;opacity:0;transition:opacity .35s ease,transform .35s ease;'+
+  'scrollbar-width:thin;scrollbar-color:rgba(94,200,255,.35) transparent}'+
+  '.ka-reply::-webkit-scrollbar{width:4px}'+
+  '.ka-reply::-webkit-scrollbar-thumb{background:rgba(94,200,255,.35);border-radius:4px}'+
   '.ka-reply.show{opacity:1;transform:translateX(-50%) translateY(0)}'+
   '.ka-reply.hide{opacity:0;transform:translateX(-50%) translateY(8px)}'+
   '.ka-reply .ka-act-row{display:flex;gap:10px;justify-content:center;margin-top:14px;pointer-events:auto}'+
   '.ka-reply .ka-act{padding:10px 18px;border-radius:14px;border:1px solid rgba(255,255,255,.12);'+
   'background:rgba(20,28,44,.88);color:#fff;font-weight:700;font-size:14px;backdrop-filter:blur(8px)}'+
   '.ka-reply .ka-act.ok{background:linear-gradient(135deg,#5EC8FF,#3A8FE8);color:#0A101C;border:0}'+
-  '.ka-hint{position:relative;z-index:3;font-size:12.5px;color:rgba(180,190,210,.9);text-align:center;'+
+  '.ka-hint{position:absolute;left:50%;top:150px;transform:translateX(-50%);z-index:3;font-size:12.5px;color:rgba(180,190,210,.9);text-align:center;'+
   'text-shadow:0 1px 8px rgba(0,0,0,.55);pointer-events:none;'+
   'white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis;'+
-  'min-height:18px;line-height:1.3;padding:10px 8px 0;margin-top:4px}'+
+  'min-height:18px;line-height:1.3;padding:0 8px}'+
   '';
 }
 
@@ -262,8 +304,10 @@ function showReply(text,actions){
     el.classList.remove('hide');
     el.innerHTML='';
     var p=document.createElement('div');
-    p.textContent=text||'';
+    p.className='ka-reply-text';
+    p.textContent=cleanReplyText(text||'');
     el.appendChild(p);
+    el.scrollTop=0;
     if(actions&&actions.length){
       var row=document.createElement('div');
       row.className='ka-act-row';
