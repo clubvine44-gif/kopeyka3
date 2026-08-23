@@ -1,6 +1,6 @@
 (function(){
 'use strict';
-var KEY='kopeyka3_onboarded_v6';
+var KEY='kopeyka3_onboarded_v7';
 var index=0, root=null, busy=false, hlEl=null;
 
 var slides=[
@@ -74,20 +74,24 @@ function highlight(el){
   clearHl();
   if(!el)return;
   hlEl=el;
-  // scroll so element is visible above/below card
   try{
-    var cardH=200;
+    var place=(root&&root.querySelector('.tour-card')||{}).className||'';
     var r=el.getBoundingClientRect();
-    var vh=window.innerHeight;
-    var needTop=r.top<80;
-    var needBot=r.bottom>vh-cardH-20;
-    if(needTop||needBot){
-      el.scrollIntoView({block:'center',behavior:'smooth'});
-    }
-  }catch(e){}
+    var vh=window.innerHeight||640;
+    var targetY = place.indexOf('place-top')>=0 ? (vh*0.55) : (vh*0.38);
+    var mid = r.top + r.height/2;
+    var delta = mid - targetY;
+    if(Math.abs(delta)>24){ window.scrollBy({top:delta, behavior:'smooth'}); }
+  }catch(e){ try{el.scrollIntoView({block:'center',behavior:'smooth'});}catch(x){} }
   setTimeout(function(){
-    if(hlEl===el) el.classList.add('tour-hl');
-  },320);
+    if(hlEl!==el)return;
+    el.classList.add('tour-hl');
+    try{
+      var r2=el.getBoundingClientRect();
+      var vh2=window.innerHeight||640;
+      if(r2.top<12||r2.bottom>vh2-12){ el.scrollIntoView({block:'center',behavior:'smooth'}); }
+    }catch(x){}
+  },380);
 }
 
 function show(i){

@@ -250,6 +250,10 @@ function openFullCalendar(){
 }
 
 function showSettings(){
+  document.body.classList.add('fin-settings-open');
+  document.documentElement.style.overflow='hidden';
+  document.body.style.overflow='hidden';
+
   var cash=compute().cash;
   var html='<div class="modal-card full-screen">'+
     '<div class="modal-title">Настройки</div>'+
@@ -537,6 +541,20 @@ homeHtml += '</div>';
 // ===== 15. Обрати внимание =====
 /* attention folded into Finn card */
 
+
+// ===== Finn tip (верхняя зона) =====
+homeHtml += '<div class="card finn-tip-card" id="finnTipCard">';
+homeHtml += '<div class="finn-tip-head"><span class="finn-mini">🦊</span> Фин · совет</div>';
+homeHtml += '<div class="finn-tip-body" id="finnTipBody">'+esc(finnTip)+'</div>';
+homeHtml += '<div class="finn-tip-hint">Зажми кнопку <b>+</b> внизу справа — откроется Фин</div>';
+if(attention.length){
+  homeHtml += '<div class="finn-att">';
+  attention.slice(0,2).forEach(function(a){ homeHtml += '<div class="att-item">'+esc(a)+'</div>'; });
+  homeHtml += '</div>';
+}
+homeHtml += '</div>';
+setTimeout(function(){try{refreshFinnTipAI(finnTip,attention);}catch(e){}},100);
+
 // ===== 9. Ближайшие платежи =====
 if(nearestObl.length){
   homeHtml += '<div class="card tight near-card">';
@@ -621,19 +639,6 @@ homeHtml += '<div class="shift-summary">'+ (shCounts.day||0)+' дневных ·
 homeHtml += '<button type="button" class="link-more" id="btnFullCal">Полный календарь →</button>';
 homeHtml += '</div>';
 
-// ===== 17. Финн tip =====
-homeHtml += '<div class="card finn-tip-card" id="finnTipCard">';
-homeHtml += '<div class="finn-tip-head"><span class="finn-mini">🦊</span> Финн · совет</div>';
-homeHtml += '<div class="finn-tip-body" id="finnTipBody">'+esc(finnTip)+'</div>';
-homeHtml += '<div class="hint" style="margin-top:8px;font-size:11px;opacity:.75">Зажми кнопку + внизу справа, чтобы открыть Фина</div>';
-if(attention.length){
-  homeHtml += '<div class="finn-att">';
-  attention.slice(0,2).forEach(function(a){ homeHtml += '<div class="att-item">'+esc(a)+'</div>'; });
-  homeHtml += '</div>';
-}
-homeHtml += '</div>';
-// Merge attention into finn card if present - attention already separate; AI will enrich
-setTimeout(function(){try{refreshFinnTipAI(finnTip,attention);}catch(e){}},100);
 
 // month nav + cal (keep existing calendar)
 /* full calendar moved to modal */
@@ -720,43 +725,82 @@ appForm('Расход',[
 function addReserve(){appChoice('Категория резерва',RES_PRESETS,'Новый резерв').then(function(idx){if(idx===null)return;var name=RES_PRESETS[idx];function cont(nm){if(!nm)return;appPrompt('Цель (0 если без цели)','0','Цель').then(function(tv){var t=num(tv);appPrompt('Уже накоплено','0','Накоплено').then(function(sv){var s=num(sv);var id=uid();pushUndo();STATE.reserves.push({id:id,name:nm,category:nm,target:t,saved:s});if(s>0)STATE.reserveOps.push({id:uid(),reserveId:id,type:'deposit',amount:s,date:today()});save(true);render();toast('Резерв «'+nm+'» создан — переносится на все месяцы');});});}if(name==='Свой вариант'){appPrompt('Название','','Название резерва').then(cont);}else cont(name);});}
 function addDebt(){appPrompt('Название долга','','Долг').then(function(n){if(!n)return;appPrompt('Сумма','','Сумма долга').then(function(t){t=num(t);if(t<=0)return toast('Укажи сумму');pushUndo();STATE.debts.push({id:uid(),name:n,total:t,paid:0});save(true);render();toast('Долг добавлен');});});}
 function addObligation(){appPrompt('Название (Алименты, Аренда…)','','Платёж').then(function(n){if(!n)return;appPrompt('Сумма каждый месяц','','Сумма').then(function(a){a=num(a);if(a<=0)return toast('Укажи сумму');appPrompt('Число месяца (1–31)','25','День').then(function(d){d=num(d);if(d<1||d>31)return toast('День 1–31');pushUndo();STATE.obligations.push({id:uid(),name:n,amount:a,day:d,active:true});save(true);render();toast('Обязательный платёж добавлен');});});});}
-function openAssistant(){
+function openAssistant(opts){
   try{
-    if(window.kopeykaAssistant&&window.kopeykaAssistant.open)window.kopeykaAssistant.open();
-    else if(window.kopeykaVoice&&window.kopeykaVoice.open)window.kopeykaVoice.open();
-  }catch(e){console.error(e);}
+    if(window.kopeykaAssistant&&typeof window.kopeykaAssistant.open==='function'){
+      window.kopeykaAssistant.open(opts||{});
+      return true;
+    }
+    if(window.kopeykaVoice&&typeof window.kopeykaVoice.open==='function'){
+      window.kopeykaVoice.open(opts||{});
+      return true;
+    }
+    toast('Фин ещё загружается…');
+  }catch(e){console.error(e);toast('Не удалось открыть Фина');}
+  return false;
 }
 window.openAssistant=openAssistant;
+
+function bindFabHold(){
+  var fab=document.getElementById('fab');
+  var radial=document.getElementById('radial');
+  if(!fab||fab._holdBound)return;
+  fab._holdBound=true;
+  var timer=null, fired=false, startX=0, startY=0;
+  function clearT(){if(timer){clearTimeout(timer);timer=null;}}
+  function onDown(e){
+    fired=false;clearT();
+    var p=e.touches&&e.touches[0]?e.touches[0]:e;
+    startX=p.clientX||0;startY=p.clientY||0;
+    fab.classList.add('holding');
+    timer=setTimeout(function(){
+      fired=true;
+      fab.classList.remove('holding');
+      if(radial){radial.classList.remove('show');fab.classList.remove('open');}
+      try{if(navigator.vibrate)navigator.vibrate(30);}catch(x){}
+      openAssistant();
+      toast('Фин');
+    },420);
+  }
+  function onMove(e){
+    if(!timer)return;
+    var p=e.touches&&e.touches[0]?e.touches[0]:e;
+    var dx=Math.abs((p.clientX||0)-startX), dy=Math.abs((p.clientY||0)-startY);
+    if(dx>18||dy>18){clearT();fab.classList.remove('holding');}
+  }
+  function onUp(e){
+    clearT();fab.classList.remove('holding');
+    if(fired){
+      if(e&&e.preventDefault)e.preventDefault();
+      if(e&&e.stopPropagation)e.stopPropagation();
+    }
+  }
+  fab.addEventListener('touchstart',onDown,{passive:true});
+  fab.addEventListener('touchmove',onMove,{passive:true});
+  fab.addEventListener('touchend',onUp,{passive:false});
+  fab.addEventListener('touchcancel',onUp,{passive:true});
+  fab.addEventListener('mousedown',onDown);
+  fab.addEventListener('mousemove',onMove);
+  fab.addEventListener('mouseup',onUp);
+  fab.addEventListener('mouseleave',onUp);
+  fab.addEventListener('click',function(e){
+    if(fired){e.preventDefault();e.stopPropagation();fired=false;return;}
+    if(radial){radial.classList.toggle('show');fab.classList.toggle('open');}
+  },true);
+}
 function setup(){
   var fab=document.getElementById('fab'),radial=document.getElementById('radial');
   if(radial){radial.querySelectorAll('button').forEach(function(btn){btn.onclick=function(){radial.classList.remove('show');if(fab)fab.classList.remove('open');var a=btn.dataset.act;if(a==='income')addIncome();else if(a==='expense')addExpense();else if(a==='reserve')addReserve();else if(a==='debt')addDebt();else if(a==='oblig')addObligation();};});}
-  if(fab&&!fab._bound){
-    fab._bound=true;
-    var holdTimer=null,longFired=false;
-    function clearHold(){if(holdTimer){clearTimeout(holdTimer);holdTimer=null;}}
-    fab.addEventListener('click',function(e){
-      if(longFired){longFired=false;e.preventDefault();e.stopPropagation();return;}
-      if(radial){radial.classList.toggle('show');fab.classList.toggle('open');}
-    });
-    function startHold(e){
-      longFired=false;clearHold();
-      holdTimer=setTimeout(function(){
-        longFired=true;
-        if(radial){radial.classList.remove('show');fab.classList.remove('open');}
-        openAssistant();
-      },480);
-    }
-    function endHold(){clearHold();}
-    fab.addEventListener('touchstart',startHold,{passive:true});
-    fab.addEventListener('touchend',endHold,{passive:true});
-    fab.addEventListener('touchcancel',endHold,{passive:true});
-    fab.addEventListener('mousedown',startHold);
-    fab.addEventListener('mouseup',endHold);
-    fab.addEventListener('mouseleave',endHold);
+  bindFabHold();
+  var av=document.getElementById('finnAvatar');
+  if(av&&!av._bound){
+    av._bound=true;
+    av.addEventListener('click',function(){openAssistant();});
   }
   var bs=document.getElementById('btnSettings');
   if(bs)bs.onclick=function(){showSettings();};
 }
-function boot(){if(!window.__scrollSaveBound){window.__scrollSaveBound=true;var st=null;window.addEventListener('scroll',function(){if((window.__finView||currentView||'home')!=='home')return;if(st)return;st=setTimeout(function(){st=null;window.__homeScroll=window.scrollY||document.documentElement.scrollTop||0;},120);},{passive:true});}try{STATE=norm(STATE);ensureMonth();var c=compute();if(STATE.income.length===0&&STATE.expenses.length===0&&c.cash<0&&!STATE.obligations.length&&!STATE.reserves.length){STATE=def();save(true);}}catch(e){STATE=def();}setup();render();syncReminders();}
+
+function boot(){if(!window.__scrollSaveBound){window.__scrollSaveBound=true;var st=null;window.addEventListener('scroll',function(){if((window.__finView||currentView||'home')!=='home')return;if(st)return;st=setTimeout(function(){st=null;window.__homeScroll=window.scrollY||document.documentElement.scrollTop||0;},120);},{passive:true});}try{STATE=norm(STATE);ensureMonth();var c=compute();if(STATE.income.length===0&&STATE.expenses.length===0&&c.cash<0&&!STATE.obligations.length&&!STATE.reserves.length){STATE=def();save(true);}}catch(e){STATE=def();}setup();render();syncReminders();setTimeout(bindFabHold,300);setTimeout(bindFabHold,1200);}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
 ;window.goView=goView;window.goHome=goHome;window.currentView=currentView;})();

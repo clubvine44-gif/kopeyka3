@@ -284,6 +284,10 @@ body.has-bnav{padding-bottom:calc(var(--nav-h) + 20px + var(--safe-b))}
   pointer-events:none;
 }
 .fab:active{transform:scale(.92)}
+.fab.holding{
+  transform:scale(.9);
+  box-shadow:0 0 0 6px rgba(94,200,255,.25),0 8px 24px rgba(58,143,232,.55)!important;
+}
 .fab.open{transform:rotate(45deg)}
 .fab.open::after{animation:fabRingFast .9s ease-out infinite;border-color:rgba(94,200,255,.9)}
 @keyframes fabRing{
@@ -540,24 +544,56 @@ html, body { overscroll-behavior-y: none; overscroll-behavior: none; }
 .finn-att{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
 .finn-att .att-item{font-size:12.5px;line-height:1.4;margin-bottom:6px;padding-left:10px;border-left:3px solid var(--gold);color:var(--text)}
 
-#btnCloud.cloud-ok{color:#F2F3F7;opacity:1}
-#btnCloud.cloud-off{color:#F87171;opacity:1}
-#btnCloud.cloud-ok svg, #btnCloud.cloud-ok{filter:none}
+#btnCloud{
+  transition:color .25s, text-shadow .25s, box-shadow .25s, background .25s;
+}
+#btnCloud.cloud-ok{
+  color:#FFFFFF!important;
+  opacity:1!important;
+  text-shadow:0 0 8px rgba(255,255,255,.95),0 0 16px rgba(255,255,255,.65),0 0 28px rgba(200,220,255,.45);
+  box-shadow:0 0 12px rgba(255,255,255,.35),inset 0 0 8px rgba(255,255,255,.12);
+  background:rgba(255,255,255,.1)!important;
+  border-radius:12px;
+}
+#btnCloud.cloud-off{
+  color:#F87171!important;
+  opacity:1!important;
+  text-shadow:0 0 8px rgba(248,113,113,.55);
+  box-shadow:none;
+  background:transparent!important;
+}
 .tour-hl{
   position:relative;z-index:5001!important;
-  box-shadow:0 0 0 3px rgba(94,200,255,.95),0 0 28px rgba(94,200,255,.35)!important;
-  border-radius:16px;
-  animation:tourPulse 1.6s ease-in-out infinite;
+  border-radius:16px!important;
+  box-shadow:
+    0 0 0 2px rgba(94,200,255,.95),
+    0 0 18px 6px rgba(94,200,255,.55),
+    0 0 40px 12px rgba(94,200,255,.28),
+    inset 0 0 20px rgba(94,200,255,.12)!important;
+  animation:tourGlow 1.8s ease-in-out infinite;
+  filter:brightness(1.08);
 }
-@keyframes tourPulse{
-  0%,100%{box-shadow:0 0 0 3px rgba(94,200,255,.9),0 0 18px rgba(94,200,255,.25)}
-  50%{box-shadow:0 0 0 5px rgba(94,200,255,1),0 0 32px rgba(94,200,255,.45)}
+@keyframes tourGlow{
+  0%,100%{
+    box-shadow:0 0 0 2px rgba(94,200,255,.85),0 0 16px 4px rgba(94,200,255,.4),0 0 32px 8px rgba(94,200,255,.2),inset 0 0 16px rgba(94,200,255,.08);
+  }
+  50%{
+    box-shadow:0 0 0 3px rgba(160,230,255,1),0 0 28px 10px rgba(94,200,255,.65),0 0 56px 18px rgba(94,200,255,.35),inset 0 0 28px rgba(94,200,255,.16);
+  }
 }
+.finn-tip-hint{
+  margin-top:10px;font-size:12px;line-height:1.35;color:rgba(180,200,230,.9);
+  padding:8px 10px;border-radius:10px;background:rgba(94,200,255,.08);
+  border:1px solid rgba(94,200,255,.18);
+}
+.finn-tip-hint b{color:#5EC8FF}
 .modal-bg.full, .modal-bg.full .modal-card.full-screen, .modal-scroll{
   overscroll-behavior:none!important;
   overscroll-behavior-y:none!important;
   -webkit-overflow-scrolling:touch;
 }
+body.fin-settings-open{overflow:hidden!important;position:fixed;width:100%;height:100%;}
+body.fin-settings-open #app{pointer-events:none;}
 </style></head><body class="has-bnav"><div class="topbar">
   <div class="top-left">
     <div class="finn-avatar status-green" id="finnAvatar" title="Финн">
@@ -608,7 +644,7 @@ html, body { overscroll-behavior-y: none; overscroll-behavior: none; }
     <span>Платежи</span>
   </button>
 </nav>
-<div class="fab-wrap"><div class="radial" id="radial"><button data-act="income"><span class="ic">➕</span> Доход</button><button data-act="expense"><span class="ic">➖</span> Расход</button><button data-act="reserve"><span class="ic">🏦</span> Резерв</button><button data-act="debt"><span class="ic">📉</span> Долг</button><button data-act="oblig"><span class="ic">📅</span> Обязательный</button></div><button class="fab" id="fab" aria-label="Добавить"><span aria-hidden="true">+</span></button></div><div class="modal-bg" id="modalBg"></div><div class="toast" id="toast"></div><script src="app.js?v=2026082307"></script><script src="onboard.js?v=2026082307"></script><script src="cloud.js?v=2026082307"></script><script src="products.js?v=2026082307"></script><script src="engine.js?v=2026082307"></script><script src="ai.js?v=2026082307"></script><script src="assistant-v2.js?v=2026082307"></script><script src="voice.js?v=2026082307"></script><script src="finn3d.js?v=2026082307"></script><script src="finn-wake.js?v=2026082307"></script><script>window.__kopeykaBuild='2026082307';window.__FIN_NATIVE=true;</script><script>
+<div class="fab-wrap"><div class="radial" id="radial"><button data-act="income"><span class="ic">➕</span> Доход</button><button data-act="expense"><span class="ic">➖</span> Расход</button><button data-act="reserve"><span class="ic">🏦</span> Резерв</button><button data-act="debt"><span class="ic">📉</span> Долг</button><button data-act="oblig"><span class="ic">📅</span> Обязательный</button></div><button class="fab" id="fab" aria-label="Добавить"><span aria-hidden="true">+</span></button></div><div class="modal-bg" id="modalBg"></div><div class="toast" id="toast"></div><script src="app.js?v=2026082308"></script><script src="onboard.js?v=2026082308"></script><script src="cloud.js?v=2026082308"></script><script src="products.js?v=2026082308"></script><script src="engine.js?v=2026082308"></script><script src="ai.js?v=2026082308"></script><script src="assistant-v2.js?v=2026082308"></script><script src="voice.js?v=2026082308"></script><script src="finn3d.js?v=2026082308"></script><script src="finn-wake.js?v=2026082308"></script><script>window.__kopeykaBuild='2026082308';window.__FIN_NATIVE=true;</script><script>
 (function(){
   function tryTestPush(){
     try{
@@ -671,15 +707,27 @@ html, body { overscroll-behavior-y: none; overscroll-behavior: none; }
   document.addEventListener('touchmove', function(e){
     var t=e.target;
     if(!t || !t.closest) return;
+    // Full-screen settings / modals: never let the page underneath move
+    if(t.closest('.modal-bg.show.full') || t.closest('.modal-bg.full.show')){
+      var sc=t.closest('.modal-scroll');
+      if(!sc){ e.preventDefault(); return; }
+      var y=e.touches[0]?e.touches[0].clientY:lastY;
+      var dy=y-lastY;
+      lastY=y;
+      var top=sc.scrollTop<=0;
+      var bot=sc.scrollTop+sc.clientHeight>=sc.scrollHeight-2;
+      if((top && dy>0) || (bot && dy<0) || (top && bot)){ e.preventDefault(); }
+      return;
+    }
     if(t.closest('.modal-bg.show') || t.closest('.ka-bg') || t.closest('#finTour') || t.closest('.modal-card') || t.closest('.ka-chat')){
-      var sc=t.closest('.modal-scroll, .modal-card, .ka-chat, .ka-card');
-      if(sc){
-        var y=e.touches[0]?e.touches[0].clientY:lastY;
-        var dy=y-lastY;
-        lastY=y;
-        // Always prevent overscroll bounce / pull-to-refresh inside modals
-        if(sc.scrollTop<=0 && dy>0){ e.preventDefault(); return; }
-        if(sc.scrollTop+sc.clientHeight>=sc.scrollHeight-1 && dy<0){ e.preventDefault(); return; }
+      var sc2=t.closest('.modal-scroll, .modal-card, .ka-chat, .ka-card');
+      if(sc2){
+        var y2=e.touches[0]?e.touches[0].clientY:lastY;
+        var dy2=y2-lastY;
+        lastY=y2;
+        if((sc2.scrollTop<=0 && dy2>0) || (sc2.scrollTop+sc2.clientHeight>=sc2.scrollHeight-1 && dy2<0)){
+          e.preventDefault();
+        }
       } else {
         e.preventDefault();
       }

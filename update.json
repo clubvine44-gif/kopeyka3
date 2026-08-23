@@ -1,6 +1,6 @@
 {
-  "versionCode": 37,
-  "versionName": "3.5.7",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v3.5.7/Fin.apk",
-  "notes": "3.5.7 — обновление Финна (versionCode 37)"
+  "versionCode": 38,
+  "versionName": "3.5.8",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v3.5.8/Fin.apk",
+  "notes": "3.5.8 — зажим + открывает Фина, белое свечение облака, совет Фина выше, вау-подсветка обучения, фикс скролла настроек"
 }
