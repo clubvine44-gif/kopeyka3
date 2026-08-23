@@ -1,7 +1,7 @@
 (function(){
 'use strict';
 var GROQ_KEY='kopeyka_groq_key',GROQ_URL='https://api.groq.com/openai/v1/chat/completions',MODEL='openai/gpt-oss-20b';var MODELS=['openai/gpt-oss-20b','openai/gpt-oss-120b','qwen/qwen3.6-27b'];
-var _aiLastCall=0,_aiBackoffUntil=0,_aiMinGap=1800,_aiInflight=null;
+var _aiLastCall=0,_aiBackoffUntil=0,_aiMinGap=900,_aiInflight=null,_aiModelIdx=0;
 function getKey(){try{var k=(localStorage.getItem(GROQ_KEY)||'').trim();if(k)return k;}catch(e){}return (function(){try{return atob(['Z3NrX3N0','VVZMNHJF','VFJFQk56','OGs3ZWV2','V0dkeWIz','RllIeUMx','ZHJUbk1j','ZWU3TzBC','eHk4N0E3','M08='].join(''));}catch(e){return '';}})();}
 function setKey(key){try{key=String(key||'').trim();if(key)localStorage.setItem(GROQ_KEY,key);else localStorage.removeItem(GROQ_KEY);}catch(e){}}
 function hasKey(){return !!getKey();}
@@ -204,14 +204,14 @@ function askConversation(history,userText){
     messages.push({role:'user',content:String(userText||'')});
     var controller=typeof AbortController!=='undefined'?new AbortController():null;
     var timer=setTimeout(function(){try{if(controller)controller.abort();}catch(e){}reject(new Error('Groq не ответил за 20 секунд'));},20000);
-    fetch(GROQ_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model:MODEL,temperature:0.3,max_completion_tokens:800,messages:messages}),signal:controller?controller.signal:undefined}).then(function(response){
+    fetch(GROQ_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model:(MODELS[_aiModelIdx%MODELS.length]||MODEL),temperature:0.25,max_completion_tokens:600,messages:messages}),signal:controller?controller.signal:undefined}).then(function(response){
       return response.text().then(function(body){
         clearTimeout(timer);
         var data;try{data=JSON.parse(body);}catch(e){throw new Error('Groq вернул некорректный ответ ('+response.status+')');}
         if(!response.ok){
           var message=data&&data.error&&data.error.message?data.error.message:('HTTP '+response.status);
           if(response.status===401)message='Неверный ключ Groq';
-          if(response.status===429){_aiBackoffUntil=Date.now()+28000;message='Слишком много запросов к ИИ. Подожди 20–30 сек и повтори.';}
+          if(response.status===429){_aiModelIdx++;_aiBackoffUntil=Date.now()+12000;message='ИИ перегружен. Подожди 10–15 сек и повтори.';}
           throw new Error(message);
         }
         var content=data&&data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content;
@@ -231,5 +231,5 @@ function askConversation(history,userText){
 function askAgent(text){return askConversation([],text);}
 function ask(text){return askAgent(text).then(function(result){return result.mode==='answer'?(result.text||''):(result.summary||result.text||'');});}
 function testKey(){return askAgent('Ответь одним словом: готово').then(function(){return 'Ключ работает ✓';});}
-window.kopeykaAI={getKey:getKey,setKey:setKey,hasKey:hasKey,ask:ask,askAgent:askAgent,askConversation:askConversation,testKey:testKey,buildContext:getContext};
+window.kopeykaAI={getKey:getKey,setKey:setKey,hasKey:hasKey,ask:ask,askAgent:askAgent,askConversation:askConversation,testKey:testKey,buildContext:getContext,isCoolingDown:function(){return Date.now()<_aiBackoffUntil;}};
 })();

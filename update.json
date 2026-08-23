@@ -1,6 +1,6 @@
 {
-  "versionCode": 48,
-  "versionName": "3.6.8",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v3.6.8/Fin.apk",
-  "notes": "3.6.8 — обновление Финна (versionCode 48)"
+  "versionCode": 49,
+  "versionName": "3.6.9",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v3.6.9/Fin.apk",
+  "notes": "3.6.9 — правка погашения долга возвращает деньги в кассу; прогноз; без ₽₽; формы без прыжков; время смен; резервы можно менять"
 }

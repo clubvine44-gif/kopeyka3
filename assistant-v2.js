@@ -279,7 +279,7 @@ function execute(a){
   else if(t==='pay_debt'||t==='increase_debt'){
     d=find(s.debts,a.name,0);if(!d)throw Error('Долг не найден: '+(a.name||''));if(amt<=0)throw Error('Сумма > 0');
     if(t==='increase_debt')d.total=n(d.total)+amt;
-    else{var left=Math.max(0,n(d.total)-n(d.paid));if(amt>left)throw Error('Осталось '+fmt(left));d.paid=n(d.paid)+amt;var _pid=id();s.expenses.push({id:_pid,amount:amt,category:'Долг',note:d.name,date:dateOf(a)});s.lastOp={kind:'expense',id:_pid};}
+    else{var left=Math.max(0,n(d.total)-n(d.paid));if(amt>left)throw Error('Осталось '+fmt(left));d.paid=n(d.paid)+amt;var _pid=id();s.expenses.push({id:_pid,amount:amt,category:'Долг',note:d.name,date:dateOf(a),debtId:d.id});s.lastOp={kind:'expense',id:_pid};}
   }
   else if(t==='reserve_deposit'||t==='reserve_withdraw'){
     r=find(s.reserves,a.reserve||a.name,0);if(!r)throw Error('Резерв не найден');if(amt<=0)throw Error('Сумма > 0');
