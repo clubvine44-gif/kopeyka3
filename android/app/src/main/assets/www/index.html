@@ -708,7 +708,8 @@ html.fin-tour-scroll .card{content-visibility:visible!important;contain:none!imp
   </div>
   <div class="top-actions">
     <button class="icon-btn" id="btnCloud" title="Облако">☁</button>
-    <button class="icon-btn" id="btnNotif" title="Уведомления" style="display:none">🔔</button>
+    <button class="icon-btn notif-btn" id="btnNotif" title="Уведомления">🔔<span class="notif-badge" id="notifBadge" hidden>0</span></button>
+    <button class="icon-btn" id="btnFaq" title="Вопросы и ответы">?</button>
     <button class="icon-btn" id="btnSettings" title="Меню">☰</button>
   </div>
 </div><div class="wrap" id="app"></div>
@@ -734,7 +735,7 @@ html.fin-tour-scroll .card{content-visibility:visible!important;contain:none!imp
     <span>Платежи</span>
   </button>
 </nav>
-<div class="fab-wrap"><div class="radial" id="radial"><button data-act="income"><span class="ic">➕</span> Доход</button><button data-act="expense"><span class="ic">➖</span> Расход</button><button data-act="reserve"><span class="ic">🏦</span> Резерв</button><button data-act="debt"><span class="ic">📉</span> Долг</button><button data-act="oblig"><span class="ic">📅</span> Обязательный</button></div><button class="fab" id="fab" aria-label="Добавить"><span aria-hidden="true">+</span></button></div><div class="modal-bg" id="modalBg"></div><div class="modal-bg" id="dlgLayer"></div><div class="toast" id="toast"></div><script src="finn-char.js?v=2026082323"></script><script src="app.js?v=2026082323"></script><script src="profile.js?v=2026082323"></script><script src="onboard.js?v=2026082323"></script><script src="cloud.js?v=2026082323"></script><script src="products.js?v=2026082323"></script><script src="engine.js?v=2026082323"></script><script src="ai.js?v=2026082323"></script><script src="assistant-v2.js?v=2026082323"></script><script src="voice.js?v=2026082323"></script><script src="finn3d.js?v=2026082323"></script><script src="finn-wake.js?v=2026082323"></script><script>window.__kopeykaBuild='2026082323';window.__FIN_NATIVE=true;</script><script>
+<div class="fab-wrap"><div class="radial" id="radial"><button data-act="income"><span class="ic">➕</span> Доход</button><button data-act="expense"><span class="ic">➖</span> Расход</button><button data-act="reserve"><span class="ic">🏦</span> Резерв</button><button data-act="debt"><span class="ic">📉</span> Долг</button><button data-act="oblig"><span class="ic">📅</span> Обязательный</button></div><button class="fab" id="fab" aria-label="Добавить"><span aria-hidden="true">+</span></button></div><div class="modal-bg" id="modalBg"></div><div class="modal-bg" id="dlgLayer"></div><div class="toast" id="toast"></div><script src="finn-char.js?v=2026082401"></script><script src="app.js?v=2026082401"></script><script src="profile.js?v=2026082401"></script><script src="onboard.js?v=2026082401"></script><script src="cloud.js?v=2026082401"></script><script src="products.js?v=2026082401"></script><script src="engine.js?v=2026082401"></script><script src="ai.js?v=2026082401"></script><script src="assistant-v2.js?v=2026082401"></script><script src="voice.js?v=2026082401"></script><script src="finn3d.js?v=2026082401"></script><script src="finn-wake.js?v=2026082401"></script><script>window.__kopeykaBuild='2026082401';window.__FIN_NATIVE=true;</script><script>
 (function(){
   function tryTestPush(){
     try{
@@ -864,11 +865,16 @@ html.fin-tour-scroll .card{content-visibility:visible!important;contain:none!imp
     }
     var cur=current();
     box.innerHTML='';
+    function statusHtml(m){
+      var st={level:'unknown',label:'проверка…'};
+      try{if(window.kopeykaAI&&window.kopeykaAI.getModelStatus)st=window.kopeykaAI.getModelStatus(m.id)||st;}catch(e){}
+      return '<div class="mm-status"><i class="mm-dot '+(st.level||'unknown')+'"></i><span>'+(st.label||'')+'</span></div>';
+    }
     list.forEach(function(m){
       var b=document.createElement('button');
       b.type='button';
       b.className='mm-item'+(m.id===cur?' active':'');
-      b.innerHTML='<b>'+m.title+'</b><span>'+m.sub+'</span>';
+      b.innerHTML='<b>'+m.title+'</b><span>'+m.sub+'</span>'+statusHtml(m);
       b.onclick=function(e){
         e.preventDefault();e.stopPropagation();
         try{if(window.kopeykaAI&&window.kopeykaAI.setModel)window.kopeykaAI.setModel(m.id);
@@ -879,6 +885,20 @@ html.fin-tour-scroll .card{content-visibility:visible!important;contain:none!imp
       };
       box.appendChild(b);
     });
+    try{
+      if(window.kopeykaAI&&window.kopeykaAI.probeModelStatuses){
+        window.kopeykaAI.probeModelStatuses(false).then(function(){
+          if(!document.getElementById('finTitle')||!document.getElementById('finTitle').classList.contains('open'))return;
+          var again=document.getElementById('finModelList');
+          if(!again)return;
+          Array.prototype.forEach.call(again.querySelectorAll('.mm-item'),function(btn,i){
+            var m=list[i];if(!m)return;
+            var st=btn.querySelector('.mm-status');
+            if(st)st.outerHTML=statusHtml(m);
+          });
+        });
+      }
+    }catch(e){}
   }
   function toggle(e){
     if(e){e.preventDefault();e.stopPropagation();}

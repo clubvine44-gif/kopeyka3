@@ -32,6 +32,54 @@ function modelMeta(id){
   return MODEL_CATALOG[0];
 }
 function listModels(){return MODEL_CATALOG.slice();}
+var _modelStatusCache={}; // id -> {level,label,ms,at}
+function getModelStatus(id){
+  id=id||getModel();
+  var c=_modelStatusCache[id];
+  if(c&&Date.now()-c.at<120000)return c;
+  return c||{level:'unknown',label:'проверка…',ms:null,at:0};
+}
+function probeModelStatuses(force){
+  if(!navigator.onLine){
+    MODEL_CATALOG.forEach(function(m){_modelStatusCache[m.id]={level:'offline',label:'нет сети',ms:null,at:Date.now()};});
+    return Promise.resolve(_modelStatusCache);
+  }
+  var key=getKey();
+  if(!key){
+    MODEL_CATALOG.forEach(function(m){_modelStatusCache[m.id]={level:'nokey',label:'нет ключа',ms:null,at:Date.now()};});
+    return Promise.resolve(_modelStatusCache);
+  }
+  var need=force||MODEL_CATALOG.some(function(m){var c=_modelStatusCache[m.id];return !c||Date.now()-c.at>90000;});
+  if(!need)return Promise.resolve(_modelStatusCache);
+  var t0=Date.now();
+  return fetch('https://api.groq.com/openai/v1/models',{headers:{'Authorization':'Bearer '+key}}).then(function(r){
+    return r.json().then(function(data){
+      var ms=Date.now()-t0;
+      var ids={};
+      try{(data.data||[]).forEach(function(x){if(x&&x.id)ids[x.id]=true;});}catch(e){}
+      var apiOk=r.ok&&Object.keys(ids).length>0;
+      MODEL_CATALOG.forEach(function(m){
+        var available=apiOk?(ids[m.id]!==undefined):false;
+        var level,label;
+        if(!apiOk){
+          if(r.status===401){level='nokey';label='ключ неверный';}
+          else if(r.status===429){level='busy';label='лимит API';}
+          else{level='bad';label='нет связи';}
+        }else if(!available){
+          level='missing';label='недоступна';
+        }else if(ms<350){level='excellent';label='отличное · '+ms+' мс';}
+        else if(ms<900){level='good';label='хорошее · '+ms+' мс';}
+        else if(ms<2000){level='ok';label='среднее · '+ms+' мс';}
+        else{level='slow';label='медленное · '+ms+' мс';}
+        _modelStatusCache[m.id]={level:level,label:label,ms:ms,at:Date.now(),available:available};
+      });
+      return _modelStatusCache;
+    });
+  }).catch(function(){
+    MODEL_CATALOG.forEach(function(m){_modelStatusCache[m.id]={level:'bad',label:'нет связи',ms:null,at:Date.now()};});
+    return _modelStatusCache;
+  });
+}
 function getKey(){try{var k=(localStorage.getItem(GROQ_KEY)||'').trim();if(k)return k;}catch(e){}return (function(){try{return atob(['Z3NrX3N0','VVZMNHJF','VFJFQk56','OGs3ZWV2','V0dkeWIz','RllIeUMx','ZHJUbk1j','ZWU3TzBC','eHk4N0E3','M08='].join(''));}catch(e){return '';}})();}
 function setKey(key){try{key=String(key||'').trim();if(key)localStorage.setItem(GROQ_KEY,key);else localStorage.removeItem(GROQ_KEY);}catch(e){}}
 function hasKey(){return !!getKey();}
@@ -267,5 +315,5 @@ function askConversation(history,userText){
 function askAgent(text){return askConversation([],text);}
 function ask(text){return askAgent(text).then(function(result){return result.mode==='answer'?(result.text||''):(result.summary||result.text||'');});}
 function testKey(){return askAgent('Ответь одним словом: готово').then(function(){return 'Ключ работает ✓';});}
-window.kopeykaAI={getKey:getKey,setKey:setKey,hasKey:hasKey,getModel:getModel,setModel:setModel,listModels:listModels,modelMeta:modelMeta,ask:ask,askAgent:askAgent,askConversation:askConversation,testKey:testKey,buildContext:getContext,isCoolingDown:function(){return Date.now()<_aiBackoffUntil;}};
+window.kopeykaAI={getKey:getKey,setKey:setKey,hasKey:hasKey,getModel:getModel,setModel:setModel,listModels:listModels,modelMeta:modelMeta,getModelStatus:getModelStatus,probeModelStatuses:probeModelStatuses,ask:ask,askAgent:askAgent,askConversation:askConversation,testKey:testKey,buildContext:getContext,isCoolingDown:function(){return Date.now()<_aiBackoffUntil;}};
 })();

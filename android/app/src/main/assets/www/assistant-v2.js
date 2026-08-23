@@ -324,12 +324,20 @@ function showReply(text,actions){
   },220);
 }
 
+var _clearReplyTimer=null,_pinReply=false;
 function clearReply(){
   var el=document.getElementById('kaReply');
   if(!el)return;
+  if(_pinReply)return;
+  if(_clearReplyTimer){clearTimeout(_clearReplyTimer);_clearReplyTimer=null;}
   el.classList.remove('show');
   el.classList.add('hide');
-  setTimeout(function(){el.innerHTML='';el.classList.remove('hide');},240);
+  _clearReplyTimer=setTimeout(function(){
+    _clearReplyTimer=null;
+    if(_pinReply)return;
+    el.innerHTML='';
+    el.classList.remove('hide');
+  },240);
 }
 
 function status(t){
@@ -451,6 +459,8 @@ function cancelWord(t){return /^(нет|отмена|отменить|не на�
 
 
 function showAssistantCalendar(month){
+  _pinReply=true;
+  if(_clearReplyTimer){clearTimeout(_clearReplyTimer);_clearReplyTimer=null;}
   month=month||(window.today?window.today().slice(0,7):(new Date().toISOString().slice(0,7)));
   try{
     if(!month&&window.STATE&&window.STATE.settings)month=window.STATE.settings.month;
@@ -478,10 +488,13 @@ function showAssistantCalendar(month){
   html+='</div>';
   var el=document.getElementById('kaReply');
   if(!el)return;
-  el.classList.remove('hide');el.classList.add('show');
+  el.classList.remove('hide');
   el.innerHTML='<div style="font-size:13px;margin-bottom:6px;opacity:.9">Календарь смен · '+month+'</div>'+html;
   el.scrollTop=0;
+  requestAnimationFrame(function(){el.classList.add('show');});
   status('Нажми на меня, чтобы говорить');
+  // календарь держим, пока не придёт новый запрос
+  setTimeout(function(){_pinReply=false;},50);
 }
 
 function parseShiftVoice(cmd){
@@ -515,10 +528,16 @@ function handle(text){
     cmd=raw;
   }
   // не показываем речь пользователя — только растворяем старый ответ
+  _pinReply=false;
   clearReply();
   history.push({role:'user',content:cmd});saveHistory();
   var localShift=parseShiftVoice(cmd);
-  if(localShift&&localShift.showCal){showAssistantCalendar();maybeResumeListen(200);return;}
+  if(localShift&&localShift.showCal){
+    // чуть подождать, чтобы clearReply не стёр календарь
+    setTimeout(function(){showAssistantCalendar();},260);
+    maybeResumeListen(200);
+    return;
+  }
   if(localShift&&localShift.actions&&localShift.actions.length){
     pending=localShift.actions;
     showReply(localShift.summary,pending);
