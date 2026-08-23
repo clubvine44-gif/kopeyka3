@@ -11,7 +11,7 @@ function open(opts){
   var already=!!document.getElementById('kopeykaAiDialog');
   if(!already){
     loadHistory();
-    document.body.insertAdjacentHTML('beforeend','<div id="kopeykaAiDialog" class="ka-bg"><div class="ka-card"><div class="ka-head"><div class="ka-head-left"><span class="ka-dot"></span><div><div class="ka-title">Финн</div><div class="ka-sub" id="kaCloud">Готов</div></div></div><button class="ka-close" id="kaClose" aria-label="Закрыть">×</button></div><div class="ka-chat" id="kaChat"></div><div class="ka-status" id="kaStatus">Готов</div><div class="ka-input-row"><input id="kaInput" autocomplete="off" placeholder="Спроси что угодно…"><button id="kaSend" aria-label="Отправить">➤</button><button class="ka-mic" id="kaOrb" aria-label="Говорить">◉</button></div></div></div>');
+    document.body.insertAdjacentHTML('beforeend','<div id="kopeykaAiDialog" class="ka-bg"><div class="ka-card"><div class="ka-head"><div class="ka-head-left"><span class="ka-dot"></span><div><div class="ka-title">Финн</div><div class="ka-sub" id="kaCloud">Готов</div></div></div><button class="ka-close" id="kaClose" aria-label="Закрыть">×</button></div><div class="ka-chat" id="kaChat"></div><div class="ka-status" id="kaStatus">Готов</div><div class="ka-input-row"><input id="kaInput" autocomplete="off" placeholder="Спроси что угодно…"><button id="kaSend" aria-label="Отправить">➤</button><button class="ka-mic" id="kaOrb" aria-label="Микрофон"><svg class="ka-mic-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg><span class="ka-lock-hint">↑</span></button></div></div></div>');
     style();
     var bg=document.getElementById('kopeykaAiDialog');
     bg.addEventListener('click',function(e){if(e.target===bg)close();});
@@ -30,7 +30,7 @@ function close(){wantListen=false;stopListen();var e=document.getElementById('ko
 function style(){if(document.getElementById('kaStyle'))return;var s=document.createElement('style');s.id='kaStyle';s.textContent=''+
 '.ka-bg{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;'+
 'background:rgba(6,8,12,.52);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}'+
-'.ka-card{width:min(100%,380px);max-height:min(72vh,520px);display:flex;flex-direction:column;'+
+'.ka-card{width:min(100%,380px);max-height:min(88vh,640px);display:flex;flex-direction:column;'+
 'background:rgba(14,22,40,.94);border:1px solid rgba(94,200,255,.2);'+
 'border-radius:18px;box-shadow:0 20px 50px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.03);overflow:hidden;color:#F2F3F7}'+
 '.ka-head{display:flex;align-items:center;justify-content:space-between;padding:12px 12px 8px;'+
@@ -41,7 +41,7 @@ function style(){if(document.getElementById('kaStyle'))return;var s=document.cre
 '.ka-sub{font-size:11px;color:#9AA0B0;margin-top:1px}'+
 '.ka-close{width:32px;height:32px;border-radius:9px;border:1px solid rgba(255,255,255,.08);'+
 'background:#1C1F28;color:#F2F3F7;font-size:18px;line-height:1}'+
-'.ka-chat{flex:1;min-height:120px;max-height:38vh;overflow:auto;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;padding:10px 12px;display:flex;flex-direction:column;gap:7px}'+
+'.ka-chat{flex:1;min-height:120px;max-height:52vh;overflow:auto;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;padding:10px 12px;display:flex;flex-direction:column;gap:7px}'+
 '.ka-empty{margin:auto;text-align:center;color:#9AA0B0;font-size:12.5px;line-height:1.5;padding:10px}'+
 '.ka-msg{max-width:92%;padding:9px 11px;border-radius:13px;font-size:13px;line-height:1.42;white-space:pre-wrap}'+
 '.ka-user{align-self:flex-end;background:rgba(94,200,255,.13);border:1px solid rgba(94,200,255,.2);border-bottom-right-radius:4px}'+
@@ -67,11 +67,44 @@ function status(t){var e=document.getElementById('kaStatus');if(e)e.textContent=
 function updateCloud(){var e=document.getElementById('kaCloud'),c=window.kopeykaEngine&&window.kopeykaEngine.snapshot?window.kopeykaEngine.snapshot().cloud:null;if(e)e.textContent=c&&c.connected?'Облако подключено':c&&c.online?'Онлайн · локально':'Офлайн';}
 function sendInput(){var i=document.getElementById('kaInput');if(!i)return;var x=i.value.trim();if(x){i.value='';handle(x);}}
 function toggleListen(){if(listening||wantListen){wantListen=false;stopListen();status('Готов. Нажми круг или скажи «Фин»');}else startListen();}
-function bindHoldMic(btn){if(!btn||btn._hb)return;btn._hb=true;var holding=false;
-function down(e){e.preventDefault();if(holding)return;holding=true;btn.classList.add('holding');startListen();}
-function up(e){if(e)e.preventDefault();if(!holding)return;holding=false;btn.classList.remove('holding');stopListen();}
-btn.addEventListener('touchstart',down,{passive:false});btn.addEventListener('touchend',up,{passive:false});
-btn.addEventListener('touchcancel',up,{passive:false});btn.addEventListener('mousedown',down);btn.addEventListener('mouseup',up);btn.addEventListener('mouseleave',up);}
+function bindHoldMic(btn){if(!btn||btn._hb)return;btn._hb=true;
+var holding=false,locked=false,startY=0,moved=false;
+function setLocked(v){locked=v;btn.classList.toggle('locked',!!v);if(v){status('Слушаю постоянно · нажми, чтобы стоп');wantListen=true;if(!listening)startListen();}else{status('Готов');}}
+function down(e){
+  e.preventDefault();
+  if(locked){setLocked(false);stopListen();holding=false;btn.classList.remove('holding');return;}
+  if(holding)return;
+  holding=true;moved=false;
+  startY=(e.touches&&e.touches[0]?e.touches[0].clientY:(e.clientY||0));
+  btn.classList.add('holding');
+  startListen();
+}
+function move(e){
+  if(!holding||locked)return;
+  var y=(e.touches&&e.touches[0]?e.touches[0].clientY:(e.clientY||startY));
+  if(startY-y>48){moved=true;setLocked(true);btn.classList.remove('holding');holding=false;}
+}
+function up(e){
+  if(e)e.preventDefault();
+  if(locked)return;
+  if(!holding)return;
+  holding=false;btn.classList.remove('holding');
+  // release = stop listening (like WA send on release for voice - we stop and process via onresult)
+  // keep listening briefly if already got result; stopListen stops recognition
+  if(!moved){/* hold-to-talk: stop on release */}
+  stopListen();
+  status('Готов');
+}
+btn.addEventListener('touchstart',down,{passive:false});
+btn.addEventListener('touchmove',move,{passive:false});
+btn.addEventListener('touchend',up,{passive:false});
+btn.addEventListener('touchcancel',up,{passive:false});
+btn.addEventListener('mousedown',down);
+btn.addEventListener('mousemove',move);
+btn.addEventListener('mouseup',up);
+btn.addEventListener('mouseleave',up);
+}
+
 function startListen(){if(!SR){status('Нет распознавания речи');return;}if(listening)return;wantListen=true;restarts=0;createRecognition();}
 function createRecognition(){
   if(!wantListen||listening)return;
@@ -80,7 +113,7 @@ function createRecognition(){
   };
   rec.onresult=function(e){
     var t='';for(var i=0;i<e.results.length;i++)t+=e.results[i][0].transcript+' ';
-    t=t.trim();wantListen=false;stopListen();
+    t=t.trim();var wasLocked=document.getElementById('kaOrb')&&document.getElementById('kaOrb').classList.contains('locked');if(!wasLocked){wantListen=false;stopListen();}else{/* keep locked listening */} 
     if(!t){status('Не услышал — скажи «Фин»');return;}
     if(isOnlyWake(t)){status('Да, слушаю…');setTimeout(startListen,300);return;}
     handle(t);
@@ -112,12 +145,12 @@ function handle(text){
       if(!acts.length){
         var msg=o.text||o.summary||'Не понял. Скажи: «удали долг ёжику».';
         history.push({role:'assistant',content:msg});saveHistory();bubble('ai',msg);
-        status('Скажи «Фин»');setTimeout(startListen,600);return;
+        var lk=document.getElementById('kaOrb')&&document.getElementById('kaOrb').classList.contains('locked');status(lk?'Слушаю…':'Готов');if(lk)setTimeout(startListen,400);return;
       }
       pending=acts;renderAction(o.summary||o.text||'Нужно выполнить действие',pending);
     }else{
       var a=o.text||'Не смог ответить.';history.push({role:'assistant',content:a});saveHistory();bubble('ai',a);updateCloud();
-      status('Скажи «Фин»');setTimeout(startListen,700);
+      var lk2=document.getElementById('kaOrb')&&document.getElementById('kaOrb').classList.contains('locked');status(lk2?'Слушаю…':'Готов');if(lk2)setTimeout(startListen,500);
     }
   }).catch(function(e){
     var a='Не получилось: '+(e&&e.message||'Ошибка');history.push({role:'assistant',content:a});saveHistory();bubble('ai',a);status('Ошибка');setTimeout(startListen,800);

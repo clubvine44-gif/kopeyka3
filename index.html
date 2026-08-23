@@ -379,18 +379,41 @@ body.has-bnav{padding-bottom:calc(var(--nav-h) + 20px + var(--safe-b))}
 }
 /* Modal glass + scroll */
 .modal-bg.show{display:flex!important;align-items:flex-end;justify-content:center;padding:12px;padding-bottom:calc(12px + var(--safe-b))}
+.modal-bg.show.full{align-items:stretch;padding:0;padding-bottom:0}
 .modal-bg .modal-card, .modal-card{
   width:100%;max-width:420px;max-height:min(85vh,640px);
   overflow-y:auto;-webkit-overflow-scrolling:touch;
-  background:rgba(14,22,40,.92)!important;
-  backdrop-filter:blur(16px)!important;
-  -webkit-backdrop-filter:blur(16px)!important;
+  background:rgba(14,22,40,.96)!important;
+  backdrop-filter:blur(12px)!important;
+  -webkit-backdrop-filter:blur(12px)!important;
   border:1px solid rgba(120,180,255,.2)!important;
   border-radius:22px 22px 18px 18px!important;
   padding:18px 16px 20px!important;
   box-shadow:0 16px 48px rgba(0,0,0,.5)!important;
   color:var(--text);margin:0 auto;
 }
+.modal-bg.full .modal-card, .modal-card.full-screen{
+  max-width:none!important;max-height:none!important;height:100%!important;
+  border-radius:0!important;margin:0!important;
+  padding:calc(12px + var(--safe-t)) 16px calc(20px + var(--safe-b))!important;
+  display:flex;flex-direction:column;
+}
+.modal-card.full-screen .modal-scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;min-height:0}
+.dlg-field{margin-bottom:12px}
+.dlg-field label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+.dlg-field input,.dlg-field select,.dlg-field textarea{
+  width:100%;padding:12px 14px;border-radius:14px;
+  background:rgba(255,255,255,.06);border:1px solid var(--line);
+  color:var(--text);font-size:16px;
+}
+.dlg-actions{display:flex;gap:10px;margin-top:16px}
+.dlg-actions .btn{
+  flex:1;padding:13px;border-radius:14px;font-weight:700;font-size:15px;
+  background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--text);
+}
+.dlg-actions .btn.primary{background:linear-gradient(135deg,#5EC8FF,#3A8FE8);color:#0A101C;border:none}
+.dlg-actions .btn.danger{background:rgba(248,113,113,.15);border-color:rgba(248,113,113,.3);color:var(--red)}
+.dlg-msg{font-size:14px;line-height:1.45;color:var(--text);margin-bottom:8px;white-space:pre-wrap}
 .modal-title{font-size:17px;font-weight:700;margin-bottom:14px;letter-spacing:-.02em}
 .set-group{margin-bottom:14px}
 .set-group-title{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px;font-weight:600}
@@ -542,7 +565,7 @@ html, body { overscroll-behavior-y: none; overscroll-behavior: none; }
     <span>Платежи</span>
   </button>
 </nav>
-<div class="fab-wrap"><div class="radial" id="radial"><button data-act="income"><span class="ic">➕</span> Доход</button><button data-act="expense"><span class="ic">➖</span> Расход</button><button data-act="reserve"><span class="ic">🏦</span> Резерв</button><button data-act="debt"><span class="ic">📉</span> Долг</button><button data-act="oblig"><span class="ic">📅</span> Обязательный</button></div><button class="fab" id="fab" aria-label="Добавить"><span aria-hidden="true">+</span></button></div><div class="modal-bg" id="modalBg"></div><div class="toast" id="toast"></div><script src="app.js?v=2026082302"></script><script src="onboard.js?v=2026082302"></script><script src="cloud.js?v=2026082302"></script><script src="products.js?v=2026082302"></script><script src="engine.js?v=2026082302"></script><script src="ai.js?v=2026082302"></script><script src="assistant-v2.js?v=2026082302"></script><script src="voice.js?v=2026082302"></script><script src="finn3d.js?v=2026082302"></script><script src="finn-wake.js?v=2026082302"></script><script>window.__kopeykaBuild='2026082302';window.__FIN_NATIVE=true;</script><script>
+<div class="fab-wrap"><div class="radial" id="radial"><button data-act="income"><span class="ic">➕</span> Доход</button><button data-act="expense"><span class="ic">➖</span> Расход</button><button data-act="reserve"><span class="ic">🏦</span> Резерв</button><button data-act="debt"><span class="ic">📉</span> Долг</button><button data-act="oblig"><span class="ic">📅</span> Обязательный</button></div><button class="fab" id="fab" aria-label="Добавить"><span aria-hidden="true">+</span></button></div><div class="modal-bg" id="modalBg"></div><div class="toast" id="toast"></div><script src="app.js?v=2026082303"></script><script src="onboard.js?v=2026082303"></script><script src="cloud.js?v=2026082303"></script><script src="products.js?v=2026082303"></script><script src="engine.js?v=2026082303"></script><script src="ai.js?v=2026082303"></script><script src="assistant-v2.js?v=2026082303"></script><script src="voice.js?v=2026082303"></script><script src="finn3d.js?v=2026082303"></script><script src="finn-wake.js?v=2026082303"></script><script>window.__kopeykaBuild='2026082303';window.__FIN_NATIVE=true;</script><script>
 (function(){
   function tryTestPush(){
     try{

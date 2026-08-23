@@ -1,6 +1,6 @@
 {
-  "versionCode": 30,
-  "versionName": "3.5.0",
+  "versionCode": 31,
+  "versionName": "3.5.1",
   "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/latest/download/Fin.apk",
-  "notes": "3.4.3 — фикс скролла без pull-to-refresh, моргание Финна, новое приветственное обучение"
+  "notes": "3.5.1 — свои диалоги вместо системных окон, настройки на весь экран, микрофон как в WhatsApp (свайп вверх = постоянное прослушивание), быстрее интерфейс."
 }

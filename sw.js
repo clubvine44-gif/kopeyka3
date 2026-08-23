@@ -1,5 +1,5 @@
-const CACHE='kopeyka3-v48';
-const APP_SHELL=['./','./index.html','./app.js?v=2026082302','./cloud.js?v=2026082302','./onboard.js?v=2026082302','./products.js?v=2026082302','./voice.js?v=2026082302','./engine.js?v=2026082302','./ai.js?v=2026082302','./assistant-v2.js?v=2026082302','./finn-wake.js?v=2026082302','./widget.html','./manifest.json','./icon.svg'];
+const CACHE='kopeyka3-v49';
+const APP_SHELL=['./','./index.html','./app.js?v=2026082303','./cloud.js?v=2026082303','./onboard.js?v=2026082303','./products.js?v=2026082303','./voice.js?v=2026082303','./engine.js?v=2026082303','./ai.js?v=2026082303','./assistant-v2.js?v=2026082303','./finn-wake.js?v=2026082303','./widget.html','./manifest.json','./icon.svg'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(APP_SHELL)).then(()=>self.skipWaiting()));});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim()));});
 self.addEventListener('fetch',event=>{if(event.request.method!=='GET')return;var url=new URL(event.request.url);if(url.origin!==self.location.origin)return;event.respondWith(fetch(event.request,{cache:'no-store'}).then(response=>{if(response&&response.ok){var copy=response.clone();caches.open(CACHE).then(function(c){c.put(event.request,copy);}).catch(function(){});}return response;}).catch(()=>caches.match(event.request).then(cached=>cached||caches.match('./index.html'))));});
