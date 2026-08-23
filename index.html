@@ -36,14 +36,20 @@ button,input,select{font:inherit;color:inherit;border:none;outline:none;backgrou
 .topbar{
   position:sticky;top:0;z-index:50;
   display:flex;align-items:center;justify-content:space-between;
-  padding:10px 14px;
+  padding:10px 12px;
   background:rgba(10,16,28,.72);
   backdrop-filter:blur(12px);
   -webkit-backdrop-filter:blur(12px);
   border-bottom:1px solid var(--line);
+  gap:8px;
+}
+.top-left{flex:0 0 auto;width:56px;display:flex;align-items:center}
+.top-title{
+  flex:1;text-align:center;font-weight:700;font-size:17px;letter-spacing:.02em;
+  color:var(--text);opacity:.95;
 }
 .finn-avatar{
-  width:48px;height:48px;border-radius:50%;
+  width:44px;height:44px;border-radius:50%;
   display:flex;align-items:center;justify-content:center;
   cursor:pointer;position:relative;transition:transform .2s;
   background:rgba(255,255,255,.08);
@@ -51,25 +57,30 @@ button,input,select{font:inherit;color:inherit;border:none;outline:none;backgrou
   box-shadow:0 0 20px rgba(94,200,255,.15), inset 0 0 12px rgba(255,255,255,.05);
 }
 .finn-avatar:active{transform:scale(.92)}
-.finn-avatar svg{width:42px;height:42px}
+.finn-avatar svg{width:38px;height:38px}
 .finn-tip{
-  position:absolute;top:54px;left:50%;transform:translateX(-50%);
+  position:absolute;top:50px;left:0;transform:none;
   background:var(--card2);border:1px solid var(--line);
   padding:8px 12px;border-radius:12px;font-size:12px;white-space:nowrap;
   opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:60;
   box-shadow:0 8px 24px rgba(0,0,0,.45);backdrop-filter:blur(12px);
 }
 .finn-avatar.show-tip .finn-tip{opacity:1}
-.top-actions{display:flex;gap:8px}
+.top-actions{display:flex;gap:6px;flex:0 0 auto;width:auto;justify-content:flex-end}
 .icon-btn{
-  width:40px;height:40px;border-radius:14px;
+  width:38px;height:38px;border-radius:12px;
   display:flex;align-items:center;justify-content:center;
   background:rgba(255,255,255,.06);
   border:1px solid var(--line);
-  font-size:18px;
+  font-size:17px;
   transition:background .15s,border-color .15s;
 }
 .icon-btn:active{background:rgba(255,255,255,.12)}
+.icon-btn.sync-ok{color:var(--green)}
+.icon-btn.sync-busy{color:var(--gold);animation:spin 1.2s linear infinite}
+.icon-btn.sync-err{color:var(--red)}
+.icon-btn.sync-pending{color:var(--accent)}
+@keyframes spin{to{transform:rotate(360deg)}}
 
 .wrap{padding:12px 14px 24px;max-width:520px;margin:0 auto}
 
@@ -424,29 +435,91 @@ html, body { overscroll-behavior-y: none; overscroll-behavior: none; }
   100% { transform: scaleY(1); }
 }
 
-</style></head><body class="has-bnav"><div class="topbar"><div class="top-actions" style="width:80px"><button class="icon-btn" id="btnCloud" title="Облако">☁</button></div>
-<div class="finn-avatar status-green" id="finnAvatar" title="Финн">
-<span class="finn-aura"></span>
-<svg class="finn-face" viewBox="0 0 64 64" fill="none">
-  <defs>
-    <linearGradient id="finnCoin" x1="10" y1="8" x2="54" y2="56"><stop stop-color="#F8E0A8"/><stop offset=".45" stop-color="#E5A75E"/><stop offset="1" stop-color="#B86B2E"/></linearGradient>
-    <filter id="finnSoft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="1.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-  </defs>
-  <circle cx="32" cy="32" r="30" fill="#121018" stroke="#E5A75E" stroke-width="1.8" opacity=".95"/>
-  <circle cx="32" cy="32" r="25" fill="url(#finnCoin)" filter="url(#finnSoft)"/>
-  <circle cx="32" cy="32" r="20.5" fill="#1A1208"/>
-  <!-- eyes groups for blink -->
-  <g class="finn-eye-g"><circle id="finnEyeL" cx="24.5" cy="28" r="3.6" fill="#4ADE80"/></g>
-  <g class="finn-eye-g"><circle id="finnEyeR" cx="39.5" cy="28" r="3.6" fill="#4ADE80"/></g>
-  <!-- soft smile -->
-  <path id="finnMouth" d="M22 41c3.5 3.5 8 5 10 5s6.5-1.5 10-5" stroke="#E5A75E" stroke-width="2.2" stroke-linecap="round" fill="none" opacity=".9"/>
-  <!-- cheek dots -->
-  <circle cx="17" cy="35" r="1.6" fill="#E5A75E" opacity=".35"/>
-  <circle cx="47" cy="35" r="1.6" fill="#E5A75E" opacity=".35"/>
-</svg>
-<div class="finn-tip">Чтобы включить ИИ-ассистента удерживайте (+)</div>
-</div>
-<div class="top-actions" style="width:80px;justify-content:flex-end"><button class="icon-btn" id="btnSettings" title="Настройки">⚙</button></div></div><div class="wrap" id="app"></div>
+/* ===== New Home Screen styles ===== */
+.hero-label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+.hero-avail-hint{font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.3}
+.hero-kpis{display:flex;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.hero-kpis .kpi{flex:1;text-align:center}
+.hero-kpis .kpi-l{display:block;font-size:11px;color:var(--muted);margin-bottom:2px}
+.hero-kpis b{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
+.hero-kpis .neg{color:var(--red)}
+.sec-title-sm{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.06em;margin-bottom:10px}
+.today-card .today-shift{display:flex;flex-direction:column;gap:2px}
+.today-card .today-shift b{font-size:16px}
+.today-card .today-shift.off b{color:var(--muted)}
+.limit-card .limit-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}
+.limit-card .limit-val{font-size:22px;font-weight:800;color:var(--gold)}
+.limit-card .limit-sub{font-size:12px;color:var(--muted);margin-bottom:8px}
+.limit-bar{height:6px;background:rgba(255,255,255,.08);border-radius:99px;overflow:hidden;margin-bottom:8px}
+.limit-fill{height:100%;background:var(--gold);border-radius:99px;transition:width .3s}
+.limit-modes{display:flex;gap:8px}
+.limit-modes .mode{font-size:12px;padding:4px 10px;border-radius:99px;background:rgba(255,255,255,.06);color:var(--muted);cursor:pointer}
+.limit-modes .mode.active{background:rgba(94,200,255,.15);color:var(--accent)}
+.btn-add-main{
+  display:block;width:100%;padding:16px;margin:4px 0 12px;
+  background:linear-gradient(135deg,rgba(94,200,255,.25),rgba(94,200,255,.12));
+  border:1px solid rgba(94,200,255,.35);border-radius:16px;
+  font-size:16px;font-weight:700;color:var(--text);text-align:center;
+  box-shadow:0 4px 20px rgba(94,200,255,.15);
+}
+.btn-add-main:active{transform:scale(.98)}
+.quick-cats{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.quick-cats .qcat{
+  padding:10px 14px;border-radius:14px;font-size:13px;
+  background:rgba(255,255,255,.06);border:1px solid var(--line);
+}
+.quick-cats .qcat:active{background:rgba(255,255,255,.12)}
+.quick-cats .qcat.more{color:var(--accent)}
+.attention-card{border-color:rgba(248,113,113,.3);background:rgba(248,113,113,.08)}
+.att-item{font-size:13px;line-height:1.4;margin-bottom:6px;padding-left:10px;border-left:3px solid var(--red)}
+.link-more{display:block;width:100%;text-align:center;padding:10px;margin-top:6px;font-size:13px;color:var(--accent);background:none;border:none}
+.forecast-card .forecast-main{font-size:14px;line-height:1.45;margin-bottom:6px}
+.forecast-card .forecast-alt{font-size:12px}
+.res-total{font-size:18px;font-weight:700;margin-bottom:8px}
+.finn-tip-card{background:linear-gradient(145deg,rgba(30,50,90,.4),rgba(18,28,48,.5));border-color:rgba(94,200,255,.2)}
+.finn-tip-head{display:flex;align-items:center;gap:8px;font-weight:700;margin-bottom:6px}
+.finn-mini{font-size:18px}
+.finn-tip-body{font-size:13px;line-height:1.45;color:var(--text)}
+.week-strip{display:flex;gap:4px;margin-bottom:10px}
+.week-strip .wd{flex:1;text-align:center;padding:8px 2px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid transparent}
+.week-strip .wd.today{border-color:var(--accent);background:rgba(94,200,255,.1)}
+.week-strip .wd.day .wd-s{color:var(--gold)}
+.week-strip .wd.night .wd-s{color:var(--blue)}
+.week-strip .wd.off .wd-s{color:var(--muted)}
+.wd-d{display:block;font-size:10px;color:var(--muted)}
+.wd-s{display:block;font-size:14px;font-weight:700;margin-top:2px}
+.shift-summary{font-size:12px;color:var(--muted);margin-bottom:4px}
+.orbit-val{font-size:20px!important}
+#ringTap{cursor:pointer}
+
+</style></head><body class="has-bnav"><div class="topbar">
+  <div class="top-left">
+    <div class="finn-avatar status-green" id="finnAvatar" title="Финн">
+      <span class="finn-aura"></span>
+      <svg class="finn-face" viewBox="0 0 64 64" fill="none">
+        <defs>
+          <linearGradient id="finnCoin" x1="10" y1="8" x2="54" y2="56"><stop stop-color="#F8E0A8"/><stop offset=".45" stop-color="#E5A75E"/><stop offset="1" stop-color="#B86B2E"/></linearGradient>
+          <filter id="finnSoft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="1.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+        <circle cx="32" cy="32" r="30" fill="#121018" stroke="#E5A75E" stroke-width="1.8" opacity=".95"/>
+        <circle cx="32" cy="32" r="25" fill="url(#finnCoin)" filter="url(#finnSoft)"/>
+        <circle cx="32" cy="32" r="20.5" fill="#1A1208"/>
+        <g class="finn-eye-g"><circle id="finnEyeL" cx="24.5" cy="28" r="3.6" fill="#4ADE80"/></g>
+        <g class="finn-eye-g"><circle id="finnEyeR" cx="39.5" cy="28" r="3.6" fill="#4ADE80"/></g>
+        <path id="finnMouth" d="M22 41c3.5 3.5 8 5 10 5s6.5-1.5 10-5" stroke="#E5A75E" stroke-width="2.2" stroke-linecap="round" fill="none" opacity=".9"/>
+        <circle cx="17" cy="35" r="1.6" fill="#E5A75E" opacity=".35"/>
+        <circle cx="47" cy="35" r="1.6" fill="#E5A75E" opacity=".35"/>
+      </svg>
+      <div class="finn-tip">Нажми, чтобы поговорить с Финном</div>
+    </div>
+  </div>
+  <div class="top-title">Копейка</div>
+  <div class="top-actions">
+    <button class="icon-btn" id="btnCloud" title="Облако">☁</button>
+    <button class="icon-btn" id="btnNotif" title="Уведомления" style="display:none">🔔</button>
+    <button class="icon-btn" id="btnSettings" title="Меню">☰</button>
+  </div>
+</div><div class="wrap" id="app"></div>
 <nav class="bottom-nav" id="bottomNav">
   <button type="button" class="bn-item active" data-view="home">
     <span class="bn-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5L12 4l8 6.5V20a1 1 0 01-1 1h-5v-6H10v6H5a1 1 0 01-1-1v-9.5z"/></svg></span>

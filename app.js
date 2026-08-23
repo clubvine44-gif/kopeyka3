@@ -158,14 +158,251 @@ if(c.available>0&&c.daysLeft>1){
 }
 
 /* view-aware main render */
-var homeHtml = '<div class="card hero"><div class="hero-main"><div class="orbit-wrap">'+ringSvg+'<div class="orbit-core"><div class="orbit-val">'+dailyStr+'</div><div class="orbit-sub">на день</div></div></div><div class="hero-stats"><div class="hero-shift">'+sl+' · ещё '+c.daysLeft+' дн.</div><div class="ring-legend">'+legendHtml+'</div></div></div>'+sparkWrap+whyDaily+'</div><div class="card tight"><div class="month-nav"><button type="button" class="mnav" id="mPrev">‹</button><div class="month-title">'+monthLabel(month)+(isCurrent?'':' · просмотр')+'</div><button type="button" class="mnav" id="mNext">›</button></div>'+cal+'<button type="button" class="btn-shift" id="btnShiftPay">Смены и зарплата</button></div>';
+var homeHtml = '';
 
-homeHtml += '<div class="card tight"><div class="quick-grid">'
-  +'<button type="button" class="quick-nav" data-view="obl"><div class="qn-label">Обязательные</div><b>'+(c.obligDue?fmt(c.obligDue):'—')+'</b></button>'
-  +'<button type="button" class="quick-nav" data-view="res"><div class="qn-label">Резервы</div><b>'+fmt(c.reservesTotal)+'</b></button>'
-  +'<button type="button" class="quick-nav" data-view="debt"><div class="qn-label">Долги</div><b>'+(c.debtLeft?fmt(c.debtLeft):'—')+'</b></button>'
-  +'<button type="button" class="quick-nav" data-view="ops"><div class="qn-label">Операции</div><b>'+String(ops.length)+'</b></button>'
-  +'</div></div>';
+// ===== Доп. данные для главного экрана =====
+var spentToday=0;(STATE.expenses||[]).forEach(function(e){if(e.date===t)spentToday+=num(e.amount);});
+var nearestObl = [];
+(STATE.obligations||[]).forEach(function(ob){
+  if(ob.active===false)return;
+  var paid=0;
+  (STATE.obligationPays||[]).forEach(function(p){if(p.obligId===ob.id&&p.month===month)paid+=num(p.amount);});
+  var left=Math.max(0,num(ob.amount)-paid);
+  if(left<=0)return;
+  var day=Math.min(Math.max(1,num(ob.day)||1), new Date(ym[0],ym[1],0).getDate());
+  var dueDate = month+'-'+String(day).padStart(2,'0');
+  var daysUntil = days(t, dueDate);
+  if(daysUntil < 0 && isCurrent){ /* overdue this month */ daysUntil = daysUntil; }
+  else if(daysUntil < 0){ /* next month approx */ daysUntil = daysUntil + 30; }
+  nearestObl.push({name:ob.name, amount:left, day:day, daysUntil:daysUntil, overdue:daysUntil<0, id:ob.id});
+});
+nearestObl.sort(function(a,b){return a.daysUntil-b.daysUntil;});
+nearestObl = nearestObl.slice(0,3);
+
+// Последние операции (3-5)
+var recentOps = [];
+(STATE.income||[]).forEach(function(i){recentOps.push({t:i.date,type:'in',a:i.amount,n:i.note||'Доход',id:i.id,k:'in'});});
+(STATE.expenses||[]).forEach(function(e){
+  var label=e.category||'Расход';
+  if(e.category==='Долг'&&e.note)label=e.note;
+  else if(e.note&&e.category==='Обязательные')label=e.note;
+  recentOps.push({t:e.date,type:'ex',a:e.amount,n:label,id:e.id,k:'ex'});
+});
+(STATE.reserveOps||[]).forEach(function(o){
+  var r=(STATE.reserves||[]).find(function(x){return x.id===o.reserveId;});
+  var name=r?r.name:'Резерв';
+  recentOps.push({t:o.date,type:o.type==='deposit'?'res-':'res+',a:o.amount,n:'Резерв «'+name+'»',id:o.id,k:'resop'});
+});
+recentOps.sort(function(a,b){return (b.t||'').localeCompare(a.t||'');});
+recentOps = recentOps.slice(0,5);
+
+// Быстрые категории из истории
+var catCount={};
+(STATE.expenses||[]).forEach(function(e){
+  var cat=e.category||'Прочее';
+  if(cat==='Долг'||cat==='Обязательные')return;
+  catCount[cat]=(catCount[cat]||0)+1;
+});
+var quickCats = Object.keys(catCount).sort(function(a,b){return catCount[b]-catCount[a];}).slice(0,4);
+if(!quickCats.length) quickCats=['Продукты','Кафе','Проезд','Сигареты'];
+
+// Прогноз
+var spentSoFar = c.expenses || 0;
+var daysPassed = isCurrent ? Math.max(1, Number(t.slice(8)) ) : 1;
+var pacePerDay = spentSoFar / daysPassed;
+var forecastPace = Math.round(c.available - pacePerDay * c.daysLeft);
+if(forecastPace < 0) forecastPace = 0;
+var forecastLimit = Math.max(0, c.available - c.daily * c.daysLeft); // if stick to limit ~0 extra, but actually available -0
+// better: if stick to daily, remaining at end = available - daily*daysLeft ~0 or residual
+var residual = c.available - c.daily * c.daysLeft;
+var forecastStick = Math.max(0, residual);
+
+// Сегодняшняя смена info
+var shiftInfo = '';
+if(sh==='off'){
+  shiftInfo = '<div class="today-shift off">Сегодня выходной</div>';
+}else{
+  var rate = (STATE.settings && (sh==='day' ? STATE.settings.dayRate : STATE.settings.nightRate)) || 0;
+  var expected = rate ? '+'+fmt(rate)+' ₽' : '';
+  var shiftName = sh==='day' ? 'Дневная смена' : 'Ночная смена';
+  // rough time
+  var timeStr = sh==='day' ? '08:00 → 20:00' : '20:00 → 08:00';
+  shiftInfo = '<div class="today-shift '+sh+'"><b>'+shiftName+'</b><span class="muted">'+timeStr+(expected?' · ожидается '+expected:'')+'</span></div>';
+}
+
+// Финн tip
+var finnTip = '';
+if(c.available <= 0){
+  finnTip = 'Свободных денег нет. Лучше сегодня не тратить и разобраться с долгами или обязательными.';
+}else if(nearestObl.length && nearestObl[0].daysUntil <= 3){
+  finnTip = 'До платежа «'+nearestObl[0].name+'» осталось '+Math.max(0,nearestObl[0].daysUntil)+' дн. Я бы сегодня не тратил больше '+fmt(Math.floor(c.available/Math.max(1,nearestObl[0].daysUntil+1)))+' ₽.';
+}else if(c.daily > 0){
+  finnTip = 'Сегодня ты потратил '+fmt(spentToday)+' ₽ из лимита '+fmt(c.daily)+' ₽. '+(spentToday<=c.daily?'Всё нормально.':'Осторожнее.');
+}else{
+  finnTip = 'Резервы заполнены на '+ (c.reservesTotal>0?Math.round(c.reservesTotal/Math.max(1,(STATE.reserves||[]).reduce(function(s,r){return s+num(r.target);},0))*100):0)+'%. Продолжай в том же духе.';
+}
+
+// Блок «Обрати внимание»
+var attention = [];
+if(nearestObl.length && nearestObl[0].overdue){
+  attention.push('Платёж «'+nearestObl[0].name+'» просрочен на '+Math.abs(nearestObl[0].daysUntil)+' дн. Осталось '+fmt(nearestObl[0].amount)+' ₽.');
+}else if(nearestObl.length && nearestObl[0].daysUntil <= 3){
+  attention.push('До платежа «'+nearestObl[0].name+'» осталось '+nearestObl[0].daysUntil+' дн. Нужно '+fmt(nearestObl[0].amount)+' ₽.');
+}
+if(c.available > 0 && pacePerDay > c.daily * 1.2 && daysPassed > 3){
+  attention.push('Текущий темп расходов выше безопасного на '+Math.round((pacePerDay/c.daily-1)*100)+'%.');
+}
+(STATE.reserves||[]).forEach(function(r){
+  if(num(r.target)>0 && num(r.saved)>=num(r.target)) attention.push('Резерв «'+r.name+'» достиг цели!');
+});
+if(c.available < c.daily * 3 && c.available > 0){
+  attention.push('Денег осталось мало. Крупно следи за дневным лимитом.');
+}
+
+// ===== 1. Главный финансовый блок + кольцо =====
+homeHtml += '<div class="card hero" id="mainFinance">';
+homeHtml += '<div class="hero-label">Сейчас</div>';
+homeHtml += '<div class="hero-main">';
+homeHtml += '<div class="orbit-wrap" id="ringTap" title="Подробная расшифровка">'+ringSvg;
+homeHtml += '<div class="orbit-core"><div class="orbit-val">'+fmt(c.available)+'</div><div class="orbit-sub">Доступно</div></div></div>';
+homeHtml += '<div class="hero-stats">';
+homeHtml += '<div class="hero-avail-hint">можно потратить без нарушения планов</div>';
+homeHtml += '<div class="ring-legend">'+legendHtml+'</div>';
+homeHtml += '</div></div>';
+homeHtml += '<div class="hero-kpis">';
+homeHtml += '<div class="kpi"><span class="kpi-l">Касса</span><b>'+fmt(c.cash)+'</b></div>';
+homeHtml += '<div class="kpi"><span class="kpi-l">Резервы</span><b>'+fmt(c.reservesTotal)+'</b></div>';
+homeHtml += '<div class="kpi"><span class="kpi-l">Долги</span><b class="'+(c.debtLeft?'neg':'')+'">'+fmt(c.debtLeft||0)+'</b></div>';
+homeHtml += '</div>';
+homeHtml += sparkWrap + whyDaily;
+homeHtml += '</div>';
+
+// ===== 4. Сегодня =====
+homeHtml += '<div class="card tight today-card">';
+homeHtml += '<div class="sec-title-sm">СЕГОДНЯ</div>';
+homeHtml += shiftInfo;
+homeHtml += '</div>';
+
+// ===== 5. Лимит на сегодня =====
+homeHtml += '<div class="card tight limit-card" id="limitCard">';
+homeHtml += '<div class="limit-head"><span>Лимит на сегодня</span><b class="limit-val">'+fmt(c.daily)+' ₽</b></div>';
+homeHtml += '<div class="limit-sub">До конца месяца '+c.daysLeft+' дн.</div>';
+var limitPct = c.daily>0 ? Math.min(100, Math.round( (spentToday||0)/c.daily *100 )) : 0;
+homeHtml += '<div class="limit-bar"><div class="limit-fill" style="width:'+limitPct+'%"></div></div>';
+homeHtml += '<div class="limit-modes"><span class="mode active" data-mode="auto">Авто</span><span class="mode" data-mode="manual">Ручной</span></div>';
+homeHtml += '</div>';
+
+// ===== 6. Главная кнопка добавить =====
+homeHtml += '<button type="button" class="btn-add-main" id="btnAddMain">＋ Добавить операцию</button>';
+
+// ===== 7. Быстрые расходы =====
+homeHtml += '<div class="quick-cats">';
+quickCats.forEach(function(cat){
+  homeHtml += '<button type="button" class="qcat" data-cat="'+esc(cat)+'">'+esc(cat)+'</button>';
+});
+homeHtml += '<button type="button" class="qcat more" data-cat="__all">Все категории</button>';
+homeHtml += '</div>';
+
+// ===== 15. Обрати внимание =====
+if(attention.length){
+  homeHtml += '<div class="card attention-card">';
+  homeHtml += '<div class="sec-title-sm">ОБРАТИ ВНИМАНИЕ</div>';
+  attention.slice(0,2).forEach(function(a){ homeHtml += '<div class="att-item">'+esc(a)+'</div>'; });
+  homeHtml += '</div>';
+}
+
+// ===== 9. Ближайшие платежи =====
+if(nearestObl.length){
+  homeHtml += '<div class="card tight">';
+  homeHtml += '<div class="sec-title-sm">БЛИЖАЙШИЕ ПЛАТЕЖИ</div>';
+  nearestObl.forEach(function(o){
+    var when = o.overdue ? '<span class="neg">просрочен</span>' : ('через '+o.daysUntil+' дн.');
+    homeHtml += '<div class="item" data-id="'+o.id+'" data-k="obl"><div class="left"><b>'+esc(o.name)+'</b><span class="muted">'+when+'</span></div><div class="amt minus">'+fmt(o.amount)+'</div></div>';
+  });
+  homeHtml += '<button type="button" class="link-more" data-view="obl">Все платежи →</button>';
+  homeHtml += '</div>';
+}
+
+// ===== 10. Последние операции =====
+homeHtml += '<div class="card tight">';
+homeHtml += '<div class="sec-title-sm">ПОСЛЕДНИЕ ОПЕРАЦИИ</div>';
+if(recentOps.length){
+  recentOps.forEach(function(o){
+    var cls = o.type==='in'||o.type==='res+' ? 'plus' : 'minus';
+    var sign = o.type==='in'||o.type==='res+' ? '+' : '−';
+    homeHtml += '<div class="item" data-id="'+o.id+'" data-k="'+o.k+'"><div class="left"><b>'+esc(o.n)+'</b><span class="muted">'+(o.t||'')+'</span></div><div class="amt '+cls+'">'+sign+fmt(o.a)+'</div></div>';
+  });
+}else{
+  homeHtml += '<div class="empty tight">Пока нет операций</div>';
+}
+homeHtml += '<button type="button" class="link-more" data-view="ops">Все операции →</button>';
+homeHtml += '</div>';
+
+// ===== 11. Прогноз =====
+homeHtml += '<div class="card tight forecast-card" id="forecastCard">';
+homeHtml += '<div class="sec-title-sm">ПРОГНОЗ</div>';
+homeHtml += '<div class="forecast-main">При текущем темпе расходов<br>к концу месяца останется: <b>'+fmt(forecastPace)+' ₽</b></div>';
+homeHtml += '<div class="forecast-alt muted">Если придерживаться дневного лимита: <b>'+fmt(Math.max(0,c.available - spentSoFar/*approx*/))+ ' ₽</b></div>';
+homeHtml += '</div>';
+
+// ===== 12. Резервы =====
+var resTargetTotal = 0;
+(STATE.reserves||[]).forEach(function(r){resTargetTotal+=num(r.target);});
+var resPct = resTargetTotal>0 ? Math.min(100,Math.round(c.reservesTotal/resTargetTotal*100)) : 0;
+homeHtml += '<div class="card tight">';
+homeHtml += '<div class="sec-title-sm">РЕЗЕРВЫ</div>';
+homeHtml += '<div class="res-total">'+fmt(c.reservesTotal)+(resTargetTotal?' / '+fmt(resTargetTotal):'')+' ₽</div>';
+homeHtml += '<div class="limit-bar"><div class="limit-fill" style="width:'+resPct+'%;background:var(--green)"></div></div>';
+var topRes = (STATE.reserves||[]).slice().sort(function(a,b){return num(b.saved)-num(a.saved);}).slice(0,2);
+topRes.forEach(function(r){
+  var pct=r.target>0?Math.min(100,Math.round(num(r.saved)/num(r.target)*100)):0;
+  homeHtml += '<div class="item" data-id="'+r.id+'" data-k="res"><div class="left"><b>'+esc(r.name)+'</b><span class="muted">'+fmt(r.saved)+(r.target?' / '+fmt(r.target):'')+'</span></div><div class="amt">'+pct+'%</div></div>';
+});
+homeHtml += '<button type="button" class="link-more" data-view="res">Все резервы →</button>';
+homeHtml += '</div>';
+
+// ===== 13. Долги =====
+if(c.debtLeft > 0){
+  homeHtml += '<div class="card tight">';
+  homeHtml += '<div class="sec-title-sm">ДОЛГИ</div>';
+  homeHtml += '<div class="res-total neg">Осталось: '+fmt(c.debtLeft)+' ₽</div>';
+  (STATE.debts||[]).slice(0,3).forEach(function(d){
+    var left=Math.max(0,num(d.total)-num(d.paid));
+    if(left<=0)return;
+    homeHtml += '<div class="item" data-id="'+d.id+'" data-k="debt"><div class="left"><b>'+esc(d.name)+'</b></div><div class="amt minus">'+fmt(left)+'</div></div>';
+  });
+  homeHtml += '<button type="button" class="link-more" data-view="debt">Все долги →</button>';
+  homeHtml += '</div>';
+}
+
+// ===== 14. Смены (компактно) =====
+var shCounts = countShifts ? countShifts(month) : {day:0,night:0,off:0};
+// compact 7 days
+var weekHtml = '<div class="week-strip">';
+for(var wd=0;wd<7;wd++){
+  var wdt = new Date(ym[0],ym[1]-1, Number(t.slice(8))+wd );
+  var wds = wdt.getFullYear()+'-'+String(wdt.getMonth()+1).padStart(2,'0')+'-'+String(wdt.getDate()).padStart(2,'0');
+  var ws = shift(wds, STATE.shiftsOverride);
+  var wlab = ws==='day'?'Д':ws==='night'?'Н':'В';
+  var isTod = wds===t;
+  weekHtml += '<div class="wd'+(isTod?' today':'')+' '+ws+'"><span class="wd-d">'+['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][wdt.getDay()]+'</span><span class="wd-s">'+wlab+'</span></div>';
+}
+weekHtml += '</div>';
+homeHtml += '<div class="card tight">';
+homeHtml += '<div class="sec-title-sm">МОИ СМЕНЫ</div>';
+homeHtml += weekHtml;
+homeHtml += '<div class="shift-summary">'+ (shCounts.day||0)+' дневных · '+(shCounts.night||0)+' ночных · '+(shCounts.off||0)+' выходных</div>';
+homeHtml += '<button type="button" class="link-more" id="btnFullCal">Полный календарь →</button>';
+homeHtml += '</div>';
+
+// ===== 17. Финн tip =====
+homeHtml += '<div class="card finn-tip-card" id="finnTipCard">';
+homeHtml += '<div class="finn-tip-head"><span class="finn-mini">🦊</span> Финн</div>';
+homeHtml += '<div class="finn-tip-body">'+esc(finnTip)+'</div>';
+homeHtml += '</div>';
+
+// month nav + cal (keep existing calendar)
+homeHtml += '<div class="card tight"><div class="month-nav"><button type="button" class="mnav" id="mPrev">‹</button><div class="month-title">'+monthLabel(month)+(isCurrent?'':' · просмотр')+'</div><button type="button" class="mnav" id="mNext">›</button></div>'+cal+'<button type="button" class="btn-shift" id="btnShiftPay">Смены и зарплата</button></div>';
 
 var viewTitle = {obl:'Обязательные',res:'Резервы и цели',debt:'Долги',ops:'Операции',an:'Аналитика'}[currentView]||'';
 var viewBody = '';
@@ -184,7 +421,44 @@ if(currentView==='home'){
 app.innerHTML = htmlOut;
 
 try{if(window.FinBridge){if(window.FinBridge.updateWidgetDataFull){window.FinBridge.updateWidgetDataFull(fmt(c.daily),fmt(c.cash),fmt(c.available),sl,String(c.daysLeft));}else if(window.FinBridge.updateWidgetData){window.FinBridge.updateWidgetData(fmt(c.daily),fmt(c.cash),sl);}}}catch(e){}
-if(!app._bound){app._bound=true;app.addEventListener('click',function(e){var t=e.target.closest('[data-date],.item[data-id],.sec-head,#mPrev,#mNext,#btnShiftPay,.quick-nav,[data-view]');if(!t||!app.contains(t))return;if(t.classList&&t.classList.contains('quick-nav')||t.dataset.view){goView(t.dataset.view);return;}if(t.id==='mPrev'){viewMonth=shiftMonth(getViewMonth(),-1);render();return;}if(t.id==='mNext'){viewMonth=shiftMonth(getViewMonth(),1);render();return;}if(t.id==='btnShiftPay'){showShiftPay();return;}if(t.classList.contains('sec-head')){var secEl=t.parentElement,id=secEl.dataset.sec;openSecs[id]=!openSecs[id];secEl.classList.toggle('open',!!openSecs[id]);return;}if(t.dataset.date){var isCur=(getViewMonth()===today().slice(0,7));if(!isCur){viewMonth=today().slice(0,7);render();toast('Вернись к текущему месяцу');return;}pushUndo();var ds=t.dataset.date,cur=shift(ds,STATE.shiftsOverride),n=cur==='day'?'night':cur==='night'?'off':'day';STATE.shiftsOverride[ds]=n;save(true);render();toast('Смена: '+(SHIFT_LABEL[n]||n));return;}var id=t.dataset.id,k=t.dataset.k,month=getViewMonth();if(!id||!k)return;
+if(!app._bound){app._bound=true;app.addEventListener('click',function(e){var t=e.target.closest('[data-date],.item[data-id],.sec-head,#mPrev,#mNext,#btnShiftPay,.quick-nav,[data-view],#btnAddMain,.qcat,#limitCard,#ringTap,#finnTipCard,#btnFullCal,.link-more,.mode');if(!t||!app.contains(t))return;if(t.classList&&t.classList.contains('quick-nav')||t.dataset.view){goView(t.dataset.view);return;}
+if(t.id==='btnAddMain'||t.classList.contains('qcat')){
+  var cat=t.dataset.cat;
+  if(typeof openModal==='function'){
+    // open expense with optional category
+    if(cat&&cat!=='__all'){ window.__prefillCat=cat; }
+    // trigger fab radial or direct expense
+    var fab=document.getElementById('fab');
+    if(fab) fab.click();
+    else if(typeof addExpense==='function'){ /* fallback */ }
+  }
+  return;
+}
+if(t.id==='ringTap'||t.closest&&t.closest('#ringTap')){
+  var cc=compute();var det='Касса — '+fmt(cc.cash)+' ₽\n− обязательные — '+fmt(cc.obligDue||0)+' ₽\n− долги — '+fmt(cc.debtLeft||0)+' ₽\n\nДоступно — '+fmt(cc.available)+' ₽';
+  alert(det);
+  return;
+}
+if(t.id==='limitCard'||t.closest('#limitCard')){
+  var mode=t.dataset.mode;
+  if(mode){ /* toggle manual later */ toast(mode==='auto'?'Автоматический лимит':'Ручной лимит (скоро)'); return; }
+  var cc2=compute();var det2='Доступно сейчас — '+fmt(cc2.available)+' ₽\nОбязательства — '+fmt((cc2.obligDue||0)+(cc2.debtLeft||0))+' ₽\nОсталось дней — '+cc2.daysLeft+'\nРекомендуемый лимит — '+fmt(cc2.daily)+' ₽/день';
+  alert(det2);
+  return;
+}
+if(t.id==='finnTipCard'){
+  if(typeof window.openAssistant==='function') window.openAssistant();
+  else if(document.getElementById('finnAvatar')) document.getElementById('finnAvatar').click();
+  return;
+}
+if(t.id==='btnFullCal'){
+  // scroll to cal or just toast
+  var calEl=document.querySelector('.cal');
+  if(calEl) calEl.scrollIntoView({behavior:'smooth'});
+  return;
+}
+if(t.classList.contains('link-more')&&t.dataset.view){goView(t.dataset.view);return;}
+if(t.id==='mPrev'){viewMonth=shiftMonth(getViewMonth(),-1);render();return;}if(t.id==='mNext'){viewMonth=shiftMonth(getViewMonth(),1);render();return;}if(t.id==='btnShiftPay'){showShiftPay();return;}if(t.classList.contains('sec-head')){var secEl=t.parentElement,id=secEl.dataset.sec;openSecs[id]=!openSecs[id];secEl.classList.toggle('open',!!openSecs[id]);return;}if(t.dataset.date){var isCur=(getViewMonth()===today().slice(0,7));if(!isCur){viewMonth=today().slice(0,7);render();toast('Вернись к текущему месяцу');return;}pushUndo();var ds=t.dataset.date,cur=shift(ds,STATE.shiftsOverride),n=cur==='day'?'night':cur==='night'?'off':'day';STATE.shiftsOverride[ds]=n;save(true);render();toast('Смена: '+(SHIFT_LABEL[n]||n));return;}var id=t.dataset.id,k=t.dataset.k,month=getViewMonth();if(!id||!k)return;
 if(k==='in'){if(!confirm('Удалить доход?'))return;pushUndo();STATE.income=STATE.income.filter(function(i){return i.id!==id;});save(true);render();toast('Удалено');return;}if(k==='ex'){if(!confirm('Удалить расход?'))return;pushUndo();STATE.expenses=STATE.expenses.filter(function(i){return i.id!==id;});save(true);render();toast('Удалено');return;}
 if(k==='res'){var r=STATE.reserves.find(function(i){return i.id===id;});if(!r)return;var act=prompt('Резерв «'+r.name+'»\n1 — пополнить\n2 — снять\n3 — удалить','1');if(act==='3'){if(!confirm('Удалить резерв?'))return;pushUndo();STATE.reserves=STATE.reserves.filter(function(i){return i.id!==id;});STATE.reserveOps=STATE.reserveOps.filter(function(o){return o.reserveId!==id;});save(true);render();toast('Удалено');}else if(act==='2'){var a=num(prompt('Снять:','0'));if(a>0&&a<=num(r.saved)){pushUndo();r.saved=num(r.saved)-a;STATE.reserveOps.push({id:uid(),reserveId:id,type:'withdraw',amount:a,date:today()});save(true);render();toast('Снято');}}else if(act==='1'){var a2=num(prompt('Пополнить:','0'));if(a2>0){pushUndo();r.saved=num(r.saved)+a2;STATE.reserveOps.push({id:uid(),reserveId:id,type:'deposit',amount:a2,date:today()});save(true);render();toast('Пополнено');}}return;}
 if(k==='debt'){var d=STATE.debts.find(function(i){return i.id===id;});if(!d)return;var act=prompt('Долг «'+d.name+'»\n1 — платёж\n2 — удалить','1');if(act==='2'){if(!confirm('Удалить долг?'))return;pushUndo();STATE.debts=STATE.debts.filter(function(i){return i.id!==id;});save(true);render();toast('Удалено');}else{var a=num(prompt('Сумма платежа:','0'));if(a>0){pushUndo();d.paid=num(d.paid)+a;STATE.expenses.push({id:uid(),amount:a,category:'Долг',note:d.name,date:today()});save(true);render();toast('Платёж: '+d.name);}}return;}
