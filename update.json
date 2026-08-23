@@ -1,6 +1,6 @@
 {
-  "versionCode": 47,
-  "versionName": "3.6.7",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v3.6.7/Fin.apk",
-  "notes": "3.6.7 — обновление Финна (versionCode 47)"
+  "versionCode": 48,
+  "versionName": "3.6.8",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v3.6.8/Fin.apk",
+  "notes": "3.6.8 — микрофон не включается сам; ИИ без спама 429; «удали последнее» не трогает чужие доходы; долги можно менять; суммы долга понятны"
 }

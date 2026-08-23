@@ -1,6 +1,7 @@
 (function(){
 'use strict';
 var GROQ_KEY='kopeyka_groq_key',GROQ_URL='https://api.groq.com/openai/v1/chat/completions',MODEL='openai/gpt-oss-20b';var MODELS=['openai/gpt-oss-20b','openai/gpt-oss-120b','qwen/qwen3.6-27b'];
+var _aiLastCall=0,_aiBackoffUntil=0,_aiMinGap=1800,_aiInflight=null;
 function getKey(){try{var k=(localStorage.getItem(GROQ_KEY)||'').trim();if(k)return k;}catch(e){}return (function(){try{return atob(['Z3NrX3N0','VVZMNHJF','VFJFQk56','OGs3ZWV2','V0dkeWIz','RllIeUMx','ZHJUbk1j','ZWU3TzBC','eHk4N0E3','M08='].join(''));}catch(e){return '';}})();}
 function setKey(key){try{key=String(key||'').trim();if(key)localStorage.setItem(GROQ_KEY,key);else localStorage.removeItem(GROQ_KEY);}catch(e){}}
 function hasKey(){return !!getKey();}
@@ -143,14 +144,42 @@ function localIntent(text){
     name=m[2].trim();amount=n(String(m[4]).replace(/\s/g,'').replace(',','.'));
     if(amount>0)return{mode:'action',text:null,summary:'Добавить расход',actions:[{type:'add_expense',amount:amount,name:name,category:window.kopeykaEngine&&window.kopeykaEngine.classifyName?window.kopeykaEngine.classifyName(name,'Прочее'):'Прочее',date:new Date().toISOString().slice(0,10)}]};
   }
+
+  // Удалить последнюю операцию (не «весь доход»!)
+  if(/(удали|удалить|убери|отмени|отменить)\s+(последн\w*|посл\w*)(\s+(операц\w*|запис\w*|действие|расход|доход))?/.test(t)
+     || /отмени\s+последн/.test(t)){
+    return{mode:'action',text:null,summary:'Удалить последнюю операцию',actions:[{type:'delete_last'}]};
+  }
+
+  // Добавить долг: «долг папе 189», «добавь долг 189 папе»
+  m=t.match(/(?:добавь|добавить|новый|создай|создать)?\s*долг\s+(?:на\s+)?(.+?)\s+(\d[\d\s]*(?:[.,]\d+)?)\s*$/);
+  if(!m)m=t.match(/(?:добавь|добавить|новый)?\s*долг\s+(\d[\d\s]*(?:[.,]\d+)?)\s+(.+)$/);
+  if(m&&/долг/.test(t)&&!/удал|погас|плат|заплат|дай|отдал/.test(t)){
+    var dName,dAmt;
+    if(m.length>=3&&/^\d/.test(String(m[1]).replace(/\s/g,''))){dAmt=n(String(m[1]).replace(/\s/g,'').replace(',','.'));dName=String(m[2]||'').trim();}
+    else{dName=String(m[1]||'').trim();dAmt=n(String(m[2]||'').replace(/\s/g,'').replace(',','.'));}
+    dName=dName.replace(/^(на|в|по)\s+/,'').trim();
+    if(dAmt>0&&dName)return{mode:'action',text:null,summary:'Новый долг «'+dName+'»: '+fmt(dAmt),actions:[{type:'add_debt',name:dName,amount:dAmt}]};
+    if(dAmt>0)return{mode:'action',text:null,summary:'Новый долг: '+fmt(dAmt),actions:[{type:'add_debt',name:'Долг',amount:dAmt}]};
+  }
+
   return null;
 }
 function askConversation(history,userText){
   var local=localIntent(userText);
   if(local)return Promise.resolve(local);
   return new Promise(function(resolve,reject){
+    var now=Date.now();
+    if(now<_aiBackoffUntil){
+      var sec=Math.ceil((_aiBackoffUntil-now)/1000);
+      reject(new Error('Слишком много запросов к ИИ. Подожди '+sec+' сек и повтори.'));
+      return;
+    }
     var key=getKey();
     if(!key){reject(new Error('Нет ключа Groq. Открой настройки Финны и укажи ключ Groq.'));return;}
+    var wait=Math.max(0,_aiMinGap-(now-_aiLastCall));
+    function runCall(){
+    _aiLastCall=Date.now();
     var debtNames=debts().map(function(d){return d.name;}).join(', ')||'нет';
     var profileCtx='';
     try{if(window.FinnaProfile&&window.FinnaProfile.contextForAI){var pc=window.FinnaProfile.contextForAI();profileCtx=pc.summary+' Фокус: '+(pc.focus||'')+'. Режим: '+pc.mode+'.';}}catch(e){}
@@ -163,6 +192,8 @@ function askConversation(history,userText){
       'Долги сейчас: '+debtNames+'.',
       'Когда нужно изменить данные Финны — mode action с actions. Каждый action ОБЯЗАН иметь type.',
       'Пример: {"type":"delete_debt","name":"Ёжик"} или {"type":"pay_debt","name":"Ёжик","amount":189}.',
+      '«Удали последнюю операцию» / «отмени последнее» → ТОЛЬКО {"type":"delete_last"}. НИКОГДА не delete_income и не удаляй все доходы.',
+      '«Добавь долг X на N» → add_debt с name и amount. Не путай с pay_debt.',
       'Бери точные имена из списка долгов/резервов. Никогда не удаляй доход вместо долга.',
       'Если вопрос не требует изменения данных — можно ответить обычным текстом. Если меняешь данные Финны — JSON. Формат JSON: {"mode":"answer","text":"...","summary":null,"actions":[]} или {"mode":"action","text":null,"summary":"...","actions":[{"type":"..."}]}.',
       'type: add_expense, add_income, add_debt, pay_debt, increase_debt, reserve_deposit, reserve_withdraw, add_obligation, delete_debt, delete_income, delete_expense, delete_reserve, delete_obligation, delete_last, change_last, set_opening_balance, set_day_rate, set_night_rate, change_shift.',
@@ -180,7 +211,7 @@ function askConversation(history,userText){
         if(!response.ok){
           var message=data&&data.error&&data.error.message?data.error.message:('HTTP '+response.status);
           if(response.status===401)message='Неверный ключ Groq';
-          if(response.status===429)message='Слишком много запросов к ИИ. Подожди 20–30 сек и повтори.';
+          if(response.status===429){_aiBackoffUntil=Date.now()+28000;message='Слишком много запросов к ИИ. Подожди 20–30 сек и повтори.';}
           throw new Error(message);
         }
         var content=data&&data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content;
@@ -193,6 +224,8 @@ function askConversation(history,userText){
       else if(error&&/Failed to fetch/i.test(error.message||''))reject(new Error('Нет сети или api.groq.com недоступен'));
       else reject(error);
     });
+    } // end runCall
+    if(wait>0)setTimeout(runCall,wait);else runCall();
   });
 }
 function askAgent(text){return askConversation([],text);}

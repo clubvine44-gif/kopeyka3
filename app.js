@@ -31,6 +31,7 @@ function norm(raw){
   ['income','expenses','reserves','debts','reserveOps','obligations','obligationPays'].forEach(function(k){if(!Array.isArray(o[k]))o[k]=[];});
   o.shiftsOverride=cleanShifts(o.shiftsOverride);if(!o.voiceMap||typeof o.voiceMap!=='object')o.voiceMap={};
   if(!o.dayPlans||typeof o.dayPlans!=='object'||Array.isArray(o.dayPlans))o.dayPlans={};
+  if(o.lastOp&&typeof o.lastOp!=='object')o.lastOp=null;
   o.settings.openingBalance=sane(o.settings.openingBalance);
   o.settings.dayRate=sane(o.settings.dayRate);
   o.settings.nightRate=sane(o.settings.nightRate);
@@ -47,6 +48,7 @@ function norm(raw){
 function load(){try{var r=localStorage.getItem(KEY);return r?norm(JSON.parse(r)):def();}catch(e){return def();}}
 var STATE=load();
 function pushUndo(){try{undoStack.push(JSON.stringify(STATE));if(undoStack.length>UNDO_MAX)undoStack.shift();}catch(e){}}
+function trackLastOp(kind,id){try{STATE.lastOp={kind:kind,id:id,at:Date.now()};}catch(e){}}
 function undoLast(){if(!undoStack.length){toast('Нечего отменять');return;}try{STATE=norm(JSON.parse(undoStack.pop()));save(true);render();toast('Отменено');}catch(e){toast('Не удалось отменить');}}
 function save(skipUndo){STATE.updatedAt=new Date().toISOString();try{localStorage.setItem(KEY,JSON.stringify(STATE));}catch(e){}if(window.kopeykaCloud&&window.kopeykaCloud.scheduleSave)window.kopeykaCloud.scheduleSave();syncReminders();}
 function computeReminders(){var out=[],t=today(),day=Number(t.slice(8)),month=(STATE.settings&&STATE.settings.month)||t.slice(0,7);(STATE.obligations||[]).forEach(function(ob){if(ob.active===false)return;var paid=0;(STATE.obligationPays||[]).forEach(function(p){if(p.obligId===ob.id&&p.month===month)paid+=num(p.amount);});var remain=Math.max(0,num(ob.amount)-paid);if(remain<=0)return;var y=Number(t.slice(0,4)),m=Number(t.slice(5,7)),dim=new Date(y,m,0).getDate(),d=Math.min(Math.max(1,num(ob.day)||1),dim);if(d<day){m+=1;if(m>12){m=1;y+=1;}var dim2=new Date(y,m,0).getDate();d=Math.min(Math.max(1,num(ob.day)||1),dim2);}var dateStr=y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0');out.push({id:String(ob.id),date:dateStr,title:'Финна · платёж',message:ob.name+' — '+fmt(remain)});});return out;}
@@ -223,11 +225,24 @@ function refreshFinnTipAI(fallback, attentionList){
   try{if(!key)key=localStorage.getItem('kopeyka_groq_key')||'';}catch(e){}
   if(!key)return;
   var snap=window.kopeykaEngine&&window.kopeykaEngine.snapshot?window.kopeykaEngine.snapshot():null;
-  var ctx=snap?JSON.stringify({available:snap.calculations&&snap.calculations.available,daily:snap.calculations&&snap.calculations.dailyBudget,cash:snap.calculations&&snap.calculations.cash,debts:snap.calculations&&snap.calculations.debtRemaining,daysLeft:snap.calculations&&snap.calculations.daysLeft,attention:attentionList||[]}):'';
+  var avail=snap&&snap.calculations?Math.round(snap.calculations.available||0):0;
+  var daily=snap&&snap.calculations?Math.round(snap.calculations.dailyBudget||0):0;
+  var cacheKey='finna_tip_'+today()+'_'+avail+'_'+daily;
+  try{
+    var cached=localStorage.getItem(cacheKey);
+    if(cached&&cached.length>10){el.textContent=cached;return;}
+    // не чаще одного AI-совета в 10 минут
+    var lastAt=Number(localStorage.getItem('finna_tip_at')||0);
+    if(lastAt&&Date.now()-lastAt<600000)return;
+  }catch(e){}
+  var ctx=snap?JSON.stringify({available:avail,daily:daily,cash:snap.calculations&&snap.calculations.cash,debts:snap.calculations&&snap.calculations.debtRemaining,daysLeft:snap.calculations&&snap.calculations.daysLeft,attention:(attentionList||[]).slice(0,2)}):'';
   var prompt='Напиши ОДИН короткий совет (1-2 предложения) на русском для пользователя Финны. Учти данные: '+ctx+'. Без markdown, без приветствия, по делу, по-дружески.';
   window.kopeykaAI.askConversation([],prompt).then(function(o){
     var t=(o&&(o.text||o.summary)||'').trim();
-    if(t&&t.length>10&&t.length<400){el.textContent=t;}
+    if(t&&t.length>10&&t.length<400){
+      el.textContent=t;
+      try{localStorage.setItem(cacheKey,t);localStorage.setItem('finna_tip_at',String(Date.now()));}catch(e){}
+    }
   }).catch(function(){});
 }
 
@@ -348,6 +363,8 @@ function dayPlanEditor(ds, onDone){
         list=STATE.dayPlans[ds]||[];
         list.push({id:uid(),type:type,amount:amount,title:title,date:ds,applied:true,opId:opId,debtId:type==='debt'&&found?found.id:undefined});
         STATE.dayPlans[ds]=list;
+        if(type==='income')trackLastOp('income',opId);
+        else trackLastOp('expense',opId);
         save(true);
         try{if(onDone)onDone();}catch(e){}
         toast('В операциях: '+fmt(amount)+' · '+title);
@@ -536,7 +553,7 @@ function showSettings(){
 function render(){if(_renderQueued)return;_renderQueued=true;_rafRender=requestAnimationFrame(function(){_renderQueued=false;try{_renderNow();}catch(err){console.error(err);var a=document.getElementById("app");if(a)a.innerHTML="<div class=\"card\"><div class=\"hint\">Не удалось отрисовать экран. Потяни вниз для обновления.</div></div>";}});}
 function _renderNow(){ensureMonth();var t=today(),month=getViewMonth(),isCurrent=(month===t.slice(0,7)),c=compute(),sh=shift(t,STATE.shiftsOverride),sl=SHIFT_LABEL[sh]||'День',app=document.getElementById('app');if(!app)return;var ym=month.split('-').map(Number),first=new Date(ym[0],ym[1]-1,1),sw=(first.getDay()+6)%7,dim=new Date(ym[0],ym[1],0).getDate();var cal='<div class="cal">';['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].forEach(function(d){cal+='<div class="cal-h">'+d+'</div>';});for(var i=0;i<sw;i++)cal+='<div class="cal-d other"></div>';var nextShiftDs=null;for(var nd=0;nd<21;nd++){var ndt=new Date(ym[0],ym[1]-1,Number(t.slice(8))+nd),nds=ndt.getFullYear()+'-'+String(ndt.getMonth()+1).padStart(2,'0')+'-'+String(ndt.getDate()).padStart(2,'0'),ns=shift(nds,STATE.shiftsOverride);if(ns==='day'||ns==='night'){nextShiftDs=nds;break;}}for(var d=1;d<=dim;d++){var ds=month+'-'+String(d).padStart(2,'0'),s=shift(ds,STATE.shiftsOverride),hasObl=STATE.obligations.some(function(ob){return ob.active!==false&&num(ob.day)===d;}),isNext=(ds===nextShiftDs);cal+='<div class="cal-d '+s+(ds===t&&isCurrent?' today':'')+(hasObl?' has-obl':'')+(isNext?' next-shift':'')+'" data-date="'+ds+'">'+(isNext?'<span class="star">✨</span>':'')+d+'<span class="dot"></span></div>';}cal+='</div>';
 var resH=STATE.reserves.length?STATE.reserves.map(function(r){var pct=r.target>0?Math.min(100,Math.round(num(r.saved)/num(r.target)*100)):0;return '<div class="item" data-id="'+r.id+'" data-k="res"><div class="left"><b>'+esc(r.name)+'</b><span class="muted">'+fmt(r.saved)+(r.target?' / '+fmt(r.target)+' · '+pct+'%':'')+'</span></div></div>';}).join(''):'<div class="empty tight">Резервов нет</div>';
-var debH=STATE.debts.length?STATE.debts.map(function(d){var left=Math.max(0,num(d.total)-num(d.paid));return '<div class="item" data-id="'+d.id+'" data-k="debt"><div class="left"><b>'+esc(d.name)+'</b><span class="muted">'+fmt(left)+' из '+fmt(d.total)+'</span></div></div>';}).join(''):'<div class="empty tight">Долгов нет</div>';
+var debH=STATE.debts.length?STATE.debts.map(function(d){var left=Math.max(0,num(d.total)-num(d.paid)),pd=num(d.paid);var sub=pd<=0?(fmt(d.total)+' · не погашено'):('осталось '+fmt(left)+' · погашено '+fmt(pd)+' из '+fmt(d.total));return '<div class="item" data-id="'+d.id+'" data-k="debt"><div class="left"><b>'+esc(d.name)+'</b><span class="muted">'+sub+'</span></div><div class="amt minus">'+fmt(left)+'</div></div>';}).join(''):'<div class="empty tight">Долгов нет</div>';
 var oblH=STATE.obligations.length?STATE.obligations.map(function(ob){var paid=0;STATE.obligationPays.forEach(function(p){if(p.obligId===ob.id&&p.month===month)paid+=num(p.amount);});var left=Math.max(0,num(ob.amount)-paid),isPaid=left<=0;return '<div class="item" data-id="'+ob.id+'" data-k="obl" data-paid="'+(isPaid?'1':'0')+'"><div class="left"><b>'+esc(ob.name)+'</b><span class="muted">'+fmt(ob.amount)+' / мес · '+(isPaid?'✓ оплачено':'до '+ob.day+'-го · '+fmt(left))+'</span></div>'+(isPaid?'<div class="amt plus check-paid">✓</div>':'<div class="amt minus">−'+fmt(left)+'</div>')+'</div>';}).join(''):'<div class="empty tight">Нет платежей</div>';
 var ops=[];STATE.income.forEach(function(i){if(inMonth(i.date,month))ops.push({t:i.date,type:'in',a:i.amount,n:i.note||'Доход',id:i.id});});STATE.expenses.forEach(function(e){if(!inMonth(e.date,month))return;var label=e.category||'Расход';if(e.category==='Долг'&&e.note)label=e.note;else if(e.note&&e.category==='Обязательные')label=e.note;ops.push({t:e.date,type:'ex',a:e.amount,n:label,id:e.id});});ops.sort(function(a,b){return(b.t||'').localeCompare(a.t||'');});var opsH=ops.map(function(o){return '<div class="item" data-id="'+o.id+'" data-k="'+o.type+'"><div class="left"><b>'+esc(o.n)+'</b><span class="muted">'+(o.t||'')+'</span></div><div class="amt '+(o.type==='in'?'plus':'minus')+'">'+(o.type==='in'?'+':'−')+fmt(o.a)+'</div></div>';}).join('')||'<div class="empty tight">Нет операций</div>';
 var colors=['#E5A75E','#60A5FA','#F87171','#4ADE80','#A78BFA','#FBBF24','#F472B6','#2DD4BF'];var catH='';if(c.cats.length){var totalCat=c.cats.reduce(function(s,x){return s+x.amount;},0)||1;catH=c.cats.slice(0,6).map(function(x,i){return '<div class="mini-cat"><span class="leg-dot" style="background:'+colors[i%colors.length]+'"></span><span class="leg-name">'+esc(x.name)+'</span><span class="leg-pct">'+Math.round(x.amount/totalCat*100)+'%</span><b>'+fmt(x.amount)+'</b></div>';}).join('');}else catH='<div class="empty tight">Нет расходов</div>';
@@ -800,9 +817,10 @@ if(c.debtLeft > 0){
   homeHtml += '<div class="sec-title-sm">ДОЛГИ</div>';
   homeHtml += '<div class="res-total neg">Осталось: '+fmt(c.debtLeft)+' ₽</div>';
   (STATE.debts||[]).slice(0,3).forEach(function(d){
-    var left=Math.max(0,num(d.total)-num(d.paid));
+    var left=Math.max(0,num(d.total)-num(d.paid)),pd=num(d.paid);
     if(left<=0)return;
-    homeHtml += '<div class="item" data-id="'+d.id+'" data-k="debt"><div class="left"><b>'+esc(d.name)+'</b></div><div class="amt minus">'+fmt(left)+'</div></div>';
+    var sub=pd<=0?(fmt(d.total)+' · не погашено'):('осталось '+fmt(left)+' из '+fmt(d.total));
+    homeHtml += '<div class="item" data-id="'+d.id+'" data-k="debt"><div class="left"><b>'+esc(d.name)+'</b><span class="muted">'+sub+'</span></div><div class="amt minus">'+fmt(left)+'</div></div>';
   });
   homeHtml += '<button type="button" class="link-more" data-view="debt">Все долги →</button>';
   homeHtml += '</div>';
@@ -916,10 +934,10 @@ if(t.id==='mPrev'){viewMonth=shiftMonth(getViewMonth(),-1);render();return;}if(t
   if(t.closest&&t.closest('.week-strip')) return;
   var isCur=(getViewMonth()===today().slice(0,7));if(!isCur){viewMonth=today().slice(0,7);render();toast('Вернись к текущему месяцу');return;}pushUndo();var cur=shift(ds,STATE.shiftsOverride),n=cur==='day'?'night':cur==='night'?'off':'day';STATE.shiftsOverride[ds]=n;save(true);render();toast('Смена: '+(SHIFT_LABEL[n]||n));return;
 }var id=t.dataset.id,k=t.dataset.k,month=getViewMonth();if(!id||!k)return;
-if(k==='in'){appConfirm('Удалить доход?','Удалить').then(function(ok){if(!ok)return;pushUndo();STATE.income=STATE.income.filter(function(i){return i.id!==id;});save(true);render();toast('Удалено');});return;}
-if(k==='ex'){appConfirm('Удалить расход?','Удалить').then(function(ok){if(!ok)return;pushUndo();STATE.expenses=STATE.expenses.filter(function(i){return i.id!==id;});save(true);render();toast('Удалено');});return;}
+if(k==='in'){var inc=STATE.income.find(function(i){return i.id===id;});if(!inc)return;appChoice('Доход · '+fmt(inc.amount),['Изменить','Удалить'],'Доход').then(function(act){if(act===null)return;if(act===1){appConfirm('Удалить доход?','Удалить').then(function(ok){if(!ok)return;pushUndo();STATE.income=STATE.income.filter(function(i){return i.id!==id;});if(STATE.lastOp&&STATE.lastOp.id===id)STATE.lastOp=null;save(true);render();toast('Удалено');});}else{appPrompt('Сумма',String(num(inc.amount)),'Изменить доход').then(function(av){if(av===null)return;appPrompt('Комментарий',inc.note||'','Комментарий',{text:true}).then(function(nn){if(nn===null)return;var a=num(av);if(a<=0)return toast('Укажи сумму');pushUndo();inc.amount=a;inc.note=String(nn||'Доход');save(true);render();toast('Доход обновлён');});});}});return;}
+if(k==='ex'){var exp=STATE.expenses.find(function(i){return i.id===id;});if(!exp)return;appChoice('Расход · '+fmt(exp.amount),['Изменить','Удалить'],'Расход').then(function(act){if(act===null)return;if(act===1){appConfirm('Удалить расход?','Удалить').then(function(ok){if(!ok)return;pushUndo();STATE.expenses=STATE.expenses.filter(function(i){return i.id!==id;});if(STATE.lastOp&&STATE.lastOp.id===id)STATE.lastOp=null;save(true);render();toast('Удалено');});}else{appPrompt('Сумма',String(num(exp.amount)),'Изменить расход').then(function(av){if(av===null)return;appPrompt('Категория / комментарий',exp.note||exp.category||'','Комментарий',{text:true}).then(function(nn){if(nn===null)return;var a=num(av);if(a<=0)return toast('Укажи сумму');pushUndo();exp.amount=a;var label=String(nn||exp.category||'Прочее');if(exp.category==='Долг'||exp.category==='Обязательные'){exp.note=label;}else{exp.category=label;exp.note=label;}save(true);render();toast('Расход обновлён');});});}});return;}
 if(k==='res'){var r=STATE.reserves.find(function(i){return i.id===id;});if(!r)return;appChoice('Резерв «'+r.name+'»',['Пополнить','Снять','Удалить'],'Резерв').then(function(act){if(act===null)return;if(act===2){appConfirm('Удалить резерв?','Удалить').then(function(ok){if(!ok)return;pushUndo();STATE.reserves=STATE.reserves.filter(function(i){return i.id!==id;});STATE.reserveOps=STATE.reserveOps.filter(function(o){return o.reserveId!==id;});save(true);render();toast('Удалено');});}else if(act===1){appPrompt('Снять','0','Снять с резерва').then(function(av){var a=num(av);if(a>0&&a<=num(r.saved)){pushUndo();r.saved=num(r.saved)-a;STATE.reserveOps.push({id:uid(),reserveId:id,type:'withdraw',amount:a,date:today()});save(true);render();toast('Снято');}});}else if(act===0){appPrompt('Пополнить','0','Пополнить резерв').then(function(av){var a2=num(av);if(a2>0){pushUndo();r.saved=num(r.saved)+a2;STATE.reserveOps.push({id:uid(),reserveId:id,type:'deposit',amount:a2,date:today()});save(true);render();toast('Пополнено');}});}});return;}
-if(k==='debt'){var d=STATE.debts.find(function(i){return i.id===id;});if(!d)return;appChoice('Долг «'+d.name+'»',['Платёж','Удалить'],'Долг').then(function(act){if(act===null)return;if(act===1){appConfirm('Удалить долг?','Удалить').then(function(ok){if(!ok)return;pushUndo();STATE.debts=STATE.debts.filter(function(i){return i.id!==id;});save(true);render();toast('Удалено');});}else{appPrompt('Сумма платежа','0','Платёж по долгу').then(function(av){var a=num(av);if(a>0){pushUndo();d.paid=num(d.paid)+a;STATE.expenses.push({id:uid(),amount:a,category:'Долг',note:d.name,date:today()});save(true);render();toast('Платёж: '+d.name);}});}});return;}
+if(k==='debt'){var d=STATE.debts.find(function(i){return i.id===id;});if(!d)return;appChoice('Долг «'+d.name+'»',['Платёж','Изменить','Удалить'],'Долг').then(function(act){if(act===null)return;if(act===2){appConfirm('Удалить долг?','Удалить').then(function(ok){if(!ok)return;pushUndo();STATE.debts=STATE.debts.filter(function(i){return i.id!==id;});if(STATE.lastOp&&STATE.lastOp.id===id)STATE.lastOp=null;save(true);render();toast('Удалено');});}else if(act===1){appPrompt('Название',d.name,'Изменить долг',{text:true}).then(function(nn){if(nn===null)return;appPrompt('Полная сумма долга',String(num(d.total)),'Сумма долга').then(function(tt){if(tt===null)return;appPrompt('Уже погашено',String(num(d.paid)),'Погашено').then(function(pp){if(pp===null)return;var tot=num(tt),pd=num(pp);if(tot<=0)return toast('Сумма долга должна быть больше 0');if(pd<0)pd=0;if(pd>tot)pd=tot;pushUndo();d.name=String(nn).trim()||d.name;d.total=tot;d.paid=pd;save(true);render();toast('Долг обновлён');});});});}else{appPrompt('Сумма платежа','0','Платёж по долгу').then(function(av){var a=num(av);if(a>0){pushUndo();d.paid=num(d.paid)+a;if(d.paid>num(d.total))d.paid=num(d.total);var opId=uid();STATE.expenses.push({id:opId,amount:a,category:'Долг',note:d.name,date:today()});trackLastOp('expense',opId);save(true);render();toast('Платёж: '+d.name);}});}});return;}
 if(k==='obl'){var ob=STATE.obligations.find(function(i){return i.id===id;});if(!ob)return;
 if(t.dataset.paid==='1'){appConfirm('Сбросить оплату «'+ob.name+'» за этот месяц?','Сброс оплаты').then(function(ok){if(!ok)return;pushUndo();STATE.obligationPays=STATE.obligationPays.filter(function(p){return !(p.obligId===id&&p.month===month);});STATE.expenses=STATE.expenses.filter(function(e){return !(e.obligId===id&&inMonth(e.date,month));});save(true);render();toast('Оплата сброшена');});return;}
 appChoice('«'+ob.name+'»',['Отметить оплату','Изменить','Удалить'],'Платёж').then(function(act){if(act===null)return;
@@ -931,7 +949,7 @@ else{var paid=0;STATE.obligationPays.forEach(function(p){if(p.obligId===id&&p.mo
 function addIncome(){appForm('Доход',[
     {name:'amount',label:'Сумма',value:'',placeholder:'0',inputmode:'decimal'},
     {name:'note',label:'Комментарий',value:'Доход',placeholder:'Необязательно'}
-  ],'Добавить доход').then(function(v){if(!v)return;var a=num(v.amount);if(a<=0)return toast('Укажи сумму');pushUndo();STATE.income.push({id:uid(),amount:a,note:(v.note||'Доход'),date:today()});save(true);render();toast('Доход добавлен');});}
+  ],'Добавить доход').then(function(v){if(!v)return;var a=num(v.amount);if(a<=0)return toast('Укажи сумму');pushUndo();var _id=uid();STATE.income.push({id:_id,amount:a,note:(v.note||'Доход'),date:today()});trackLastOp('income',_id);save(true);render();toast('Доход добавлен');});}
 function addExpense(){var pre=window.__prefillCat||'Продукты';window.__prefillCat=null;
 var cats=(typeof CATS!=='undefined'?CATS:['Продукты','Кафе','Проезд','Сигареты','Прочее']).slice();
 if(cats.indexOf(pre)<0)cats.unshift(pre);
@@ -939,9 +957,9 @@ appForm('Расход',[
   {name:'amount',label:'Сумма',value:'',placeholder:'0',inputmode:'decimal'},
   {name:'category',label:'Категория',type:'chips',options:cats.slice(0,12),value:pre},
   {name:'note',label:'Комментарий',value:'',placeholder:'Необязательно'}
-],'Добавить расход').then(function(v){if(!v)return;var a=num(v.amount);if(a<=0)return toast('Укажи сумму');var cat=v.category||pre||'Прочее';pushUndo();STATE.expenses.push({id:uid(),amount:a,category:cat,note:v.note||'',date:today()});save(true);render();toast('Расход добавлен');});}
+],'Добавить расход').then(function(v){if(!v)return;var a=num(v.amount);if(a<=0)return toast('Укажи сумму');var cat=v.category||pre||'Прочее';pushUndo();var _id=uid();STATE.expenses.push({id:_id,amount:a,category:cat,note:v.note||'',date:today()});trackLastOp('expense',_id);save(true);render();toast('Расход добавлен');});}
 function addReserve(){appChoice('Категория резерва',RES_PRESETS,'Новый резерв').then(function(idx){if(idx===null)return;var name=RES_PRESETS[idx];function cont(nm){if(!nm)return;appPrompt('Цель (0 если без цели)','0','Цель').then(function(tv){var t=num(tv);appPrompt('Уже накоплено','0','Накоплено').then(function(sv){var s=num(sv);var id=uid();pushUndo();STATE.reserves.push({id:id,name:nm,category:nm,target:t,saved:s});if(s>0)STATE.reserveOps.push({id:uid(),reserveId:id,type:'deposit',amount:s,date:today()});save(true);render();toast('Резерв «'+nm+'» создан — переносится на все месяцы');});});}if(name==='Свой вариант'){appPrompt('Название','','Название резерва').then(cont);}else cont(name);});}
-function addDebt(){appPrompt('Название долга','','Долг').then(function(n){if(!n)return;appPrompt('Сумма','','Сумма долга').then(function(t){t=num(t);if(t<=0)return toast('Укажи сумму');pushUndo();STATE.debts.push({id:uid(),name:n,total:t,paid:0});save(true);render();toast('Долг добавлен');});});}
+function addDebt(){appPrompt('Название долга','','Долг').then(function(n){if(!n)return;appPrompt('Сумма','','Сумма долга').then(function(t){t=num(t);if(t<=0)return toast('Укажи сумму');pushUndo();var _id=uid();STATE.debts.push({id:_id,name:n,total:t,paid:0});trackLastOp('debt',_id);save(true);render();toast('Долг добавлен');});});}
 function addObligation(){appPrompt('Название (Алименты, Аренда…)','','Платёж').then(function(n){if(!n)return;appPrompt('Сумма каждый месяц','','Сумма').then(function(a){a=num(a);if(a<=0)return toast('Укажи сумму');appPrompt('Число месяца (1–31)','25','День').then(function(d){d=num(d);if(d<1||d>31)return toast('День 1–31');pushUndo();STATE.obligations.push({id:uid(),name:n,amount:a,day:d,active:true});save(true);render();toast('Обязательный платёж добавлен');});});});}
 function openAssistant(opts){
   try{
