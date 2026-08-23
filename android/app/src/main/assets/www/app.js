@@ -29,7 +29,7 @@ function days(a,b){return Math.round((pd(b)-pd(a))/864e5);}
 function shift(ds,ov){var v=ov&&ov[ds];if(typeof v==='string'&&SHIFT_LABEL[v])return v;return CYCLE[((days(ANCHOR,ds)%6)+6)%6];}window.shift=shift;window.SHIFT_LABEL=SHIFT_LABEL;
 function cleanShifts(ov){var out={};if(!ov||typeof ov!=='object')return out;Object.keys(ov).forEach(function(k){var v=ov[k];if(typeof v==='string'&&SHIFT_LABEL[v])out[k]=v;});return out;}
 function inMonth(dateStr,month){return String(dateStr||'').slice(0,7)===month;}
-function def(){return{version:6,settings:{openingBalance:0,month:today().slice(0,7),dayRate:0,nightRate:0,paydayDay:null,shiftNotifHour:20,shiftNotifMinute:0,shiftNotifEnabled:true},income:[],expenses:[],reserves:[],debts:[],reserveOps:[],obligations:[],obligationPays:[],voiceMap:{},shiftsOverride:{},dayPlans:{},updatedAt:new Date().toISOString()};}
+function def(){return{version:6,settings:{openingBalance:0,month:today().slice(0,7),dayRate:0,nightRate:0,paydayDay:null,limitHorizon:'payday',shiftNotifHour:20,shiftNotifMinute:0,shiftNotifEnabled:true},income:[],expenses:[],reserves:[],debts:[],reserveOps:[],obligations:[],obligationPays:[],voiceMap:{},shiftsOverride:{},dayPlans:{},updatedAt:new Date().toISOString()};}
 function norm(raw){
   var b=def();if(!raw||typeof raw!=='object')return b;
   var o=Object.assign({},b,raw);o.settings=Object.assign({},b.settings,raw.settings||{});
@@ -41,6 +41,7 @@ function norm(raw){
   o.settings.dayRate=sane(o.settings.dayRate);
   o.settings.nightRate=sane(o.settings.nightRate);
   if(o.settings.paydayDay!=null&&o.settings.paydayDay!==''){var pd=num(o.settings.paydayDay);o.settings.paydayDay=(pd>=1&&pd<=31)?pd:null;}else o.settings.paydayDay=null;
+  if(o.settings.limitHorizon!=='month'&&o.settings.limitHorizon!=='payday')o.settings.limitHorizon=(o.settings.paydayDay? 'payday':'month');
   if(o.settings.shiftNotifHour==null||o.settings.shiftNotifHour==='')o.settings.shiftNotifHour=20;else o.settings.shiftNotifHour=Math.min(23,Math.max(0,num(o.settings.shiftNotifHour)));
   if(o.settings.shiftNotifMinute==null||o.settings.shiftNotifMinute==='')o.settings.shiftNotifMinute=0;else o.settings.shiftNotifMinute=Math.min(59,Math.max(0,num(o.settings.shiftNotifMinute)));
   if(o.settings.shiftNotifEnabled==null)o.settings.shiftNotifEnabled=true;
@@ -154,24 +155,29 @@ function cmpMonth(a,b){return String(a||'').localeCompare(String(b||''));}
 function openingForMonth(target){var anchor=(STATE.settings&&STATE.settings.month)||today().slice(0,7);var open=num(STATE.settings&&STATE.settings.openingBalance);target=String(target||anchor);if(target===anchor)return open;var guard=0;if(cmpMonth(target,anchor)>0){var m=anchor;while(m!==target&&guard++<240){open=open+monthOps(m).delta;m=nextMonth(m);}return open;}var m2=anchor;while(m2!==target&&guard++<240){m2=prevMonth(m2);open=open-monthOps(m2).delta;}return open;}
 function computeForMonth(month){month=String(month||today().slice(0,7));var ops=monthOps(month);var open=openingForMonth(month);var cash=open+ops.delta;var resT=0;(STATE.reserves||[]).forEach(function(r){resT+=num(r.saved);});var debt=0;(STATE.debts||[]).forEach(function(d){debt+=Math.max(0,num(d.total)-num(d.paid));});var obligDue=0,obligPaid=0;(STATE.obligations||[]).forEach(function(ob){if(ob.active===false)return;var paid=0;(STATE.obligationPays||[]).forEach(function(p){if(p.obligId===ob.id&&p.month===month)paid+=num(p.amount);});obligPaid+=paid;obligDue+=Math.max(0,num(ob.amount)-paid);});var avail=cash-debt-obligDue;var t=today(),p=month.split('-').map(Number);var last=new Date(p[0],p[1],0).getDate();var dayNum=Number(t.slice(8));
 var payday=STATE.settings&&STATE.settings.paydayDay!=null?num(STATE.settings.paydayDay):0;
-var leftDays;
+var daysToMonthEnd=month===t.slice(0,7)?Math.max(1,last-dayNum+1):last;
+var daysToPayday=daysToMonthEnd;
 if(month===t.slice(0,7)&&payday>=1&&payday<=31){
-  if(dayNum<=payday)leftDays=Math.max(1,payday-dayNum+1);
+  if(dayNum<=payday)daysToPayday=Math.max(1,payday-dayNum+1);
   else{
     var nm=nextMonth(month),np=nm.split('-').map(Number);
     var nlast=new Date(np[0],np[1],0).getDate();
     var pd2=Math.min(payday,nlast);
-    leftDays=Math.max(1,(last-dayNum+1)+pd2);
+    daysToPayday=Math.max(1,(last-dayNum+1)+pd2);
   }
-}else{
-  leftDays=month===t.slice(0,7)?Math.max(1,last-dayNum+1):last;
+}else if(payday>=1&&payday<=31){
+  daysToPayday=Math.max(1,Math.min(payday,last));
 }
-// Лимит: свободные / дни до зарплаты (или до конца месяца). Ручной лимит перекрывает авто.
+// Горизонт лимита: payday | month
+var horizon=STATE.settings&&STATE.settings.limitHorizon==='month'?'month':'payday';
+if(horizon==='payday'&&!(payday>=1&&payday<=31))horizon='month';
+var leftDays=horizon==='payday'?daysToPayday:daysToMonthEnd;
+var horizonLabel=horizon==='payday'?'до зарплаты':'до конца месяца';
+// Лимит: свободные / дни горизонта. Ручной лимит перекрывает авто.
 var daily=0;
 if(avail>0&&leftDays>0)daily=Math.floor(avail/leftDays);
 var manualL=STATE.settings&&STATE.settings.manualDailyLimit;
 if(manualL!=null&&manualL!==''&&isFinite(Number(manualL)))daily=Math.max(0,Math.round(Number(manualL)));
-// Сколько уже потрачено сегодня (без удалённых) — для UI, не для формулы daily
 var spentTodayCalc=0;
 var td=today();
 (STATE.expenses||[]).forEach(function(e){if(e.deleted)return;if(e.date===td)spentTodayCalc+=num(e.amount);});
@@ -184,7 +190,7 @@ var by={};
   by[cat]=(by[cat]||0)+num(e.amount);
 });
 var cats=Object.keys(by).map(function(k){return{name:k,amount:by[k]};}).sort(function(a,b){return b.amount-a.amount;});
-return{open:open,cash:cash,available:avail,incomeSum:ops.inc,expenseSum:ops.exp,depSum:ops.dep,wdSum:ops.wd,debtLeft:debt,reservesTotal:resT,obligDue:obligDue,obligPaid:obligPaid,daily:daily,daysLeft:leftDays,spentToday:spentTodayCalc,cats:cats,month:month};}
+return{open:open,cash:cash,available:avail,incomeSum:ops.inc,expenseSum:ops.exp,depSum:ops.dep,wdSum:ops.wd,debtLeft:debt,reservesTotal:resT,obligDue:obligDue,obligPaid:obligPaid,daily:daily,daysLeft:leftDays,daysToMonthEnd:daysToMonthEnd,daysToPayday:daysToPayday,horizon:horizon,horizonLabel:horizonLabel,hasPayday:payday>=1&&payday<=31,spentToday:spentTodayCalc,cats:cats,month:month};}
 function compute(){return computeForMonth(getViewMonth());}
 function ensureMonth(){var cur=today().slice(0,7);var st=(STATE.settings&&STATE.settings.month)||cur;if(!STATE.settings)STATE.settings={};if(st===cur)return;var guard=0,m=st,open=num(STATE.settings.openingBalance);while(m!==cur&&guard++<240){open=open+monthOps(m).delta;m=nextMonth(m);}STATE.settings.openingBalance=open;STATE.settings.month=cur;viewMonth=cur;save(true);toast('Новый месяц: остаток '+fmt(STATE.settings.openingBalance)+' перенесён');}
 function toast(m){var el=document.getElementById('toast');if(!el)return;el.textContent=m;el.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(function(){el.classList.remove('show');},2800);}window.toast=toast;
@@ -998,7 +1004,7 @@ if(sh==='off'){
 // Финн tip — актуальные цифры без лишних запросов к ИИ
 var finnTip = '';
 var leftDaysTip = c.daysLeft||1;
-var horizonWord = (STATE.settings&&STATE.settings.paydayDay)?'до зарплаты':'до конца периода';
+var horizonWord = (c.horizonLabel)||((STATE.settings&&STATE.settings.paydayDay)?'до зарплаты':'до конца месяца');
 if(c.available <= 0){
   finnTip = 'Свободных денег нет: касса '+fmt(c.cash)+', долги '+fmt(c.debtLeft)+', обязательные '+fmt(c.obligDue)+'. Сегодня лучше без необязательных трат.';
 }else if(nearestObl.length && nearestObl[0].daysUntil <= 3){
@@ -1072,11 +1078,24 @@ homeHtml += '</div>';
 // ===== 5. Лимит на сегодня =====
 homeHtml += '<div class="card tight limit-card" id="limitCard">';
 homeHtml += '<div class="limit-head"><span>Лимит на сегодня</span><b class="limit-val">'+fmt(c.daily)+'</b></div>';
-homeHtml += '<div class="limit-sub">До конца месяца '+c.daysLeft+' дн.</div>';
+var leftLimitShow=Math.max(0,(c.daily||0)-(spentToday||0));
+var hLab=c.horizonLabel||'до конца месяца';
+homeHtml += '<div class="limit-sub">'+esc(hLab.charAt(0).toUpperCase()+hLab.slice(1))+' · '+c.daysLeft+' дн. · осталось сегодня '+fmt(leftLimitShow)+'</div>';
 var limitPct = c.daily>0 ? Math.min(100, Math.round( (spentToday||0)/c.daily *100 )) : 0;
-homeHtml += '<div class="limit-bar"><div class="limit-fill" style="width:'+limitPct+'%"></div></div>';
+homeHtml += '<div class="limit-bar"><div class="limit-fill'+(limitPct>=100?' over':'')+'" style="width:'+limitPct+'%"></div></div>';
 var isManual=STATE.settings&&STATE.settings.manualDailyLimit!=null&&STATE.settings.manualDailyLimit!=='';
-homeHtml += '<div class="limit-modes"><span class="mode'+(isManual?'':' active')+'" data-mode="auto">Авто</span><span class="mode'+(isManual?' active':'')+'" data-mode="manual">Ручной</span></div>';
+var hz=c.horizon||'month';
+homeHtml += '<div class="limit-row">';
+if(c.hasPayday){
+  homeHtml += '<div class="limit-modes horizon" data-limit-kind="horizon">';
+  homeHtml += '<span class="mode'+(hz==='payday'?' active':'')+'" data-horizon="payday">До зарплаты</span>';
+  homeHtml += '<span class="mode'+(hz==='month'?' active':'')+'" data-horizon="month">До конца месяца</span>';
+  homeHtml += '</div>';
+}
+homeHtml += '<div class="limit-modes" data-limit-kind="mode">';
+homeHtml += '<span class="mode'+(isManual?'':' active')+'" data-mode="auto">Авто</span>';
+homeHtml += '<span class="mode'+(isManual?' active':'')+'" data-mode="manual">Ручной</span>';
+homeHtml += '</div></div>';
 homeHtml += '</div>';
 
 // ===== 6. Главная кнопка добавить =====
@@ -1252,10 +1271,20 @@ if(t.id==='ringTap'||t.closest&&t.closest('#ringTap')){
   return;
 }
 if(t.id==='limitCard'||t.closest('#limitCard')){
-  var mode=t.dataset.mode;
+  var hzEl=t.closest('[data-horizon]')||t;
+  var horizon=hzEl.dataset&&hzEl.dataset.horizon;
+  if(horizon==='payday'||horizon==='month'){
+    if(!STATE.settings)STATE.settings={};
+    STATE.settings.limitHorizon=horizon;
+    save(true);render();
+    toast(horizon==='payday'?'Лимит до зарплаты':'Лимит до конца месяца');
+    return;
+  }
+  var mode=t.dataset&&t.dataset.mode;
   if(mode==='auto'){if(STATE.settings){STATE.settings.manualDailyLimit=null;}save(true);render();toast('Автоматический лимит');return;}
-if(mode==='manual'){var cur=compute().daily;appPrompt('Лимит на день (₽)',String(cur),'Ручной лимит').then(function(v){if(v===null)return;if(!STATE.settings)STATE.settings={};STATE.settings.manualDailyLimit=num(v);save(true);render();toast('Ручной лимит: '+fmt(num(v)));});return;}
-  var cc2=compute();var det2='Доступно сейчас — '+fmt(cc2.available)+'\nОбязательства — '+fmt((cc2.obligDue||0)+(cc2.debtLeft||0))+'\nОсталось дней — '+cc2.daysLeft+'\nРекомендуемый лимит — '+fmt(cc2.daily)+'/день';
+  if(mode==='manual'){var cur=compute().daily;appPrompt('Лимит на день (₽)',String(cur),'Ручной лимит').then(function(v){if(v===null)return;if(!STATE.settings)STATE.settings={};STATE.settings.manualDailyLimit=num(v);save(true);render();toast('Ручной лимит: '+fmt(num(v)));});return;}
+  var cc2=compute();
+  var det2='Горизонт — '+(cc2.horizonLabel||'')+'\nДней осталось — '+cc2.daysLeft+'\nДоступно — '+fmt(cc2.available)+'\nОбязательства — '+fmt((cc2.obligDue||0)+(cc2.debtLeft||0))+'\nЛимит на день — '+fmt(cc2.daily);
   appAlert(det2,'Лимит на сегодня');
   return;
 }

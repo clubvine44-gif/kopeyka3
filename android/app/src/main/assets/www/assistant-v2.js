@@ -363,12 +363,35 @@ function setListeningUI(on){
   }
 }
 
+var _speechBuf='',_silenceTimer=null,_speechRestarts=0;
+var SILENCE_MS=1700,MAX_SPEECH_RESTARTS=8;
+
+function clearSilenceTimer(){
+  if(_silenceTimer){clearTimeout(_silenceTimer);_silenceTimer=null;}
+}
+
+function finalizeSpeech(){
+  clearSilenceTimer();
+  var text=String(_speechBuf||'').replace(/\s+/g,' ').trim();
+  _speechBuf='';
+  wantListen=false;
+  _micStarting=false;
+  _speechRestarts=0;
+  stopListen();
+  if(!text){status('Нажми на меня, чтобы говорить');kaEmo('idle');return;}
+  if(isOnlyWake(text)){status('Да, слушаю…');setTimeout(function(){startListen();},280);return;}
+  handle(text);
+}
+
 function startListen(){
   if(!SR){status('Нет распознавания речи');return;}
   if(listening||_micStarting)return;
   wantListen=true;
   _micStarting=true;
   restarts=0;
+  _speechBuf='';
+  _speechRestarts=0;
+  clearSilenceTimer();
   status('Слушаю… говори');
   setListeningUI(true);
   createRecognition();
@@ -377,79 +400,110 @@ function startListen(){
 function createRecognition(){
   if(!wantListen){_micStarting=false;return;}
   if(listening){_micStarting=false;return;}
-  try{if(rec){try{rec.abort();}catch(x){}rec=null;}}catch(x){}
+  try{if(rec){try{rec.onend=null;rec.onerror=null;rec.abort();}catch(x){}rec=null;}}catch(x){}
   rec=new SR();
   rec.lang='ru-RU';
   rec.interimResults=true;
-  rec.continuous=false;
-  rec.maxAlternatives=3;
+  // continuous: длинные фразы; на Android сессия всё равно может оборваться — тогда мягкий restart
+  rec.continuous=true;
+  rec.maxAlternatives=2;
   rec.onstart=function(){
     listening=true;
     _micStarting=false;
     restarts=0;
     setListeningUI(true);
-    status('Слушаю…');
+    status(_speechBuf?('… '+_speechBuf):'Слушаю…');
   };
   rec.onresult=function(e){
-    var interim='',final='';
+    if(!wantListen)return;
+    var interim='',chunk='';
     for(var i=e.resultIndex;i<e.results.length;i++){
       var piece=e.results[i][0].transcript;
-      if(e.results[i].isFinal)final+=piece+' ';
+      if(e.results[i].isFinal)chunk+=piece+' ';
       else interim+=piece+' ';
     }
-    if(interim)status('… '+interim.trim());
-    var t=final.trim();
-    if(!t)return;
-    // one-shot: сразу стоп, без рестартов
-    wantListen=false;
-    _micStarting=false;
-    stopListen();
-    if(isOnlyWake(t)){status('Да, слушаю…');setTimeout(function(){startListen();},300);return;}
-    handle(t);
+    chunk=chunk.trim();
+    if(chunk){
+      _speechBuf=(_speechBuf?(_speechBuf+' '):'')+chunk;
+      _speechBuf=_speechBuf.replace(/\s+/g,' ').trim();
+    }
+    if(interim)status('… '+(_speechBuf?(_speechBuf+' '):'')+interim.trim());
+    else if(_speechBuf)status('… '+_speechBuf);
+    // ждём паузу после речи — не обрываем длинную фразу
+    if(_speechBuf){
+      clearSilenceTimer();
+      _silenceTimer=setTimeout(function(){finalizeSpeech();},SILENCE_MS);
+    }
   };
   rec.onerror=function(e){
     var code=e&&e.error||'';
     listening=false;
     _micStarting=false;
-    setListeningUI(false);
-    try{if(rec)rec.abort();}catch(x){}
+    try{if(rec){rec.onend=null;rec.abort();}}catch(x){}
     rec=null;
-    // без автоперезапуска — иначе мигание
-    if(code==='not-allowed'){wantListen=false;status('Нет доступа к микрофону');kaEmo('alert',1800);return;}
-    if(code==='no-speech'||code==='aborted'){
-      wantListen=false;
-      status('Нажми на меня, чтобы говорить');
-      kaEmo('idle');
+    if(code==='not-allowed'){
+      clearSilenceTimer();wantListen=false;_speechBuf='';
+      status('Нет доступа к микрофону');kaEmo('alert',1800);setListeningUI(false);return;
+    }
+    // no-speech / aborted mid-phrase: если уже есть текст — дождёмся silence; иначе можно продолжить
+    if(wantListen&&_speechBuf&&(code==='no-speech'||code==='aborted')){
+      clearSilenceTimer();
+      _silenceTimer=setTimeout(function(){finalizeSpeech();},900);
       return;
     }
-    wantListen=false;
-    status('Нажми на меня, чтобы говорить');
-    kaEmo('idle');
+    if(wantListen&&!_speechBuf&&(code==='no-speech'||code==='aborted')){
+      if(_speechRestarts<MAX_SPEECH_RESTARTS){
+        _speechRestarts++;
+        setTimeout(function(){if(wantListen)createRecognition();},250);
+        return;
+      }
+      wantListen=false;status('Нажми на меня, чтобы говорить');kaEmo('idle');setListeningUI(false);return;
+    }
+    if(!wantListen)return;
+    clearSilenceTimer();wantListen=false;_speechBuf='';
+    status('Нажми на меня, чтобы говорить');kaEmo('idle');setListeningUI(false);
   };
   rec.onend=function(){
     listening=false;
     _micStarting=false;
-    setListeningUI(false);
     rec=null;
-    // критично: НЕ перезапускаем сами — только по кнопке или явному startListen
-    if(wantListen){
-      // редкий случай: onend до onresult — один мягкий retry
-      wantListen=false;
-      status('Нажми на меня, чтобы говорить');
-      kaEmo('idle');
+    if(!wantListen){setListeningUI(false);return;}
+    // сессия оборвалась, но пользователь ещё говорит / мы копим фразу
+    if(_speechBuf){
+      // даём silence-таймеру доработать; если его нет — поставим
+      if(!_silenceTimer)_silenceTimer=setTimeout(function(){finalizeSpeech();},SILENCE_MS);
+      // параллельно можно перезапустить распознавание, чтобы поймать продолжение
+      if(_speechRestarts<MAX_SPEECH_RESTARTS){
+        _speechRestarts++;
+        setTimeout(function(){if(wantListen&&!listening)createRecognition();},220);
+      }
+      return;
     }
+    // пустой буфер — мягкий restart пока wantListen
+    if(_speechRestarts<MAX_SPEECH_RESTARTS){
+      _speechRestarts++;
+      setTimeout(function(){if(wantListen&&!listening)createRecognition();},220);
+      return;
+    }
+    wantListen=false;setListeningUI(false);
+    status('Нажми на меня, чтобы говорить');kaEmo('idle');
   };
   try{rec.start();}catch(e){
-    rec=null;listening=false;wantListen=false;_micStarting=false;
-    setListeningUI(false);
-    status('Микрофон не запустился');
-    kaEmo('alert',1600);
+    rec=null;listening=false;_micStarting=false;
+    if(wantListen&&_speechRestarts<MAX_SPEECH_RESTARTS){
+      _speechRestarts++;
+      setTimeout(function(){if(wantListen)createRecognition();},300);
+      return;
+    }
+    wantListen=false;setListeningUI(false);
+    status('Микрофон не запустился');kaEmo('alert',1600);
   }
 }
 
 function stopListen(){
   wantListen=false;
   _micStarting=false;
+  clearSilenceTimer();
   if(rec){try{rec.onend=null;rec.onerror=null;rec.stop();}catch(e){try{rec.abort();}catch(x){}}rec=null;}
   listening=false;
   setListeningUI(false);
