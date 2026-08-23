@@ -539,6 +539,25 @@ html, body { overscroll-behavior-y: none; overscroll-behavior: none; }
 
 .finn-att{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
 .finn-att .att-item{font-size:12.5px;line-height:1.4;margin-bottom:6px;padding-left:10px;border-left:3px solid var(--gold);color:var(--text)}
+
+#btnCloud.cloud-ok{color:#F2F3F7;opacity:1}
+#btnCloud.cloud-off{color:#F87171;opacity:1}
+#btnCloud.cloud-ok svg, #btnCloud.cloud-ok{filter:none}
+.tour-hl{
+  position:relative;z-index:5001!important;
+  box-shadow:0 0 0 3px rgba(94,200,255,.95),0 0 28px rgba(94,200,255,.35)!important;
+  border-radius:16px;
+  animation:tourPulse 1.6s ease-in-out infinite;
+}
+@keyframes tourPulse{
+  0%,100%{box-shadow:0 0 0 3px rgba(94,200,255,.9),0 0 18px rgba(94,200,255,.25)}
+  50%{box-shadow:0 0 0 5px rgba(94,200,255,1),0 0 32px rgba(94,200,255,.45)}
+}
+.modal-bg.full, .modal-bg.full .modal-card.full-screen, .modal-scroll{
+  overscroll-behavior:none!important;
+  overscroll-behavior-y:none!important;
+  -webkit-overflow-scrolling:touch;
+}
 </style></head><body class="has-bnav"><div class="topbar">
   <div class="top-left">
     <div class="finn-avatar status-green" id="finnAvatar" title="Финн">
@@ -589,7 +608,7 @@ html, body { overscroll-behavior-y: none; overscroll-behavior: none; }
     <span>Платежи</span>
   </button>
 </nav>
-<div class="fab-wrap"><div class="radial" id="radial"><button data-act="income"><span class="ic">➕</span> Доход</button><button data-act="expense"><span class="ic">➖</span> Расход</button><button data-act="reserve"><span class="ic">🏦</span> Резерв</button><button data-act="debt"><span class="ic">📉</span> Долг</button><button data-act="oblig"><span class="ic">📅</span> Обязательный</button></div><button class="fab" id="fab" aria-label="Добавить"><span aria-hidden="true">+</span></button></div><div class="modal-bg" id="modalBg"></div><div class="toast" id="toast"></div><script src="app.js?v=2026082306"></script><script src="onboard.js?v=2026082306"></script><script src="cloud.js?v=2026082306"></script><script src="products.js?v=2026082306"></script><script src="engine.js?v=2026082306"></script><script src="ai.js?v=2026082306"></script><script src="assistant-v2.js?v=2026082306"></script><script src="voice.js?v=2026082306"></script><script src="finn3d.js?v=2026082306"></script><script src="finn-wake.js?v=2026082306"></script><script>window.__kopeykaBuild='2026082306';window.__FIN_NATIVE=true;</script><script>
+<div class="fab-wrap"><div class="radial" id="radial"><button data-act="income"><span class="ic">➕</span> Доход</button><button data-act="expense"><span class="ic">➖</span> Расход</button><button data-act="reserve"><span class="ic">🏦</span> Резерв</button><button data-act="debt"><span class="ic">📉</span> Долг</button><button data-act="oblig"><span class="ic">📅</span> Обязательный</button></div><button class="fab" id="fab" aria-label="Добавить"><span aria-hidden="true">+</span></button></div><div class="modal-bg" id="modalBg"></div><div class="toast" id="toast"></div><script src="app.js?v=2026082307"></script><script src="onboard.js?v=2026082307"></script><script src="cloud.js?v=2026082307"></script><script src="products.js?v=2026082307"></script><script src="engine.js?v=2026082307"></script><script src="ai.js?v=2026082307"></script><script src="assistant-v2.js?v=2026082307"></script><script src="voice.js?v=2026082307"></script><script src="finn3d.js?v=2026082307"></script><script src="finn-wake.js?v=2026082307"></script><script>window.__kopeykaBuild='2026082307';window.__FIN_NATIVE=true;</script><script>
 (function(){
   function tryTestPush(){
     try{
@@ -657,9 +676,10 @@ html, body { overscroll-behavior-y: none; overscroll-behavior: none; }
       if(sc){
         var y=e.touches[0]?e.touches[0].clientY:lastY;
         var dy=y-lastY;
-        if((sc.scrollTop<=0 && dy>0) || (sc.scrollTop+sc.clientHeight>=sc.scrollHeight-1 && dy<0)){
-          e.preventDefault();
-        }
+        lastY=y;
+        // Always prevent overscroll bounce / pull-to-refresh inside modals
+        if(sc.scrollTop<=0 && dy>0){ e.preventDefault(); return; }
+        if(sc.scrollTop+sc.clientHeight>=sc.scrollHeight-1 && dy<0){ e.preventDefault(); return; }
       } else {
         e.preventDefault();
       }
