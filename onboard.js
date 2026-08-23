@@ -1,16 +1,16 @@
 (function(){
 'use strict';
-var KEY='kopeyka3_onboarded_v7';
+var KEY='kopeyka3_onboarded_v8';
 var index=0, root=null, busy=false, hlEl=null;
 
 var slides=[
-  {title:'Привет, я Фин',text:'Я помощник по деньгам в Копейке. Коротко покажу, где что.',target:'.finn-avatar',place:'bottom'},
+  {title:'Привет, я Фин',text:'Я твой помощник по деньгам. За минуту покажу, где что лежит.',target:'.finn-avatar',place:'bottom'},
   {title:'Сколько доступно',text:'Главная цифра — доступные деньги. Касса, резервы и долги рядом. Нажми на кольцо для расшифровки.',target:'#mainFinance',place:'bottom'},
   {title:'Сегодня',text:'Какая сейчас смена и когда ближайшая.',target:'.today-card',place:'bottom'},
-  {title:'Лимит на сегодня',text:'Сколько безопасно потратить. Можно переключить на ручной лимит.',target:'.limit-card',place:'bottom'},
-  {title:'Ближайшие платежи',text:'Что скоро нужно оплатить — прямо на главной.',target:'.near-card',place:'top'},
-  {title:'Совет Фина',text:'Подсказка по твоим цифрам. Зажми кнопку + внизу справа, чтобы открыть чат с Фином.',target:'#finnTipCard',place:'top'},
-  {title:'Смены',text:'Ближайшие дни графика. «Полный календарь» откроет окно, где можно менять смены.',target:'.week-strip',place:'top'},
+  {title:'Лимит на сегодня',text:'Сколько безопасно потратить. Можно переключить на ручной лимит.',target:'.limit-card,#limitCard',place:'auto'},
+  {title:'Совет Фина',text:'Подсказка по твоим цифрам. Зажми кнопку + внизу справа — откроется чат.',target:'#finnTipCard',place:'auto'},
+  {title:'Ближайшие платежи',text:'Что скоро нужно оплатить — прямо на главной. Если пусто, платежи можно добавить во вкладке «Платежи».',target:'.near-card,#nearCard',place:'auto'},
+  {title:'Смены',text:'Ближайшие дни графика. «Полный календарь» откроет окно, где можно менять смены.',target:'.week-strip',place:'auto'},
   {title:'Навигация',text:'Вкладки внизу: Главная, Операции, Резервы, Долги, Платежи.',target:'.bottom-nav',place:'top'},
   {title:'Кнопка +',text:'Короткое нажатие — меню добавления. Зажми и держи — откроется Фин.',target:'.fab',place:'top'},
   {title:'Готово',text:'Данные на телефоне, облако — по желанию. Удачного учёта!',target:null,place:'center'}
@@ -25,11 +25,11 @@ function injectCss(){
   s.id='finTourStyle';
   s.textContent=''+
     '#finTour{position:fixed;inset:0;z-index:5000;pointer-events:none;}'+
-    '#finTour .tour-dim{position:absolute;inset:0;background:rgba(4,8,18,.45);pointer-events:auto;}'+
+    '#finTour .tour-dim{position:absolute;inset:0;background:rgba(4,8,18,.42);pointer-events:none;}'+
     '#finTour .tour-card{position:absolute;left:12px;right:12px;max-width:400px;margin:0 auto;'+
       'background:rgba(14,22,40,.98);border:1px solid rgba(120,180,255,.3);border-radius:18px;'+
       'padding:16px 14px 12px;box-shadow:0 16px 40px rgba(0,0,0,.55);color:#E8F0FF;'+
-      'pointer-events:auto;z-index:5002;opacity:0;transition:opacity .25s,transform .3s;}'+
+      'pointer-events:auto;z-index:5002;opacity:0;transition:opacity .25s,transform .3s;max-height:42vh;overflow:auto;}'+
     '#finTour .tour-card.show{opacity:1;}'+
     '#finTour .tour-card.place-bottom{bottom:calc(12px + env(safe-area-inset-bottom,0px));top:auto;transform:translateY(8px);}'+
     '#finTour .tour-card.place-bottom.show{transform:translateY(0);}'+
@@ -47,7 +47,8 @@ function injectCss(){
     '#finTour .tour-actions{display:flex;gap:8px;}'+
     '#finTour .tour-actions button{flex:1;padding:11px 8px;border-radius:12px;font-size:13.5px;font-weight:700;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.06);color:#E8F0FF;}'+
     '#finTour .tour-next{background:linear-gradient(135deg,#5EC8FF,#3A8FE8)!important;color:#0A101C!important;border:none!important;}'+
-    'body.fin-tour-active{overflow:hidden!important;}';
+    /* IMPORTANT: allow page scroll during tour */
+    'body.fin-tour-active{/* scroll allowed */}';
   document.head.appendChild(s);
 }
 
@@ -66,32 +67,52 @@ function findTarget(sel){
       if(r.width>2&&r.height>2)return el;
     }
   }
-  // fallback fuzzy for section titles
   return null;
 }
 
-function highlight(el){
+function pickPlace(el, preferred){
+  if(preferred&&preferred!=='auto')return preferred;
+  if(!el)return 'center';
+  var r=el.getBoundingClientRect();
+  var vh=window.innerHeight||640;
+  var mid=r.top+r.height/2;
+  // keep card on the opposite side of the target
+  if(mid < vh*0.45) return 'bottom';
+  return 'top';
+}
+
+function highlight(el, place){
   clearHl();
   if(!el)return;
   hlEl=el;
+  var vh=window.innerHeight||640;
+  var cardReserve = place==='top' ? 24 : 200;
   try{
-    var place=(root&&root.querySelector('.tour-card')||{}).className||'';
     var r=el.getBoundingClientRect();
-    var vh=window.innerHeight||640;
-    var targetY = place.indexOf('place-top')>=0 ? (vh*0.55) : (vh*0.38);
-    var mid = r.top + r.height/2;
-    var delta = mid - targetY;
-    if(Math.abs(delta)>24){ window.scrollBy({top:delta, behavior:'smooth'}); }
-  }catch(e){ try{el.scrollIntoView({block:'center',behavior:'smooth'});}catch(x){} }
-  setTimeout(function(){
-    if(hlEl!==el)return;
-    el.classList.add('tour-hl');
-    try{
+    // scroll so element sits in free zone (not under card)
+    var desiredTop = place==='top' ? Math.max(80, vh*0.28) : Math.max(24, vh*0.12);
+    var delta = r.top - desiredTop;
+    if(Math.abs(delta)>16){
+      window.scrollBy(0, delta);
+    }
+  }catch(e){
+    try{el.scrollIntoView({block:'center',behavior:'instant'});}catch(x){}
+  }
+  // apply glow after scroll
+  requestAnimationFrame(function(){
+    requestAnimationFrame(function(){
+      if(hlEl!==el)return;
+      el.classList.add('tour-hl');
+      // second correction
       var r2=el.getBoundingClientRect();
-      var vh2=window.innerHeight||640;
-      if(r2.top<12||r2.bottom>vh2-12){ el.scrollIntoView({block:'center',behavior:'smooth'}); }
-    }catch(x){}
-  },380);
+      if(place==='bottom' && r2.bottom > vh - 210){
+        window.scrollBy(0, r2.bottom - (vh - 220));
+      }
+      if(place==='top' && r2.top < 90){
+        window.scrollBy(0, r2.top - 100);
+      }
+    });
+  });
 }
 
 function show(i){
@@ -105,6 +126,8 @@ function show(i){
   card.classList.remove('show');
   clearHl();
   setTimeout(function(){
+    var el=findTarget(s.target);
+    var place=pickPlace(el, s.place);
     card.querySelector('h2').textContent=s.title;
     card.querySelector('p').textContent=s.text;
     card.querySelector('.tour-count').textContent=(i+1)+' / '+slides.length;
@@ -112,13 +135,13 @@ function show(i){
     card.querySelector('.tour-next').textContent=i===slides.length-1?'Начать':'Далее';
     card.querySelector('.tour-back').style.visibility=i===0?'hidden':'visible';
     card.classList.remove('place-bottom','place-top','place-center');
-    card.classList.add('place-'+(s.place||'bottom'));
+    card.classList.add('place-'+place);
     card.classList.add('show');
     setTimeout(function(){
-      highlight(findTarget(s.target));
+      highlight(el, place);
       busy=false;
-    },200);
-  },80);
+    },120);
+  },60);
 }
 
 function make(){

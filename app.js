@@ -66,12 +66,12 @@ function ensureMonth(){var cur=today().slice(0,7);var st=(STATE.settings&&STATE.
 function toast(m){var el=document.getElementById('toast');if(!el)return;el.textContent=m;el.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(function(){el.classList.remove('show');},2800);}window.toast=toast;
 function countShifts(month){var p=month.split('-').map(Number),dim=new Date(p[0],p[1],0).getDate();var day=0,night=0,off=0,leftDay=0,leftNight=0,leftOff=0;var t=today(),curM=t.slice(0,7),curD=Number(t.slice(8));for(var d=1;d<=dim;d++){var ds=month+'-'+String(d).padStart(2,'0');var s=shift(ds,STATE.shiftsOverride);if(s==='day')day++;else if(s==='night')night++;else off++;if(month>curM||(month===curM&&d>=curD)){if(s==='day')leftDay++;else if(s==='night')leftNight++;else leftOff++;}}return{day:day,night:night,off:off,total:dim,leftDay:leftDay,leftNight:leftNight,leftOff:leftOff,leftWork:leftDay+leftNight};}
 function showShiftPay(){var month=getViewMonth(),sc=countShifts(month),dr=num(STATE.settings.dayRate),nr=num(STATE.settings.nightRate),pay=sc.day*dr+sc.night*nr,leftPay=sc.leftDay*dr+sc.leftNight*nr;var isCur=month===today().slice(0,7);var html='<div class="modal-card"><div class="modal-title">Смены · '+monthLabel(month)+'</div><div class="sp-grid"><div class="sp-item"><b>'+sc.day+'</b><span>День</span></div><div class="sp-item"><b>'+sc.night+'</b><span>Ночь</span></div><div class="sp-item"><b>'+sc.off+'</b><span>Выходной</span></div></div>'+(isCur?'<div class="sp-pay" style="margin-bottom:8px"><div class="muted">Осталось смен</div><div class="big" style="font-size:20px">'+sc.leftWork+' <span style="font-size:13px;font-weight:500;color:var(--muted)">('+sc.leftDay+'д + '+sc.leftNight+'н)</span></div></div>':'')+'<div class="sp-pay"><div class="muted">'+(isCur?'Осталось получить':'Ожидаемая зарплата')+'</div><div class="big" style="font-size:22px">'+fmt(isCur?leftPay:pay)+'</div>'+(dr||nr?'<div class="muted" style="margin-top:6px">день '+fmt(dr)+' · ночь '+fmt(nr)+(isCur?' · всего в месяце '+fmt(pay):'')+'</div>':'<div class="muted" style="margin-top:6px">Задай ставки в настройках ⚙</div>')+'</div><button type="button" class="btn-primary" id="spClose">Закрыть</button></div>';openModal(html,function(){var c=document.getElementById('spClose');if(c)c.onclick=closeModal;});}
-function openModal(html,bind){var bg=document.getElementById('modalBg');if(!bg)return;bg.innerHTML=html;bg.classList.add('show');bg.onclick=function(e){if(e.target===bg)closeModal();};if(bind)bind();}
-function closeModal(){var bg=document.getElementById('modalBg');if(!bg)return;bg.classList.remove('show');bg.innerHTML='';}
+function openModal(html,bind){var bg=document.getElementById('modalBg');if(!bg)return;bg.innerHTML=html;bg.classList.add('show');bg.onclick=function(e){if(e.target===bg)closeModal();};try{if(window.FinBridge&&window.FinBridge.setPullRefresh)window.FinBridge.setPullRefresh(false);}catch(e){}if(bind)bind();}
+function closeModal(){var bg=document.getElementById('modalBg');if(!bg)return;bg.classList.remove('show','full');bg.innerHTML='';document.body.classList.remove('fin-settings-open');document.documentElement.style.overflow='';document.body.style.overflow='';try{if(window.FinBridge&&window.FinBridge.setPullRefresh)window.FinBridge.setPullRefresh(false);}catch(e){}}
 
 function appAlert(message, title){
   return new Promise(function(resolve){
-    var html='<div class="modal-card"><div class="modal-title">'+(title||'Копейка')+'</div><div class="dlg-msg">'+esc(String(message||''))+'</div><div class="dlg-actions"><button type="button" class="btn primary" id="dlgOk">ОК</button></div></div>';
+    var html='<div class="modal-card"><div class="modal-title">'+(title||'Фин')+'</div><div class="dlg-msg">'+esc(String(message||''))+'</div><div class="dlg-actions"><button type="button" class="btn primary" id="dlgOk">ОК</button></div></div>';
     openModal(html,function(){
       var ok=document.getElementById('dlgOk');
       function done(){closeModal();resolve();}
@@ -556,16 +556,19 @@ homeHtml += '</div>';
 setTimeout(function(){try{refreshFinnTipAI(finnTip,attention);}catch(e){}},100);
 
 // ===== 9. Ближайшие платежи =====
+homeHtml += '<div class="card tight near-card" id="nearCard">';
+homeHtml += '<div class="sec-title-sm">БЛИЖАЙШИЕ ПЛАТЕЖИ</div>';
 if(nearestObl.length){
-  homeHtml += '<div class="card tight near-card">';
-  homeHtml += '<div class="sec-title-sm">БЛИЖАЙШИЕ ПЛАТЕЖИ</div>';
   nearestObl.forEach(function(o){
     var when = o.overdue ? '<span class="neg">просрочен</span>' : ('через '+o.daysUntil+' дн.');
     homeHtml += '<div class="item" data-id="'+o.id+'" data-k="obl"><div class="left"><b>'+esc(o.name)+'</b><span class="muted">'+when+'</span></div><div class="amt minus">'+fmt(o.amount)+'</div></div>';
   });
-  homeHtml += '<button type="button" class="link-more" data-view="obl">Все платежи →</button>';
-  homeHtml += '</div>';
+} else {
+  homeHtml += '<div class="hint" style="margin:0">Пока нет ближайших платежей</div>';
 }
+homeHtml += '<button type="button" class="link-more" data-view="obl">Все платежи →</button>';
+homeHtml += '</div>';
+
 
 // ===== 10. Последние операции =====
 homeHtml += '<div class="card tight">';
@@ -727,6 +730,10 @@ function addDebt(){appPrompt('Название долга','','Долг').then(f
 function addObligation(){appPrompt('Название (Алименты, Аренда…)','','Платёж').then(function(n){if(!n)return;appPrompt('Сумма каждый месяц','','Сумма').then(function(a){a=num(a);if(a<=0)return toast('Укажи сумму');appPrompt('Число месяца (1–31)','25','День').then(function(d){d=num(d);if(d<1||d>31)return toast('День 1–31');pushUndo();STATE.obligations.push({id:uid(),name:n,amount:a,day:d,active:true});save(true);render();toast('Обязательный платёж добавлен');});});});}
 function openAssistant(opts){
   try{
+    // снять возможные блокировки
+    document.body.classList.remove('fin-tour-active','fin-settings-open');
+    document.documentElement.style.overflow='';
+    document.body.style.overflow='';
     if(window.kopeykaAssistant&&typeof window.kopeykaAssistant.open==='function'){
       window.kopeykaAssistant.open(opts||{});
       return true;
@@ -735,7 +742,7 @@ function openAssistant(opts){
       window.kopeykaVoice.open(opts||{});
       return true;
     }
-    toast('Фин ещё загружается…');
+    toast('Фин ещё загружается — подожди секунду');
   }catch(e){console.error(e);toast('Не удалось открыть Фина');}
   return false;
 }
@@ -758,8 +765,7 @@ function bindFabHold(){
       fab.classList.remove('holding');
       if(radial){radial.classList.remove('show');fab.classList.remove('open');}
       try{if(navigator.vibrate)navigator.vibrate(30);}catch(x){}
-      openAssistant();
-      toast('Фин');
+      try{openAssistant();}catch(x){console.error(x);}
     },420);
   }
   function onMove(e){

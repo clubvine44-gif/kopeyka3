@@ -125,6 +125,11 @@ public class FinBridge {
 
     @JavascriptInterface public String getVersion() { try { return context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionName; } catch (Exception e) { return ""; } }
     @JavascriptInterface public int getVersionCode() { try { return context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionCode; } catch (Exception e) { return 0; } }
+    @JavascriptInterface public void setPullRefresh(boolean on) {
+        if (context instanceof MainActivity) {
+            ((MainActivity) context).runOnUiThread(() -> ((MainActivity) context).setPullRefreshEnabled(on));
+        }
+    }
     @JavascriptInterface public void checkUpdate() {
         if (context instanceof MainActivity) {
             ((MainActivity) context).runOnUiThread(((MainActivity) context)::forceCheckUpdate);

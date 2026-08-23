@@ -7,35 +7,45 @@ function isOnlyWake(s){var t=norm(s);return /^(привет\s+)?(финн?|фе�
 function loadHistory(){try{var h=JSON.parse(localStorage.getItem(HKEY)||'[]');if(Array.isArray(h))history=h.slice(-40);}catch(e){history=[];}}function saveHistory(){try{localStorage.setItem(HKEY,JSON.stringify(history.slice(-40)));}catch(e){}}
 function open(opts){
   opts=opts||{};
-  try{if(window.__finnWakeStop)window.__finnWakeStop();}catch(x){}
-  var already=!!document.getElementById('kopeykaAiDialog');
-  if(!already){
-    loadHistory();
-    document.body.insertAdjacentHTML('beforeend','<div id="kopeykaAiDialog" class="ka-bg"><div class="ka-card"><div class="ka-head"><div class="ka-head-left"><span class="ka-dot"></span><div><div class="ka-title">Фин</div><div class="ka-sub" id="kaCloud">Готов</div></div></div><button class="ka-close" id="kaClose" aria-label="Закрыть">×</button></div><div class="ka-chat" id="kaChat"></div><div class="ka-status" id="kaStatus">Готов</div><div class="ka-input-row"><input id="kaInput" autocomplete="off" placeholder="Спроси что угодно…"><button id="kaSend" aria-label="Отправить">➤</button><button class="ka-mic" id="kaOrb" aria-label="Микрофон"><svg class="ka-mic-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg><span class="ka-lock-hint">↑</span></button></div></div></div>');
+  try{
+    try{if(window.__finnWakeStop)window.__finnWakeStop();}catch(x){}
     style();
-    var bg=document.getElementById('kopeykaAiDialog');
-    bg.addEventListener('click',function(e){if(e.target===bg)close();});
-    document.getElementById('kaClose').onclick=close;
-    document.getElementById('kaOrb').onclick=function(e){e.preventDefault();};bindHoldMic(document.getElementById('kaOrb'));
-    document.getElementById('kaSend').onclick=sendInput;
-    document.getElementById('kaInput').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();sendInput();}});
-    renderHistory();
-    updateCloud();
-  }
-  if(opts.command) setTimeout(function(){handle(String(opts.command));},180);
-  else if(!already){
-    setTimeout(function(){
-      var c=document.getElementById('kaChat');
-      if(c&&!history.length){
-        bubble('ai','Привет, меня зовут Фин. Чем помочь?');
-      }
-    },120);
+    var existing=document.getElementById('kopeykaAiDialog');
+    if(existing){existing.style.display='flex';existing.style.zIndex='10050';return;}
+    loadHistory();
+    var wrap=document.createElement('div');
+    wrap.id='kopeykaAiDialog';
+    wrap.className='ka-bg';
+    wrap.style.cssText='position:fixed;inset:0;z-index:10050;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(6,8,12,.62);';
+    wrap.innerHTML='<div class="ka-card"><div class="ka-head"><div class="ka-head-left"><span class="ka-dot"></span><div><div class="ka-title">Фин</div><div class="ka-sub" id="kaCloud">Готов</div></div></div><button class="ka-close" id="kaClose" type="button" aria-label="Закрыть">×</button></div><div class="ka-chat" id="kaChat"></div><div class="ka-status" id="kaStatus">Готов</div><div class="ka-input-row"><input id="kaInput" autocomplete="off" placeholder="Спроси что угодно…"><button id="kaSend" type="button" aria-label="Отправить">➤</button><button class="ka-mic" id="kaOrb" type="button" aria-label="Микрофон"><svg class="ka-mic-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg><span class="ka-lock-hint">↑</span></button></div></div>';
+    document.body.appendChild(wrap);
+    wrap.addEventListener('click',function(e){if(e.target===wrap)close();});
+    var closeBtn=document.getElementById('kaClose');
+    if(closeBtn)closeBtn.onclick=function(e){e.preventDefault();e.stopPropagation();close();};
+    var orb=document.getElementById('kaOrb');
+    if(orb){orb.onclick=function(e){e.preventDefault();};try{bindHoldMic(orb);}catch(x){}}
+    var send=document.getElementById('kaSend');
+    if(send)send.onclick=sendInput;
+    var inp=document.getElementById('kaInput');
+    if(inp)inp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();sendInput();}});
+    try{renderHistory();}catch(x){}
+    try{updateCloud();}catch(x){}
+    if(opts.command) setTimeout(function(){try{handle(String(opts.command));}catch(x){}},180);
+    else setTimeout(function(){
+      try{
+        var c=document.getElementById('kaChat');
+        if(c&&!history.length) bubble('ai','Привет, меня зовут Фин. Чем помочь?');
+      }catch(x){}
+    },80);
+  }catch(err){
+    console.error('open Fin',err);
+    try{alert('Фин: '+(err&&err.message||err));}catch(x){}
   }
 }
 
 function close(){wantListen=false;stopListen();var e=document.getElementById('kopeykaAiDialog');if(e)e.remove();try{if(window.Finn3D&&window.Finn3D.deactivate)window.Finn3D.deactivate();}catch(x){}try{if(window.__finnWakeStart)window.__finnWakeStart();}catch(x){}}
 function style(){if(document.getElementById('kaStyle'))return;var s=document.createElement('style');s.id='kaStyle';s.textContent=''+
-'.ka-bg{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;'+
+'.ka-bg{position:fixed;inset:0;z-index:10050;display:flex;align-items:center;justify-content:center;padding:16px;'+
 'background:rgba(6,8,12,.52);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}'+
 '.ka-card{width:min(100%,380px);max-height:min(88vh,640px);display:flex;flex-direction:column;'+
 'background:rgba(14,22,40,.94);border:1px solid rgba(94,200,255,.2);'+

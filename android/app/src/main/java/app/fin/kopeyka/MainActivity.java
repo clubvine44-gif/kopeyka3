@@ -76,6 +76,10 @@ public class MainActivity extends AppCompatActivity {
         refreshLayout.addView(webView);
         setupWebView();
         refreshLayout.setOnRefreshListener(() -> webView.reload());
+        refreshLayout.setEnabled(false);
+        // Не даём SwipeRefresh перехватывать скролл в модалках/настройках
+        refreshLayout.setOnChildScrollUpCallback((parent, child) -> true);
+        refreshLayout.setEnabled(false);
         ensureMicPermission();
         webView.loadUrl("https://appassets.androidplatform.net/assets/www/index.html");
         checkForUpdate();
@@ -191,6 +195,10 @@ public class MainActivity extends AppCompatActivity {
     @Override protected void onPause() {
         if (webView != null) webView.onPause();
         super.onPause();
+    }
+
+    void setPullRefreshEnabled(boolean on) {
+        if (refreshLayout != null) refreshLayout.setEnabled(on);
     }
 
     void forceCheckUpdate() {
