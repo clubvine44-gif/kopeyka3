@@ -125,7 +125,7 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" Fin.apk --clobber
           else
-            gh release create "$TAG" Fin.apk --title "Финн ${RELEASE_VERSION_NAME}" --notes "Обновление Финна ${RELEASE_VERSION_NAME}"
+            gh release create "$TAG" Fin.apk --title "Фин ${RELEASE_VERSION_NAME}" --notes "Обновление Фин ${RELEASE_VERSION_NAME}" ||               gh release upload "$TAG" Fin.apk --clobber
           fi
 
       - name: Update public update manifest
