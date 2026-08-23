@@ -58,11 +58,12 @@ button,input,select{font:inherit;color:inherit;border:none;outline:none;backgrou
   margin-top:1px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 .model-menu{
-  position:absolute;top:calc(100% + 8px);left:50%;transform:translateX(-50%);
-  width:min(280px,86vw);z-index:80;
+  position:fixed;top:56px;left:50%;transform:translateX(-50%);
+  width:min(300px,calc(100vw - 24px));max-width:calc(100vw - 24px);z-index:200;
   background:rgba(14,22,40,.98);border:1px solid rgba(120,180,255,.28);
-  border-radius:16px;padding:8px;box-shadow:0 16px 40px rgba(0,0,0,.5);
+  border-radius:16px;padding:8px;box-shadow:0 16px 40px rgba(0,0,0,.55);
   display:none;text-align:left;
+  max-height:min(70vh,480px);overflow-y:auto;-webkit-overflow-scrolling:touch;
 }
 .top-title.open .model-menu{display:block}
 .model-menu .mm-head{
@@ -123,7 +124,7 @@ button,input,select{font:inherit;color:inherit;border:none;outline:none;backgrou
   background:var(--card2);border:1px solid var(--line);
   padding:8px 12px;border-radius:12px;font-size:12px;white-space:nowrap;
   opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:60;
-  box-shadow:0 8px 24px rgba(0,0,0,.45);backdrop-filter:blur(12px);
+  box-shadow:0 8px 24px rgba(0,0,0,.45);
 }
 .finn-avatar.show-tip .finn-tip-tooltip{opacity:1}
 .top-actions{display:flex;gap:6px;flex:0 0 auto;width:auto;justify-content:flex-end}
@@ -373,7 +374,7 @@ body.has-bnav{padding-bottom:calc(var(--nav-h) + 20px + var(--safe-b))}
 .toast{
   position:fixed;left:50%;bottom:calc(var(--nav-h) + 30px + var(--safe-b));
   transform:translateX(-50%) translateY(20px);opacity:0;
-  background:rgba(20,30,50,.92);backdrop-filter:blur(16px);
+  background:rgba(18,27,46,.98);
   border:1px solid var(--line);padding:10px 18px;border-radius:14px;
   font-size:13px;z-index:100;pointer-events:none;transition:opacity .25s,transform .25s;
   box-shadow:0 8px 28px rgba(0,0,0,.4);
@@ -386,12 +387,16 @@ body.has-bnav{padding-bottom:calc(var(--nav-h) + 20px + var(--safe-b))}
 .fab-wrap{position:fixed;right:16px;bottom:calc(var(--nav-h) + var(--safe-b) + 14px);z-index:45;width:56px;height:56px}
 .radial{
   position:absolute;right:0;bottom:68px;
-  display:none;flex-direction:column;gap:8px;
-  background:rgba(14,22,40,.92);backdrop-filter:blur(20px);
+  display:flex;flex-direction:column;gap:8px;
+  background:rgba(12,20,38,.98);
   border:1px solid var(--line);border-radius:18px;padding:10px;
   box-shadow:0 12px 40px rgba(0,0,0,.45);min-width:160px;
+  opacity:0;pointer-events:none;transform-origin:bottom right;
+  transform:translate3d(0,8px,0) scale(.92);
+  transition:opacity .16s ease-out,transform .16s ease-out;
+  will-change:transform,opacity;
 }
-.radial.show{display:flex}
+.radial.show{opacity:1;pointer-events:auto;transform:translate3d(0,0,0) scale(1)}
 .radial button{
   display:flex;align-items:center;gap:10px;padding:10px 14px;
   border-radius:12px;font-size:14px;font-weight:500;
@@ -402,19 +407,22 @@ body.has-bnav{padding-bottom:calc(var(--nav-h) + 20px + var(--safe-b))}
 .radial .ic{font-size:16px}
 .modal-bg{
   position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.55);
-  backdrop-filter:blur(6px);opacity:0;pointer-events:none;
-  transition:opacity .25s;
+  opacity:0;pointer-events:none;
+  transition:opacity .2s;
+  will-change:opacity;
 }
 .modal-bg.show{opacity:1;pointer-events:auto}
 .modal{
-  position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(.95);
+  position:fixed;left:50%;top:50%;transform:translate3d(-50%,-50%,0) scale(.95);
   z-index:70;width:min(360px,92vw);max-height:80vh;overflow:auto;
-  background:rgba(16,26,46,.95);backdrop-filter:blur(28px);
+  background:rgba(13,21,39,.99);
   border:1px solid var(--line);border-radius:22px;padding:20px;
   box-shadow:0 20px 60px rgba(0,0,0,.5);opacity:0;pointer-events:none;
-  transition:opacity .25s,transform .25s;
+  transition:opacity .2s,transform .2s;
+  will-change:transform,opacity;
+  contain:content;
 }
-.modal.show{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1)}
+.modal.show{opacity:1;pointer-events:auto;transform:translate3d(-50%,-50%,0) scale(1)}
 .modal h3{font-size:17px;font-weight:700;margin-bottom:14px}
 .modal label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
 .modal input,.modal select,.modal textarea{
@@ -452,9 +460,7 @@ body.has-bnav{padding-bottom:calc(var(--nav-h) + 20px + var(--safe-b))}
 .modal-bg .modal-card, .modal-card{
   width:100%;max-width:420px;max-height:min(85vh,640px);
   overflow-y:auto;-webkit-overflow-scrolling:touch;
-  background:rgba(14,22,40,.96)!important;
-  backdrop-filter:blur(12px)!important;
-  -webkit-backdrop-filter:blur(12px)!important;
+  background:rgba(12,20,38,.99)!important;
   border:1px solid rgba(120,180,255,.2)!important;
   border-radius:22px 22px 18px 18px!important;
   padding:18px 16px 20px!important;
@@ -656,6 +662,43 @@ html, body { overscroll-behavior-y: none; overscroll-behavior: none; }
 }
 body.fin-settings-open{overflow:hidden!important;position:fixed;width:100%;height:100%;}
 body.fin-settings-open #app{pointer-events:none;}
+
+.mm-item .mm-status{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:10.5px;font-weight:600;color:var(--muted)}
+.mm-item .mm-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;background:#6B7280;display:inline-block}
+.mm-item .mm-dot.excellent{background:#4ADE80;box-shadow:0 0 6px rgba(74,222,128,.55)}
+.mm-item .mm-dot.good{background:#86EFAC}
+.mm-item .mm-dot.ok{background:#FBBF24}
+.mm-item .mm-dot.slow,.mm-item .mm-dot.busy{background:#FB923C}
+.mm-item .mm-dot.bad,.mm-item .mm-dot.offline,.mm-item .mm-dot.nokey,.mm-item .mm-dot.missing{background:#F87171}
+.mm-item .mm-dot.unknown{background:#6B7280}
+.notif-btn{position:relative}
+.notif-badge{
+  position:absolute;top:-3px;right:-4px;min-width:16px;height:16px;padding:0 4px;
+  border-radius:8px;background:#F87171;color:#fff;font-size:10px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;line-height:1;
+  box-shadow:0 0 0 2px rgba(10,16,28,.9);
+}
+.notif-badge[hidden]{display:none!important}
+#btnFaq{font-weight:800;font-size:15px;color:#5EC8FF}
+.item.op-deleted{opacity:.55}
+.item.op-deleted b{text-decoration:line-through}
+.item .op-mark{font-size:10px;font-weight:700;margin-left:6px;padding:1px 6px;border-radius:6px}
+.item .op-mark.del{background:rgba(248,113,113,.18);color:#F87171}
+.item .op-mark.edit{background:rgba(251,191,36,.16);color:#FBBF24}
+.faq-cat{margin-bottom:10px;border:1px solid rgba(255,255,255,.08);border-radius:14px;overflow:hidden;background:rgba(20,28,44,.55)}
+.faq-cat > button{width:100%;text-align:left;padding:14px 16px;background:transparent;border:0;color:#E8ECF4;font-weight:700;font-size:14px;display:flex;justify-content:space-between;align-items:center}
+.faq-cat > button span{opacity:.5;font-size:12px;transition:transform .2s}
+.faq-cat.open > button span{transform:rotate(90deg);opacity:.9}
+.faq-body{display:none;padding:0 16px 14px;color:rgba(200,210,230,.92);font-size:13.5px;line-height:1.55}
+.faq-cat.open .faq-body{display:block}
+.faq-body p{margin:0 0 10px}
+.faq-body b{color:#5EC8FF}
+.notif-list .n-item{padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.06)}
+.notif-list .n-item:last-child{border-bottom:0}
+.notif-list .n-item b{display:block;font-size:13.5px;margin-bottom:3px}
+.notif-list .n-item span{font-size:12px;color:var(--muted);line-height:1.4}
+.notif-list .n-item.unread{background:rgba(94,200,255,.06)}
+
 .cal-d.has-plan .dot,.cal-d.has-plan{box-shadow:inset 0 0 0 2px rgba(94,200,255,.55)}
 .week-strip .wd.has-plan{box-shadow:inset 0 0 0 1.5px rgba(94,200,255,.55)}
 #dlgLayer{z-index:90!important;}
@@ -735,7 +778,7 @@ html.fin-tour-scroll .card{content-visibility:visible!important;contain:none!imp
     <span>Платежи</span>
   </button>
 </nav>
-<div class="fab-wrap"><div class="radial" id="radial"><button data-act="income"><span class="ic">➕</span> Доход</button><button data-act="expense"><span class="ic">➖</span> Расход</button><button data-act="reserve"><span class="ic">🏦</span> Резерв</button><button data-act="debt"><span class="ic">📉</span> Долг</button><button data-act="oblig"><span class="ic">📅</span> Обязательный</button></div><button class="fab" id="fab" aria-label="Добавить"><span aria-hidden="true">+</span></button></div><div class="modal-bg" id="modalBg"></div><div class="modal-bg" id="dlgLayer"></div><div class="toast" id="toast"></div><script src="finn-char.js?v=2026082401"></script><script src="app.js?v=2026082401"></script><script src="profile.js?v=2026082401"></script><script src="onboard.js?v=2026082401"></script><script src="cloud.js?v=2026082401"></script><script src="products.js?v=2026082401"></script><script src="engine.js?v=2026082401"></script><script src="ai.js?v=2026082401"></script><script src="assistant-v2.js?v=2026082401"></script><script src="voice.js?v=2026082401"></script><script src="finn3d.js?v=2026082401"></script><script src="finn-wake.js?v=2026082401"></script><script>window.__kopeykaBuild='2026082401';window.__FIN_NATIVE=true;</script><script>
+<div class="fab-wrap"><div class="radial" id="radial"><button data-act="income"><span class="ic">➕</span> Доход</button><button data-act="expense"><span class="ic">➖</span> Расход</button><button data-act="reserve"><span class="ic">🏦</span> Резерв</button><button data-act="debt"><span class="ic">📉</span> Долг</button><button data-act="oblig"><span class="ic">📅</span> Обязательный</button></div><button class="fab" id="fab" aria-label="Добавить"><span aria-hidden="true">+</span></button></div><div class="modal-bg" id="modalBg"></div><div class="modal-bg" id="dlgLayer"></div><div class="toast" id="toast"></div><script src="finn-char.js?v=2026082402"></script><script src="app.js?v=2026082402"></script><script src="profile.js?v=2026082402"></script><script src="onboard.js?v=2026082402"></script><script src="cloud.js?v=2026082402"></script><script src="products.js?v=2026082402"></script><script src="engine.js?v=2026082402"></script><script src="ai.js?v=2026082402"></script><script src="assistant-v2.js?v=2026082402"></script><script src="voice.js?v=2026082402"></script><script src="finn3d.js?v=2026082402"></script><script src="finn-wake.js?v=2026082402"></script><script>window.__kopeykaBuild='2026082402';window.__FIN_NATIVE=true;</script><script>
 (function(){
   function tryTestPush(){
     try{

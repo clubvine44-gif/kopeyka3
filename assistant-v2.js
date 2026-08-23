@@ -258,14 +258,22 @@ function style(){
   '.ka-reply .ka-act{padding:10px 18px;border-radius:14px;border:1px solid rgba(255,255,255,.12);'+
   'background:rgba(20,28,44,.88);color:#fff;font-weight:700;font-size:14px;backdrop-filter:blur(8px)}'+
   '.ka-reply .ka-act.ok{background:linear-gradient(135deg,#5EC8FF,#3A8FE8);color:#0A101C;border:0}'+
-  '.ka-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;width:min(92vw,340px);margin:0 auto;padding:6px 0 4px}'+
-'.ka-cal .ch{font-size:10px;color:rgba(180,190,210,.75);text-align:center;padding:2px 0}'+
-'.ka-cal .cd{aspect-ratio:1;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;font-weight:650;background:rgba(20,28,44,.75);border:1px solid rgba(255,255,255,.08);color:#E8ECF4;line-height:1.1}'+
-'.ka-cal .cd.day{background:rgba(94,200,255,.18);border-color:rgba(94,200,255,.35)}'+
-'.ka-cal .cd.night{background:rgba(167,139,250,.2);border-color:rgba(167,139,250,.4)}'+
-'.ka-cal .cd.off{background:rgba(255,255,255,.04);color:rgba(180,190,210,.7)}'+
-'.ka-cal .cd.today{box-shadow:0 0 0 2px rgba(251,191,36,.7)}'+
-'.ka-cal .cd .dt{font-size:8px;opacity:.8;margin-top:1px}'+
+  '.ka-cal-wrap{width:min(92vw,340px);margin:0 auto;padding:4px 0 8px}'+
+  '.ka-cal-title{font-size:14px;font-weight:700;margin-bottom:8px;opacity:.95}'+
+  '.ka-cal-leg{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;font-size:11px;color:rgba(180,190,210,.9)}'+
+  '.ka-cal-leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}'+
+  '.ka-cal-leg .l-day{background:rgba(94,200,255,.55)}'+
+  '.ka-cal-leg .l-night{background:rgba(167,139,250,.6)}'+
+  '.ka-cal-leg .l-off{background:rgba(255,255,255,.18)}'+
+  '.ka-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;width:100%}'+
+  '.ka-cal .ch{font-size:10px;color:rgba(180,190,210,.75);text-align:center;padding:2px 0;font-weight:600}'+
+  '.ka-cal .cd{aspect-ratio:1;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:rgba(20,28,44,.82);border:1px solid rgba(255,255,255,.1);color:#E8ECF4;line-height:1.15;min-height:36px}'+
+  '.ka-cal .cd.day{background:rgba(94,200,255,.22);border-color:rgba(94,200,255,.4)}'+
+  '.ka-cal .cd.night{background:rgba(167,139,250,.24);border-color:rgba(167,139,250,.45)}'+
+  '.ka-cal .cd.off{background:rgba(255,255,255,.05);color:rgba(180,190,210,.75)}'+
+  '.ka-cal .cd.today{box-shadow:0 0 0 2px rgba(251,191,36,.85)}'+
+  '.ka-cal .cd .dt{font-size:9px;opacity:.85;margin-top:2px;font-weight:600}'+
+  '.ka-reply.ka-cal-mode{max-height:min(52vh,420px);bottom:calc(18% + 160px);text-align:center}'+
 '.ka-hint{position:absolute;left:50%;top:150px;transform:translateX(-50%);z-index:3;font-size:12.5px;color:rgba(180,190,210,.9);text-align:center;'+
   'text-shadow:0 1px 8px rgba(0,0,0,.55);pointer-events:none;'+
   'white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis;'+
@@ -336,7 +344,7 @@ function clearReply(){
     _clearReplyTimer=null;
     if(_pinReply)return;
     el.innerHTML='';
-    el.classList.remove('hide');
+    el.classList.remove('hide','ka-cal-mode');
   },240);
 }
 
@@ -477,23 +485,29 @@ function showAssistantCalendar(month){
     }catch(e){}
     var v=ov[ds];return (v==='day'||v==='night'||v==='off')?v:'day';
   }
-  var html='<div class="ka-cal">';
+  var monthNames=['','январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+  var title=(monthNames[m]||'')+' '+y;
+  var html='<div class="ka-cal-wrap">';
+  html+='<div class="ka-cal-title">Календарь смен · '+title+'</div>';
+  html+='<div class="ka-cal-leg"><span><i class="l-day"></i>День</span><span><i class="l-night"></i>Ночь</span><span><i class="l-off"></i>Выходной</span></div>';
+  html+='<div class="ka-cal">';
   ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].forEach(function(h){html+='<div class="ch">'+h+'</div>';});
   for(var i=0;i<sw;i++)html+='<div class="cd" style="opacity:.2"></div>';
   for(var d=1;d<=dim;d++){
     var ds=month+'-'+String(d).padStart(2,'0');
     var s=sh(ds);
-    html+='<div class="cd '+s+(ds===td?' today':'')+'">'+d+'<span class="dt">'+(labels[s]||'')+'</span></div>';
+    var full={day:'День',night:'Ночь',off:'Вых'}[s]||'';
+    html+='<div class="cd '+s+(ds===td?' today':'')+'" title="'+ds+' · '+full+'">'+d+'<span class="dt">'+(labels[s]||'')+'</span></div>';
   }
-  html+='</div>';
+  html+='</div></div>';
   var el=document.getElementById('kaReply');
   if(!el)return;
   el.classList.remove('hide');
-  el.innerHTML='<div style="font-size:13px;margin-bottom:6px;opacity:.9">Календарь смен · '+month+'</div>'+html;
+  el.classList.add('ka-cal-mode');
+  el.innerHTML=html;
   el.scrollTop=0;
   requestAnimationFrame(function(){el.classList.add('show');});
   status('Нажми на меня, чтобы говорить');
-  // календарь держим, пока не придёт новый запрос
   setTimeout(function(){_pinReply=false;},50);
 }
 
