@@ -2,5 +2,5 @@
   "versionCode": 33,
   "versionName": "3.5.3",
   "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/latest/download/Fin.apk",
-  "notes": "3.5.3 — формы без мигания, категории, ручной лимит, совет Финна от ИИ, скролл, микрофон"
+  "notes": "3.4.3 — фикс скролла без pull-to-refresh, моргание Финна, новое приветственное обучение"
 }
