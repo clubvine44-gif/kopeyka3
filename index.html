@@ -2,8 +2,8 @@
 :root{
   --bg:#0B1220;
   --bg2:#0E1628;
-  --card:rgba(18,28,48,.55);
-  --card2:rgba(22,34,58,.65);
+  --card:rgba(17,26,45,.82);
+  --card2:rgba(21,32,54,.9);
   --glass:rgba(255,255,255,.06);
   --line:rgba(255,255,255,.12);
   --line2:rgba(120,180,255,.18);
@@ -37,9 +37,7 @@ button,input,select{font:inherit;color:inherit;border:none;outline:none;backgrou
   position:sticky;top:0;z-index:50;
   display:flex;align-items:center;justify-content:space-between;
   padding:10px 12px;
-  background:rgba(10,16,28,.72);
-  backdrop-filter:blur(12px);
-  -webkit-backdrop-filter:blur(12px);
+  background:rgba(9,14,25,.94);
   border-bottom:1px solid var(--line);
   gap:8px;
 }
@@ -91,12 +89,10 @@ button,input,select{font:inherit;color:inherit;border:none;outline:none;backgrou
   border-radius:var(--radius);
   padding:16px;
   margin-bottom:12px;
-  backdrop-filter:blur(12px);
-  -webkit-backdrop-filter:blur(12px);
   box-shadow:0 8px 32px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.06);
 }
 .card.hero{
-  background:linear-gradient(145deg,rgba(30,50,90,.5),rgba(18,28,48,.55));
+  background:linear-gradient(145deg,rgba(32,52,92,.78),rgba(18,28,48,.85));
   border:1px solid rgba(120,180,255,.2);
   box-shadow:0 12px 40px rgba(0,20,60,.35), inset 0 1px 0 rgba(255,255,255,.08);
   overflow:hidden;
@@ -218,7 +214,6 @@ button,input,select{font:inherit;color:inherit;border:none;outline:none;backgrou
 .sec{
   background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
   margin-bottom:10px;overflow:hidden;
-  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
 }
 .sec-head{width:100%;display:flex;align-items:center;gap:10px;padding:14px 16px;text-align:left}
 .sec-title{font-size:14px;font-weight:600;flex:1}
@@ -247,9 +242,7 @@ button,input,select{font:inherit;color:inherit;border:none;outline:none;backgrou
   display:flex;justify-content:space-around;align-items:center;
   height:calc(var(--nav-h) + var(--safe-b));
   padding-bottom:var(--safe-b);
-  background:rgba(10,16,28,.82);
-  backdrop-filter:blur(14px);
-  -webkit-backdrop-filter:blur(14px);
+  background:rgba(9,14,25,.96);
   border-top:1px solid var(--line);
   box-shadow:0 -8px 32px rgba(0,0,0,.3);
 }
@@ -277,20 +270,30 @@ body.has-bnav{padding-bottom:calc(var(--nav-h) + 20px + var(--safe-b))}
   display:flex;align-items:center;justify-content:center;
   box-shadow:0 6px 24px rgba(60,140,220,.5),0 0 0 3px rgba(94,200,255,.45);
   transition:transform .15s;
-  animation:fabPulse 2.4s ease-in-out infinite;
   -webkit-tap-highlight-color:transparent;
   touch-action:manipulation;
   user-select:none;-webkit-user-select:none;
+  isolation:isolate;
+}
+.fab::after{
+  content:"";position:absolute;inset:-3px;border-radius:50%;
+  border:2px solid rgba(94,200,255,.55);
+  opacity:.6;transform:scale(1);
+  will-change:transform,opacity;
+  animation:fabRing 2.4s ease-out infinite;
+  pointer-events:none;
 }
 .fab:active{transform:scale(.92)}
-.fab.open{transform:rotate(45deg);animation:fabPulseFast 0.9s ease-in-out infinite}
-@keyframes fabPulse{
-  0%,100%{box-shadow:0 6px 22px rgba(60,140,220,.5),0 0 0 3px rgba(94,200,255,.5)}
-  50%{box-shadow:0 8px 28px rgba(60,140,220,.65),0 0 0 8px rgba(94,200,255,.2)}
+.fab.open{transform:rotate(45deg)}
+.fab.open::after{animation:fabRingFast .9s ease-out infinite;border-color:rgba(94,200,255,.9)}
+@keyframes fabRing{
+  0%{transform:scale(1);opacity:.55}
+  70%{transform:scale(1.35);opacity:0}
+  100%{transform:scale(1.35);opacity:0}
 }
-@keyframes fabPulseFast{
-  0%,100%{box-shadow:0 0 0 4px rgba(94,200,255,.9),0 0 20px rgba(94,200,255,.5)}
-  50%{box-shadow:0 0 0 10px rgba(94,200,255,.15),0 0 28px rgba(94,200,255,.65)}
+@keyframes fabRingFast{
+  0%{transform:scale(1);opacity:.7}
+  100%{transform:scale(1.5);opacity:0}
 }
 
 /* Misc */
@@ -366,6 +369,7 @@ body.has-bnav{padding-bottom:calc(var(--nav-h) + 20px + var(--safe-b))}
   position:absolute;inset:-4px;border-radius:50%;
   border:2px solid rgba(74,222,128,.45);
   opacity:0;pointer-events:none;
+  will-change:transform,opacity;
   animation:finnAuraPulse 2.6s ease-in-out infinite;
 }
 .finn-avatar.status-green .finn-aura{border-color:rgba(74,222,128,.55)}
@@ -376,7 +380,6 @@ body.has-bnav{padding-bottom:calc(var(--nav-h) + 20px + var(--safe-b))}
   50%{opacity:.9;transform:scale(1.08)}
 }
 
-}
 /* Modal glass + scroll */
 .modal-bg.show{display:flex!important;align-items:flex-end;justify-content:center;padding:12px;padding-bottom:calc(12px + var(--safe-b))}
 .modal-bg.show.full{align-items:stretch;padding:0;padding-bottom:0}

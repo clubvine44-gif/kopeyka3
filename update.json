@@ -1,6 +1,6 @@
 {
-  "versionCode": 33,
-  "versionName": "3.5.3",
+  "versionCode": 34,
+  "versionName": "3.5.4",
   "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/latest/download/Fin.apk",
-  "notes": "3.4.3 — фикс скролла без pull-to-refresh, моргание Финна, новое приветственное обучение"
+  "notes": "3.5.4 — оптимизация скролла (убран backdrop-filter с шапки/навигации/карточек), фикс памяти позиции скролла на главном экране, пульс кнопки + и анимация Финна сохранены"
 }

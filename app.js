@@ -590,7 +590,6 @@ if(currentView==='home'){
   htmlOut = '<div class="view-title-bar"><h2>'+viewTitle+'</h2></div><div class="card"><div class="list">'+ (viewBody||'<div class="empty">Пусто</div>') +'</div></div>';
 }
 var prevScroll=(currentView==='home'&&window.__homeScroll)?window.__homeScroll:0;
-if(currentView!=='home'){try{var wrap=document.querySelector('.wrap')||document.scrollingElement;if(wrap)window.__homeScroll=window.scrollY||document.documentElement.scrollTop||0;}catch(e){}}
 app.innerHTML = htmlOut;
 if(currentView==='home'&&prevScroll>0){requestAnimationFrame(function(){window.scrollTo(0,prevScroll);requestAnimationFrame(function(){window.scrollTo(0,prevScroll);});});}
 
