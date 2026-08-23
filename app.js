@@ -24,7 +24,7 @@ function days(a,b){return Math.round((pd(b)-pd(a))/864e5);}
 function shift(ds,ov){var v=ov&&ov[ds];if(typeof v==='string'&&SHIFT_LABEL[v])return v;return CYCLE[((days(ANCHOR,ds)%6)+6)%6];}
 function cleanShifts(ov){var out={};if(!ov||typeof ov!=='object')return out;Object.keys(ov).forEach(function(k){var v=ov[k];if(typeof v==='string'&&SHIFT_LABEL[v])out[k]=v;});return out;}
 function inMonth(dateStr,month){return String(dateStr||'').slice(0,7)===month;}
-function def(){return{version:6,settings:{openingBalance:0,month:today().slice(0,7),dayRate:0,nightRate:0},income:[],expenses:[],reserves:[],debts:[],reserveOps:[],obligations:[],obligationPays:[],voiceMap:{},shiftsOverride:{},updatedAt:new Date().toISOString()};}
+function def(){return{version:6,settings:{openingBalance:0,month:today().slice(0,7),dayRate:0,nightRate:0},income:[],expenses:[],reserves:[],debts:[],reserveOps:[],obligations:[],obligationPays:[],voiceMap:{},shiftsOverride:{},dayPlans:{},updatedAt:new Date().toISOString()};}
 function norm(raw){
   var b=def();if(!raw||typeof raw!=='object')return b;
   var o=Object.assign({},b,raw);o.settings=Object.assign({},b.settings,raw.settings||{});
@@ -192,7 +192,88 @@ function refreshFinnTipAI(fallback, attentionList){
 }
 
 
+
+function openPlanCalendar(){
+  if(!STATE.dayPlans) STATE.dayPlans={};
+  var month=getViewMonth(),t=today();
+  function buildCal(m){
+    var ym=m.split('-').map(Number),first=new Date(ym[0],ym[1]-1,1),sw=(first.getDay()+6)%7,dim=new Date(ym[0],ym[1],0).getDate();
+    var h='<div class="cal">';
+    ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].forEach(function(d){h+='<div class="cal-h">'+d+'</div>';});
+    for(var i=0;i<sw;i++) h+='<div class="cal-d other"></div>';
+    for(var d=1;d<=dim;d++){
+      var ds=m+'-'+String(d).padStart(2,'0');
+      var plans=(STATE.dayPlans[ds]||[]);
+      var mark=plans.length?' has-plan':'';
+      h+='<div class="cal-d'+mark+(ds===t?' today':'')+'" data-date="'+ds+'">'+d+(plans.length?'<span class="dot"></span>':'')+'</div>';
+    }
+    h+='</div>';
+    return h;
+  }
+  var html='<div class="modal-card full-screen"><div class="modal-title">Планы на дни</div>'+
+    '<div class="modal-scroll">'+
+    '<div class="month-nav"><button type="button" class="mnav" id="calPrev">‹</button><div class="month-title" id="calTitle">'+monthLabel(month)+'</div><button type="button" class="mnav" id="calNext">›</button></div>'+
+    '<div id="calBody">'+buildCal(month)+'</div>'+
+    '<div class="hint">Выбери день и отметь: покупка, долг, доход или заметка. Суммы учтутся в подсказках лимита.</div>'+
+    '</div><button type="button" class="btn-primary" id="calClose">Закрыть</button></div>';
+  openModal(html,function(){
+    var bg=document.getElementById('modalBg'); if(bg) bg.classList.add('full');
+    var prevClose=closeModal, closed=false;
+    function doClose(){ if(closed)return; closed=true; if(bg)bg.classList.remove('full'); closeModal=prevClose; prevClose(); if(typeof render==='function')render(); }
+    closeModal=doClose;
+    document.getElementById('calClose').onclick=doClose;
+    function redraw(){
+      var m=getViewMonth();
+      document.getElementById('calTitle').textContent=monthLabel(m);
+      document.getElementById('calBody').innerHTML=buildCal(m);
+      Array.prototype.forEach.call(document.querySelectorAll('#calBody [data-date]'),function(el){
+        el.onclick=function(){ dayPlanEditor(el.getAttribute('data-date'), redraw); };
+      });
+    }
+    document.getElementById('calPrev').onclick=function(){ viewMonth=shiftMonth(getViewMonth(),-1); redraw(); };
+    document.getElementById('calNext').onclick=function(){ viewMonth=shiftMonth(getViewMonth(),1); redraw(); };
+    redraw();
+  });
+}
+function dayPlanEditor(ds, onDone){
+  if(!STATE.dayPlans) STATE.dayPlans={};
+  var list=STATE.dayPlans[ds]||[];
+  appChoice('План на '+ds, ['Покупка / трата','Доход','Платёж по долгу','Заметка','Очистить день'], 'Что запланировать?').then(function(i){
+    if(i===null) return;
+    if(i===4){ pushUndo(); STATE.dayPlans[ds]=[]; save(true); if(onDone)onDone(); toast('День очищен'); return; }
+    var types=['purchase','income','debt','note'];
+    var type=types[i];
+    appPrompt(type==='note'?'Текст':'Сумма', type==='note'?'':'0', type==='note'?'Заметка':'Сумма').then(function(v){
+      if(v===null) return;
+      var item={id:uid(), type:type, amount:type==='note'?0:num(v), title:type==='note'?String(v):(['Покупка','Доход','Долг'][i]||'План')};
+      if(type!=='note'){
+        appPrompt('Комментарий', item.title, 'Название').then(function(t){
+          if(t!==null && t) item.title=t;
+          pushUndo();
+          list=STATE.dayPlans[ds]||[];
+          list.push(item);
+          STATE.dayPlans[ds]=list;
+          save(true);
+          if(onDone)onDone();
+          toast('Добавлено в '+ds);
+        });
+      } else {
+        pushUndo();
+        list=STATE.dayPlans[ds]||[];
+        list.push(item);
+        STATE.dayPlans[ds]=list;
+        save(true);
+        if(onDone)onDone();
+        toast('Заметка сохранена');
+      }
+    });
+  });
+}
+
 function openFullCalendar(){
+  var planMode=false;
+  try{planMode=window.FinnaProfile&&window.FinnaProfile.showPlanCalendar&&window.FinnaProfile.showPlanCalendar();}catch(e){}
+  if(planMode){ openPlanCalendar(); return; }
   var month=getViewMonth(),t=today(),isCurrent=(month===t.slice(0,7));
   var ym=month.split('-').map(Number),first=new Date(ym[0],ym[1]-1,1),sw=(first.getDay()+6)%7,dim=new Date(ym[0],ym[1],0).getDate();
   var cal='<div class="cal">';
@@ -267,7 +348,7 @@ function showSettings(){
     '</div>'+
     '<div class="set-group"><div class="set-group-title">Ассистент</div>'+
       '<button type="button" class="set-row" id="setAi"><div class="set-main"><b>Голосовой помощник</b><span>Ключ для умных ответов Финна</span></div><span class="set-val" id="setAiStatus">—</span></button>'+
-      '<button type="button" class="set-row" id="setCheckUpdate"><div class="set-main"><b>Проверить обновления</b><span>Сверка с сервером прямо сейчас</span></div><span class="set-val">↻</span></button>'+'<button type="button" class="set-row" id="setTestPush"><div class="set-main"><b>Проверить уведомление</b><span>Придёт через несколько секунд</span></div><span class="set-val">↗</span></button>'+
+      '<button type="button" class="set-row" id="setScenario"><div class="set-main"><b>Сценарий жизни</b><span>Работа, бюджет, фокус — перестроить приложение</span></div><span class="set-val">↻</span></button>'+'<button type="button" class="set-row" id="setCheckUpdate"><div class="set-main"><b>Проверить обновления</b><span>Сверка с сервером прямо сейчас</span></div><span class="set-val">↻</span></button>'+'<button type="button" class="set-row" id="setTestPush"><div class="set-main"><b>Проверить уведомление</b><span>Придёт через несколько секунд</span></div><span class="set-val">↗</span></button>'+
     '</div>'+
     '<div class="set-group"><div class="set-group-title">Данные</div>'+
       '<button type="button" class="set-row" id="setUndo"><div class="set-main"><b>Отменить последнее</b><span>'+(undoStack.length?'Можно откатить действие':'Пока нечего отменять')+'</span></div><span class="set-val">'+(undoStack.length?'↩':'')+'</span></button>'+
@@ -327,6 +408,13 @@ function showSettings(){
         if(st2)st2.textContent=o?'Включён':'Выключен';
         toast(o?'Ключ сохранён':'Ключ удалён');
       });
+    };
+    var setSc=document.getElementById('setScenario');
+    if(setSc)setSc.onclick=function(){
+      doClose();
+      try{localStorage.removeItem('finna_profile_v2');localStorage.removeItem('finna_profile_v1');}catch(e){}
+      if(STATE.settings)STATE.settings.profile=null;
+      if(window.FinnaProfile)window.FinnaProfile.start();
     };
     document.getElementById('setCheckUpdate').onclick=function(){
       try{
@@ -638,15 +726,34 @@ for(var wd=0;wd<7;wd++){
   weekHtml += '<div class="wd'+(isTod?' today':'')+' '+ws+'"><span class="wd-d">'+['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][wdt.getDay()]+'</span><span class="wd-s">'+wlab+'</span></div>';
 }
 weekHtml += '</div>';
-var showShifts=true;
-try{if(window.FinnaProfile&&typeof window.FinnaProfile.showShifts==='function')showShifts=window.FinnaProfile.showShifts();}catch(e){}
-if(showShifts){
+var flags={showShifts:true,showPlanCalendar:false,mode:'shift',prioritizeDebts:false,prioritizeGoals:false,labelCalendar:'Смены'};
+try{if(window.FinnaProfile&&window.FinnaProfile.flags)flags=Object.assign(flags,window.FinnaProfile.flags());}catch(e){}
+if(flags.showShifts){
   homeHtml += '<div class="card tight" id="shiftsCard">';
   homeHtml += '<div class="sec-title-sm">МОИ СМЕНЫ</div>';
   homeHtml += weekHtml;
   homeHtml += '<div class="shift-summary">'+ (shCounts.day||0)+' дневных · '+(shCounts.night||0)+' ночных · '+(shCounts.off||0)+' выходных</div>';
   homeHtml += '<button type="button" class="link-more" id="btnFullCal">Полный календарь →</button>';
   homeHtml += '</div>';
+} else if(flags.showPlanCalendar){
+  homeHtml += '<div class="card tight" id="shiftsCard">';
+  homeHtml += '<div class="sec-title-sm">'+(flags.mode==='budget'?'ПЛАНЫ НА ДНИ':'КАЛЕНДАРЬ')+'</div>';
+  homeHtml += weekHtml.replace(/wd-s">Д/g,'wd-s">·').replace(/wd-s">Н/g,'wd-s">·').replace(/wd-s">В/g,'wd-s">·');
+  homeHtml += '<div class="hint" style="margin:8px 0 0">Нажми день — запланируй покупку, долг или доход</div>';
+  homeHtml += '<button type="button" class="link-more" id="btnFullCal">Открыть календарь →</button>';
+  homeHtml += '</div>';
+}
+// focus banners
+if(flags.prioritizeDebts){
+  homeHtml = homeHtml.replace(
+    '<div class="card finn-tip-card"',
+    '<div class="card tight" id="focusBanner"><div class="sec-title-sm">ФОКУС · ДОЛГИ</div><div class="hint" style="margin:0">Главное сейчас — закрывать долги. Лимит и советы заточены под это.</div></div><div class="card finn-tip-card"'
+  );
+} else if(flags.prioritizeGoals){
+  homeHtml = homeHtml.replace(
+    '<div class="card finn-tip-card"',
+    '<div class="card tight" id="focusBanner"><div class="sec-title-sm">ФОКУС · НАКОПЛЕНИЯ</div><div class="hint" style="margin:0">Режим целей: резервы и лимит помогают копить.</div></div><div class="card finn-tip-card"'
+  );
 }
 
 
@@ -707,7 +814,12 @@ if(t.id==='btnFullCal'){
   return;
 }
 if(t.classList.contains('link-more')&&t.dataset.view){goView(t.dataset.view);return;}
-if(t.id==='mPrev'){viewMonth=shiftMonth(getViewMonth(),-1);render();return;}if(t.id==='mNext'){viewMonth=shiftMonth(getViewMonth(),1);render();return;}if(t.id==='btnShiftPay'){showShiftPay();return;}if(t.classList.contains('sec-head')){var secEl=t.parentElement,id=secEl.dataset.sec;openSecs[id]=!openSecs[id];secEl.classList.toggle('open',!!openSecs[id]);return;}if(t.dataset.date){var isCur=(getViewMonth()===today().slice(0,7));if(!isCur){viewMonth=today().slice(0,7);render();toast('Вернись к текущему месяцу');return;}pushUndo();var ds=t.dataset.date,cur=shift(ds,STATE.shiftsOverride),n=cur==='day'?'night':cur==='night'?'off':'day';STATE.shiftsOverride[ds]=n;save(true);render();toast('Смена: '+(SHIFT_LABEL[n]||n));return;}var id=t.dataset.id,k=t.dataset.k,month=getViewMonth();if(!id||!k)return;
+if(t.id==='mPrev'){viewMonth=shiftMonth(getViewMonth(),-1);render();return;}if(t.id==='mNext'){viewMonth=shiftMonth(getViewMonth(),1);render();return;}if(t.id==='btnShiftPay'){showShiftPay();return;}if(t.classList.contains('sec-head')){var secEl=t.parentElement,id=secEl.dataset.sec;openSecs[id]=!openSecs[id];secEl.classList.toggle('open',!!openSecs[id]);return;}if(t.dataset.date){
+  var planMode=false;try{planMode=window.FinnaProfile&&window.FinnaProfile.showPlanCalendar&&window.FinnaProfile.showPlanCalendar();}catch(e){}
+  var ds=t.dataset.date;
+  if(planMode){ dayPlanEditor(ds, function(){render();}); return; }
+  var isCur=(getViewMonth()===today().slice(0,7));if(!isCur){viewMonth=today().slice(0,7);render();toast('Вернись к текущему месяцу');return;}pushUndo();var cur=shift(ds,STATE.shiftsOverride),n=cur==='day'?'night':cur==='night'?'off':'day';STATE.shiftsOverride[ds]=n;save(true);render();toast('Смена: '+(SHIFT_LABEL[n]||n));return;
+}var id=t.dataset.id,k=t.dataset.k,month=getViewMonth();if(!id||!k)return;
 if(k==='in'){appConfirm('Удалить доход?','Удалить').then(function(ok){if(!ok)return;pushUndo();STATE.income=STATE.income.filter(function(i){return i.id!==id;});save(true);render();toast('Удалено');});return;}
 if(k==='ex'){appConfirm('Удалить расход?','Удалить').then(function(ok){if(!ok)return;pushUndo();STATE.expenses=STATE.expenses.filter(function(i){return i.id!==id;});save(true);render();toast('Удалено');});return;}
 if(k==='res'){var r=STATE.reserves.find(function(i){return i.id===id;});if(!r)return;appChoice('Резерв «'+r.name+'»',['Пополнить','Снять','Удалить'],'Резерв').then(function(act){if(act===null)return;if(act===2){appConfirm('Удалить резерв?','Удалить').then(function(ok){if(!ok)return;pushUndo();STATE.reserves=STATE.reserves.filter(function(i){return i.id!==id;});STATE.reserveOps=STATE.reserveOps.filter(function(o){return o.reserveId!==id;});save(true);render();toast('Удалено');});}else if(act===1){appPrompt('Снять','0','Снять с резерва').then(function(av){var a=num(av);if(a>0&&a<=num(r.saved)){pushUndo();r.saved=num(r.saved)-a;STATE.reserveOps.push({id:uid(),reserveId:id,type:'withdraw',amount:a,date:today()});save(true);render();toast('Снято');}});}else if(act===0){appPrompt('Пополнить','0','Пополнить резерв').then(function(av){var a2=num(av);if(a2>0){pushUndo();r.saved=num(r.saved)+a2;STATE.reserveOps.push({id:uid(),reserveId:id,type:'deposit',amount:a2,date:today()});save(true);render();toast('Пополнено');}});}});return;}

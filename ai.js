@@ -1,6 +1,6 @@
 (function(){
 'use strict';
-var GROQ_KEY='kopeyka_groq_key',GROQ_URL='https://api.groq.com/openai/v1/chat/completions',MODEL='openai/gpt-oss-20b';
+var GROQ_KEY='kopeyka_groq_key',GROQ_URL='https://api.groq.com/openai/v1/chat/completions',MODEL='llama-3.3-70b-versatile';var MODELS=['llama-3.3-70b-versatile','llama-3.1-8b-instant','gemma2-9b-it'];
 function getKey(){try{var k=(localStorage.getItem(GROQ_KEY)||'').trim();if(k)return k;}catch(e){}return (function(){try{return atob(['Z3NrX3N0','VVZMNHJF','VFJFQk56','OGs3ZWV2','V0dkeWIz','RllIeUMx','ZHJUbk1j','ZWU3TzBC','eHk4N0E3','M08='].join(''));}catch(e){return '';}})();}
 function setKey(key){try{key=String(key||'').trim();if(key)localStorage.setItem(GROQ_KEY,key);else localStorage.removeItem(GROQ_KEY);}catch(e){}}
 function hasKey(){return !!getKey();}
@@ -134,7 +134,10 @@ function askConversation(history,userText){
     var key=getKey();
     if(!key){reject(new Error('Нет ключа Groq. Открой настройки Копейки и укажи ключ Groq.'));return;}
     var debtNames=debts().map(function(d){return d.name;}).join(', ')||'нет';
+    var profileCtx='';
+    try{if(window.FinnaProfile&&window.FinnaProfile.contextForAI){var pc=window.FinnaProfile.contextForAI();profileCtx=pc.summary+' Фокус: '+(pc.focus||'')+'. Режим: '+pc.mode+'.';}}catch(e){}
     var system=[
+      'Контекст сценария пользователя: '+profileCtx,
       'Тебя зовут Финна (не Финн и не Фина). Ты дружелюбный ассистент приложения Копейка.',
       'Отвечай только по-русски, коротко и по делу.',
       'Ты можешь отвечать на ЛЮБЫЕ вопросы пользователя: финансы, общие знания, быт, шутки — без отказов «я только про деньги».',
@@ -159,7 +162,7 @@ function askConversation(history,userText){
         if(!response.ok){
           var message=data&&data.error&&data.error.message?data.error.message:('HTTP '+response.status);
           if(response.status===401)message='Неверный ключ Groq';
-          if(response.status===429)message='Лимит Groq временно исчерпан';
+          if(response.status===429)message='Слишком много запросов к ИИ. Подожди 20–30 сек и повтори.';
           throw new Error(message);
         }
         var content=data&&data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content;

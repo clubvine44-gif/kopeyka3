@@ -1,6 +1,6 @@
 (function(){
 'use strict';
-var KEY='kopeyka3_onboarded_v9';
+var KEY='kopeyka3_onboarded_v10';
 var index=0, root=null, busy=false, hlEl=null;
 
 var slides=[
@@ -76,14 +76,18 @@ function scrollToEl(el, place){
   if(!el)return Promise.resolve();
   return new Promise(function(resolve){
     try{
-      el.scrollIntoView({block: place==='top'?'end':'center', behavior:'smooth', inline:'nearest'});
-    }catch(e){
-      try{
-        var top=el.getBoundingClientRect().top+(window.scrollY||0)-(place==='top'?120:160);
-        window.scrollTo(0, Math.max(0,top));
-      }catch(x){}
-    }
-    setTimeout(resolve, 420);
+      // disable content-visibility during tour for correct metrics
+      document.documentElement.classList.add('fin-tour-scroll');
+      var y=0, node=el;
+      while(node){ y+=node.offsetTop||0; node=node.offsetParent; }
+      var vh=window.innerHeight||640;
+      var target = place==='top' ? Math.max(0, y - 100) : Math.max(0, y - Math.round(vh*0.28));
+      window.scrollTo(0, target);
+      document.documentElement.scrollTop=target;
+      document.body.scrollTop=target;
+      try{ el.scrollIntoView({block:'center', behavior:'smooth'}); }catch(e){}
+    }catch(e){}
+    setTimeout(resolve, 480);
   });
 }
 
