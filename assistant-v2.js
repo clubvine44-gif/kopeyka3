@@ -200,7 +200,13 @@ function handle(text){
       var lk2=document.getElementById('kaOrb')&&document.getElementById('kaOrb').classList.contains('locked');status(lk2?'Слушаю…':'Готов');if(lk2)setTimeout(startListen,500);
     }
   }).catch(function(e){
-    var a=(e&&e.message&&/ключ|Groq|сети|Таймаут/i.test(e.message))?('Не получилось: '+e.message):('Попробуй ещё раз или переформулируй. '+(e&&e.message?e.message:''));history.push({role:'assistant',content:a});saveHistory();bubble('ai',a);status('Готов');
+    var msg=(e&&e.message)?String(e.message):'ошибка сети';
+    var a=/ключ|401/i.test(msg)?'Нужен ключ Groq в настройках.':
+      /429|много запросов/i.test(msg)?'Слишком много запросов. Подожди полминуты.':
+      /Таймаут|abort/i.test(msg)?'ИИ не ответил вовремя. Попробуй ещё раз.':
+      /сети|fetch/i.test(msg)?'Нет сети. Проверь интернет.':
+      ('Финна: '+msg);
+    history.push({role:'assistant',content:a});saveHistory();bubble('ai',a);status('Готов');
   });
 }
 function renderAction(summary,actions){

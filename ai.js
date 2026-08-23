@@ -1,6 +1,6 @@
 (function(){
 'use strict';
-var GROQ_KEY='kopeyka_groq_key',GROQ_URL='https://api.groq.com/openai/v1/chat/completions',MODEL='llama-3.3-70b-versatile';var MODELS=['llama-3.3-70b-versatile','llama-3.1-8b-instant','gemma2-9b-it'];
+var GROQ_KEY='kopeyka_groq_key',GROQ_URL='https://api.groq.com/openai/v1/chat/completions',MODEL='llama-3.1-8b-instant';var MODELS=['llama-3.3-70b-versatile','llama-3.1-8b-instant','gemma2-9b-it'];
 function getKey(){try{var k=(localStorage.getItem(GROQ_KEY)||'').trim();if(k)return k;}catch(e){}return (function(){try{return atob(['Z3NrX3N0','VVZMNHJF','VFJFQk56','OGs3ZWV2','V0dkeWIz','RllIeUMx','ZHJUbk1j','ZWU3TzBC','eHk4N0E3','M08='].join(''));}catch(e){return '';}})();}
 function setKey(key){try{key=String(key||'').trim();if(key)localStorage.setItem(GROQ_KEY,key);else localStorage.removeItem(GROQ_KEY);}catch(e){}}
 function hasKey(){return !!getKey();}
@@ -8,7 +8,25 @@ function norm(s){return String(s||'').toLowerCase().replace(/ё/g,'е').replace(
 function n(v){var x=Number(v);return isFinite(x)?Math.round(x):0;}
 function fmt(v){return n(v).toLocaleString('ru-RU')+' ₽';}
 function getContext(){try{return window.kopeykaEngine&&typeof window.kopeykaEngine.context==='function'?window.kopeykaEngine.context():JSON.stringify(window.STATE||{});}catch(e){return '{}';}}
-function parseResponse(raw){var text=String(raw||'').trim().replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/\s*```$/i,'');var start=text.indexOf('{'),end=text.lastIndexOf('}');if(start>=0&&end>start)text=text.slice(start,end+1);var result=JSON.parse(text);if(!result||typeof result!=='object')throw new Error('Неверный ответ ИИ');if(!Array.isArray(result.actions))result.actions=[];return result;}
+function parseResponse(raw){
+  var text=String(raw||'').trim();
+  if(!text) throw new Error('Пустой ответ ИИ');
+  var cleaned=text.replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/\s*```$/i,'');
+  var start=cleaned.indexOf('{'), end=cleaned.lastIndexOf('}');
+  if(start>=0&&end>start){
+    try{
+      var result=JSON.parse(cleaned.slice(start,end+1));
+      if(result&&typeof result==='object'){
+        if(!Array.isArray(result.actions)) result.actions=[];
+        if(!result.mode) result.mode=(result.actions&&result.actions.length)?'action':'answer';
+        if(result.mode==='answer'&&!result.text) result.text=result.summary||cleaned;
+        return result;
+      }
+    }catch(e){ /* fall through */ }
+  }
+  // Plain text answer — still success
+  return {mode:'answer', text:text.replace(/^["«]+|["»]+$/g,'').trim(), summary:null, actions:[]};
+}
 function debts(){return(window.STATE&&Array.isArray(window.STATE.debts))?window.STATE.debts:[];}
 function obligations(){return(window.STATE&&Array.isArray(window.STATE.obligations))?window.STATE.obligations:[];}
 function stem(s){
@@ -146,7 +164,7 @@ function askConversation(history,userText){
       'Когда нужно изменить данные Копейки — mode action с actions. Каждый action ОБЯЗАН иметь type.',
       'Пример: {"type":"delete_debt","name":"Ёжик"} или {"type":"pay_debt","name":"Ёжик","amount":189}.',
       'Бери точные имена из списка долгов/резервов. Никогда не удаляй доход вместо долга.',
-      'Формат JSON строго: {"mode":"answer","text":"...","summary":null,"actions":[]} или {"mode":"action","text":null,"summary":"...","actions":[{"type":"..."}]}.',
+      'Если вопрос не требует изменения данных — можно ответить обычным текстом. Если меняешь данные Копейки — JSON. Формат JSON: {"mode":"answer","text":"...","summary":null,"actions":[]} или {"mode":"action","text":null,"summary":"...","actions":[{"type":"..."}]}.',
       'type: add_expense, add_income, add_debt, pay_debt, increase_debt, reserve_deposit, reserve_withdraw, add_obligation, delete_debt, delete_income, delete_expense, delete_reserve, delete_obligation, delete_last, change_last, set_opening_balance, set_day_rate, set_night_rate, change_shift.',
       'На вопрос «как тебя зовут» отвечай: «Меня зовут Финна».'
     ].join('\n');
@@ -155,7 +173,7 @@ function askConversation(history,userText){
     messages.push({role:'user',content:String(userText||'')});
     var controller=typeof AbortController!=='undefined'?new AbortController():null;
     var timer=setTimeout(function(){try{if(controller)controller.abort();}catch(e){}reject(new Error('Groq не ответил за 20 секунд'));},20000);
-    fetch(GROQ_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model:MODEL,temperature:0.05,max_completion_tokens:1400,messages:messages}),signal:controller?controller.signal:undefined}).then(function(response){
+    fetch(GROQ_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({model:MODEL,temperature:0.3,max_completion_tokens:800,messages:messages}),signal:controller?controller.signal:undefined}).then(function(response){
       return response.text().then(function(body){
         clearTimeout(timer);
         var data;try{data=JSON.parse(body);}catch(e){throw new Error('Groq вернул некорректный ответ ('+response.status+')');}

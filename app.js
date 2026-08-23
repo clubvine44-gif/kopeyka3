@@ -88,9 +88,12 @@ function appConfirm(message, title){
     });
   });
 }
-function appPrompt(message, defVal, title){
+function appPrompt(message, defVal, title, opts){
   return new Promise(function(resolve){
-    var html='<div class="modal-card"><div class="modal-title">'+(title||'Ввод')+'</div><div class="dlg-msg">'+esc(String(message||''))+'</div><div class="dlg-field"><input id="dlgInput" type="text" value="'+esc(String(defVal==null?'':defVal))+'" autocomplete="off" inputmode="decimal"></div><div class="dlg-actions"><button type="button" class="btn" id="dlgCancel">Отмена</button><button type="button" class="btn primary" id="dlgOk">ОК</button></div></div>';
+    opts=opts||{};
+    var im=opts.inputmode!=null?opts.inputmode:(opts.text?'text':'decimal');
+    var imAttr=im?(' inputmode="'+im+'"'):'';
+    var html='<div class="modal-card"><div class="modal-title">'+(title||'Ввод')+'</div><div class="dlg-msg">'+esc(String(message||''))+'</div><div class="dlg-field"><input id="dlgInput" type="text" value="'+esc(String(defVal==null?'':defVal))+'" autocomplete="off"'+imAttr+'></div><div class="dlg-actions"><button type="button" class="btn" id="dlgCancel">Отмена</button><button type="button" class="btn primary" id="dlgOk">ОК</button></div></div>';
     openModal(html,function(){
       var inp=document.getElementById('dlgInput');
       if(inp){setTimeout(function(){inp.focus();inp.select&&inp.select();},80);}
@@ -175,6 +178,39 @@ function appForm(title, fields, okLabel){
 window.appForm=appForm;
 
 
+
+function refreshTodayStatus(){
+  var el=document.getElementById('todayStatusBody');
+  if(!el)return;
+  var fallbacks=[
+    'Маленький шаг сегодня лучше идеального плана завтра.',
+    'Запиши трату сразу — так проще не потерять контроль.',
+    'Перед покупкой спроси себя: это нужно или просто хочется?',
+    'Даже 100 ₽ в резерв — уже движение к цели.',
+    'Спокойный день без импульсивных трат — тоже победа.'
+  ];
+  var day=new Date().getDate();
+  var fb=fallbacks[day%fallbacks.length];
+  el.textContent=fb;
+  if(!window.kopeykaAI||typeof window.kopeykaAI.askConversation!=='function')return;
+  var key=(window.kopeykaAI.getKey&&window.kopeykaAI.getKey())||'';
+  try{if(!key)key=localStorage.getItem('kopeyka_groq_key')||'';}catch(e){}
+  if(!key)return;
+  var cacheKey='finna_today_status_'+today();
+  try{
+    var cached=localStorage.getItem(cacheKey);
+    if(cached&&cached.length>10){el.textContent=cached;return;}
+  }catch(e){}
+  var prompt='Напиши ОДНУ короткую фразу (макс 18 слов) на русском: позитивный практичный совет про деньги на сегодня. Без приветствия, без markdown, без кавычек.';
+  window.kopeykaAI.askConversation([],prompt).then(function(o){
+    var t=(o&&(o.text||o.summary)||'').trim();
+    if(t&&t.length>8&&t.length<180){
+      el.textContent=t;
+      try{localStorage.setItem(cacheKey,t);}catch(e){}
+    }
+  }).catch(function(){});
+}
+
 function refreshFinnTipAI(fallback, attentionList){
   var el=document.getElementById('finnTipBody');
   if(!el)return;
@@ -243,32 +279,69 @@ function dayPlanEditor(ds, onDone){
     if(i===4){ pushUndo(); STATE.dayPlans[ds]=[]; save(true); if(onDone)onDone(); toast('День очищен'); return; }
     var types=['purchase','income','debt','note'];
     var type=types[i];
-    appPrompt(type==='note'?'Текст':'Сумма', type==='note'?'':'0', type==='note'?'Заметка':'Сумма').then(function(v){
-      if(v===null) return;
-      var item={id:uid(), type:type, amount:type==='note'?0:num(v), title:type==='note'?String(v):(['Покупка','Доход','Долг'][i]||'План')};
-      if(type!=='note'){
-        appPrompt('Комментарий', item.title, 'Название').then(function(t){
-          if(t!==null && t) item.title=t;
-          pushUndo();
-          list=STATE.dayPlans[ds]||[];
-          list.push(item);
-          STATE.dayPlans[ds]=list;
-          save(true);
-          if(onDone)onDone();
-          toast('Добавлено в '+ds);
-        });
-      } else {
+    if(type==='note'){
+      appPrompt('Текст заметки','','Заметка',{text:true}).then(function(v){
+        if(v===null||!String(v).trim())return;
         pushUndo();
         list=STATE.dayPlans[ds]||[];
-        list.push(item);
+        list.push({id:uid(),type:'note',amount:0,title:String(v).trim(),date:ds});
+        STATE.dayPlans[ds]=list; save(true);
+        if(onDone)onDone(); toast('Заметка сохранена');
+      });
+      return;
+    }
+    appPrompt('Сумма','','Сумма',{inputmode:'decimal'}).then(function(v){
+      if(v===null)return;
+      var amount=num(v);
+      if(amount<=0)return toast('Укажи сумму');
+      appPrompt('Название / комментарий', type==='purchase'?'Покупка':(type==='income'?'Доход':'Платёж по долгу'), 'Комментарий',{text:true}).then(function(t){
+        if(t===null)return;
+        var title=(t&&String(t).trim())||(type==='purchase'?'Покупка':(type==='income'?'Доход':'Долг'));
+        pushUndo();
+        // Apply to real ledger when day is today or past
+        var apply=ds<=today();
+        if(type==='purchase'){
+          if(apply){
+            STATE.expenses=STATE.expenses||[];
+            STATE.expenses.push({id:uid(),amount:amount,category:title,note:title,date:ds});
+          }
+        } else if(type==='income'){
+          if(apply){
+            STATE.income=STATE.income||[];
+            STATE.income.push({id:uid(),amount:amount,note:title,date:ds});
+          }
+        } else if(type==='debt'){
+          if(apply){
+            // try match debt by name, else create debt and mark paid partially
+            var debts=STATE.debts||[];
+            var found=null;
+            var q=String(title).toLowerCase();
+            for(var di=0;di<debts.length;di++){
+              if(String(debts[di].name||'').toLowerCase().indexOf(q)>=0 || q.indexOf(String(debts[di].name||'').toLowerCase())>=0){found=debts[di];break;}
+            }
+            if(found){
+              found.paid=num(found.paid)+amount;
+              if(found.paid>num(found.total)) found.paid=num(found.total);
+            } else {
+              STATE.debts.push({id:uid(),name:title,total:amount,paid:amount});
+            }
+            // also record as expense for cash flow
+            STATE.expenses=STATE.expenses||[];
+            STATE.expenses.push({id:uid(),amount:amount,category:'Долг',note:'Долг: '+title,date:ds});
+          }
+        }
+        list=STATE.dayPlans[ds]||[];
+        list.push({id:uid(),type:type,amount:amount,title:title,date:ds,applied:!!apply});
         STATE.dayPlans[ds]=list;
         save(true);
         if(onDone)onDone();
-        toast('Заметка сохранена');
-      }
+        toast(apply?('Учтено в операциях · '+fmt(amount)):('Запланировано на '+ds));
+        if(typeof render==='function')render();
+      });
     });
   });
 }
+
 
 function openFullCalendar(){
   var planMode=false;
@@ -612,9 +685,17 @@ homeHtml += sparkWrap + whyDaily;
 homeHtml += '</div>';
 
 // ===== 4. Сегодня =====
-homeHtml += '<div class="card tight today-card">';
-homeHtml += '<div class="sec-title-sm">СЕГОДНЯ</div>';
-homeHtml += shiftInfo;
+var _flagsT={showShifts:true,mode:'shift'};
+try{if(window.FinnaProfile&&window.FinnaProfile.flags)_flagsT=Object.assign(_flagsT,window.FinnaProfile.flags());}catch(e){}
+homeHtml += '<div class="card tight today-card" id="todayCard">';
+if(_flagsT.showShifts){
+  homeHtml += '<div class="sec-title-sm">СЕГОДНЯ</div>';
+  homeHtml += shiftInfo;
+} else {
+  homeHtml += '<div class="sec-title-sm">СЕГОДНЯ · ФИННА</div>';
+  homeHtml += '<div class="today-status" id="todayStatusBody">Загружаю мысль дня…</div>';
+  setTimeout(function(){try{refreshTodayStatus();}catch(e){}},150);
+}
 homeHtml += '</div>';
 
 // ===== 5. Лимит на сегодня =====
@@ -637,7 +718,7 @@ homeHtml += '</div>';
 homeHtml += '<div class="card finn-tip-card" id="finnTipCard">';
 homeHtml += '<div class="finn-tip-head"><span class="finn-mini">🦊</span> Финна · совет</div>';
 homeHtml += '<div class="finn-tip-body" id="finnTipBody">'+esc(finnTip)+'</div>';
-homeHtml += '<div class="finn-tip-hint">Зажми кнопку <b>+</b> внизу справа — откроется Фин</div>';
+homeHtml += '<div class="finn-tip-hint">Зажми кнопку <b>+</b> внизу справа — откроется Финна</div>';
 if(attention.length){
   homeHtml += '<div class="finn-att">';
   attention.slice(0,2).forEach(function(a){ homeHtml += '<div class="att-item">'+esc(a)+'</div>'; });
