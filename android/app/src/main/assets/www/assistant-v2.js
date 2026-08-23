@@ -1,7 +1,7 @@
 (function(){
 'use strict';
 var SR=window.SpeechRecognition||window.webkitSpeechRecognition,history=[],pending=null,rec=null,listening=false,wantListen=false,restarts=0,HKEY='kopeyka_ai_history_v2';
-var firstOpenListen=true, openingAnim=false;
+var firstOpenListen=true, openingAnim=false, _micStarting=false;
 
 function n(v){var x=Number(v);return isFinite(x)?Math.round(x):0;}
 function id(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
@@ -26,8 +26,7 @@ function originRect(opts){
 }
 
 function targetPos(){
-  // чуть ниже центра, ближе к низу
-  return{x:window.innerWidth/2,y:window.innerHeight*0.72};
+  return{x:window.innerWidth/2,y:window.innerHeight*0.78};
 }
 
 function open(opts){
@@ -39,7 +38,6 @@ function open(opts){
     if(existing){
       existing.classList.add('ka-show');
       existing.style.display='block';
-      if(firstOpenListen){firstOpenListen=false;setTimeout(function(){startListen();},320);}
       return;
     }
     loadHistory();
@@ -53,40 +51,39 @@ function open(opts){
     wrap.innerHTML=
       '<div class="ka-backdrop" id="kaBackdrop"></div>'+
       '<div class="ka-reply" id="kaReply" aria-live="polite"></div>'+
-      '<div class="ka-confirm" id="kaConfirm" hidden></div>'+
       '<div class="ka-stage" id="kaStage">'+
-        '<div class="ka-bubble" id="kaBubble">'+
-          '<div class="finn-avatar ka-orb-face" id="kaFinnAvatar" data-emotion="idle">'+
-            '<span class="finn-aura"></span>'+avatarSvg+
+        '<div class="ka-row" id="kaRow">'+
+          '<div class="ka-bubble" id="kaBubble">'+
+            '<div class="finn-avatar ka-orb-face" id="kaFinnAvatar" data-emotion="idle">'+
+              '<span class="finn-aura"></span>'+avatarSvg+
+            '</div>'+
+            '<div class="ka-ring"></div>'+
+            '<div class="ka-ring ka-ring2"></div>'+
           '</div>'+
-          '<div class="ka-ring"></div>'+
-          '<div class="ka-ring ka-ring2"></div>'+
+          '<button class="ka-micbtn" id="kaOrb" type="button" aria-label="Микрофон">'+
+            '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+
+              '<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>'+
+              '<path d="M19 10v2a7 7 0 0 1-14 0v-2"/>'+
+              '<line x1="12" y1="19" x2="12" y2="23"/>'+
+              '<line x1="8" y1="23" x2="16" y2="23"/>'+
+            '</svg>'+
+            '<span class="ka-mic-pulse"></span>'+
+          '</button>'+
+          '<button class="ka-x" id="kaClose" type="button" aria-label="Закрыть">×</button>'+
         '</div>'+
-        '<button class="ka-micbtn" id="kaOrb" type="button" aria-label="Микрофон">'+
-          '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+
-            '<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>'+
-            '<path d="M19 10v2a7 7 0 0 1-14 0v-2"/>'+
-            '<line x1="12" y1="19" x2="12" y2="23"/>'+
-            '<line x1="8" y1="23" x2="16" y2="23"/>'+
-          '</svg>'+
-          '<span class="ka-mic-pulse"></span>'+
-        '</button>'+
-        '<button class="ka-x" id="kaClose" type="button" aria-label="Закрыть">×</button>'+
-      '</div>'+
-      '<div class="ka-hint" id="kaStatus">Слушаю…</div>';
+        '<div class="ka-hint" id="kaStatus">Слушаю…</div>'+
+      '</div>';
     document.body.appendChild(wrap);
 
-    // стартовая позиция пузыря у источника
     var stage=document.getElementById('kaStage');
-    var bubble=document.getElementById('kaBubble');
     if(stage){
       stage.style.left=origin.x+'px';
       stage.style.top=origin.y+'px';
-      stage.style.transform='translate(-50%,-50%) scale(0.35)';
+      stage.style.bottom='auto';
+      stage.style.transform='translate(-50%,-50%) scale(0.32)';
       stage.style.opacity='0';
     }
     openingAnim=true;
-    // force reflow
     void wrap.offsetWidth;
     wrap.classList.add('ka-show');
     requestAnimationFrame(function(){
@@ -99,7 +96,13 @@ function open(opts){
       setTimeout(function(){openingAnim=false;},580);
     });
 
-    try{if(window.FinnChar)window.FinnChar.scheduleBlink(document.getElementById('kaFinnAvatar'));}catch(x){}
+    try{
+      var av=document.getElementById('kaFinnAvatar');
+      if(window.FinnChar){
+        window.FinnChar.scheduleBlink(av);
+        window.FinnChar.flashEmotion(av,'idle',0);
+      }
+    }catch(x){}
 
     var bd=document.getElementById('kaBackdrop');
     if(bd)bd.addEventListener('click',function(){close();});
@@ -109,22 +112,27 @@ function open(opts){
     if(orb){
       orb.addEventListener('click',function(e){
         e.preventDefault();e.stopPropagation();
-        if(listening||wantListen){wantListen=false;stopListen();status('Нажми микрофон');}
-        else{startListen();}
+        if(listening||wantListen||_micStarting){
+          wantListen=false;_micStarting=false;stopListen();
+          status('Нажми микрофон');
+          kaEmo('idle');
+        }else{
+          startListen();
+        }
       });
     }
 
-    // первый раз — сразу слушаем
+    // только при первом открытии сессии — один автостарт микрофона
     firstOpenListen=true;
     setTimeout(function(){
+      if(!document.getElementById('kopeykaAiDialog'))return;
       if(firstOpenListen){
         firstOpenListen=false;
         startListen();
-        status('Слушаю… говори');
       }
-    },420);
+    },520);
 
-    if(opts.command)setTimeout(function(){try{handle(String(opts.command));}catch(x){}},480);
+    if(opts.command)setTimeout(function(){try{handle(String(opts.command));}catch(x){}},560);
   }catch(err){
     console.error('open Fin',err);
     try{alert('Фин: '+(err&&err.message||err));}catch(x){}
@@ -132,7 +140,7 @@ function open(opts){
 }
 
 function close(){
-  wantListen=false;stopListen();pending=null;
+  wantListen=false;_micStarting=false;stopListen();pending=null;firstOpenListen=true;
   var e=document.getElementById('kopeykaAiDialog');
   if(!e)return;
   e.classList.remove('ka-show');
@@ -156,25 +164,26 @@ function style(){
   'opacity:0;transition:opacity .4s ease}'+
   '.ka-show .ka-backdrop{opacity:1}'+
   '.ka-hide .ka-backdrop{opacity:0}'+
-  '.ka-stage{position:absolute;z-index:2;display:flex;align-items:center;gap:14px;'+
+  '.ka-stage{position:absolute;z-index:2;display:flex;flex-direction:column;align-items:center;gap:14px;'+
   'will-change:transform,left,top,opacity;pointer-events:auto}'+
-  '.ka-bubble{position:relative;width:72px;height:72px;border-radius:50%;'+
-  'background:radial-gradient(circle at 35% 30%,rgba(120,210,255,.35),rgba(14,22,40,.92) 55%,rgba(8,12,22,.98));'+
-  'border:1.5px solid rgba(94,200,255,.45);'+
-  'box-shadow:0 12px 40px rgba(0,0,0,.45),0 0 28px rgba(94,200,255,.22),inset 0 0 16px rgba(94,200,255,.08);'+
+  '.ka-row{position:relative;display:flex;align-items:center;justify-content:center;gap:18px}'+
+  '.ka-bubble{position:relative;width:100px;height:100px;border-radius:50%;'+
+  'background:radial-gradient(circle at 35% 30%,rgba(120,210,255,.38),rgba(14,22,40,.92) 55%,rgba(8,12,22,.98));'+
+  'border:1.5px solid rgba(94,200,255,.48);'+
+  'box-shadow:0 14px 44px rgba(0,0,0,.48),0 0 32px rgba(94,200,255,.24),inset 0 0 18px rgba(94,200,255,.1);'+
   'display:flex;align-items:center;justify-content:center;'+
   'animation:kaBob 3.2s ease-in-out infinite}'+
   '.ka-bubble.thinking{animation:kaPulse 1.1s ease-in-out infinite}'+
-  '.ka-bubble.listening{box-shadow:0 12px 40px rgba(0,0,0,.45),0 0 0 6px rgba(94,200,255,.18),0 0 32px rgba(94,200,255,.35)}'+
-  '.ka-orb-face{width:56px!important;height:56px!important;border:0!important;background:transparent!important;box-shadow:none!important;animation:none!important}'+
-  '.ka-orb-face svg{width:50px;height:50px}'+
+  '.ka-bubble.listening{box-shadow:0 14px 44px rgba(0,0,0,.48),0 0 0 7px rgba(94,200,255,.18),0 0 36px rgba(94,200,255,.38)}'+
+  '.ka-orb-face{width:78px!important;height:78px!important;border:0!important;background:transparent!important;box-shadow:none!important;animation:none!important}'+
+  '.ka-orb-face svg{width:70px;height:70px}'+
   '.ka-orb-face::before{display:none!important}'+
-  '.ka-ring,.ka-ring2{position:absolute;inset:-6px;border-radius:50%;border:1.5px solid rgba(94,200,255,.35);'+
+  '.ka-ring,.ka-ring2{position:absolute;inset:-8px;border-radius:50%;border:1.5px solid rgba(94,200,255,.35);'+
   'animation:kaRing 2.4s ease-out infinite;pointer-events:none}'+
-  '.ka-ring2{inset:-14px;animation-delay:.7s;opacity:.55}'+
+  '.ka-ring2{inset:-18px;animation-delay:.7s;opacity:.55}'+
   '@keyframes kaRing{0%{transform:scale(.85);opacity:.7}100%{transform:scale(1.25);opacity:0}}'+
   '@keyframes kaBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}'+
-  '@keyframes kaPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}'+
+  '@keyframes kaPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}'+
   '.ka-micbtn{position:relative;width:56px;height:56px;border-radius:50%;border:1.5px solid rgba(94,200,255,.4);'+
   'background:linear-gradient(145deg,rgba(30,42,70,.95),rgba(14,22,40,.98));'+
   'color:#5EC8FF;display:flex;align-items:center;justify-content:center;'+
@@ -188,12 +197,12 @@ function style(){
   '.ka-mic-pulse{position:absolute;inset:-4px;border-radius:50%;border:2px solid rgba(94,200,255,.4);'+
   'opacity:0;pointer-events:none}'+
   '.ka-micbtn.listening .ka-mic-pulse{animation:kaRing 1.4s ease-out infinite;opacity:1}'+
-  '.ka-x{position:absolute;top:-38px;right:-8px;width:30px;height:30px;border-radius:50%;'+
+  '.ka-x{position:absolute;top:-36px;right:-6px;width:30px;height:30px;border-radius:50%;'+
   'border:1px solid rgba(255,255,255,.12);background:rgba(20,28,44,.85);color:#9AA0B0;'+
   'font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;'+
   'pointer-events:auto;opacity:.85}'+
   '.ka-x:active{transform:scale(.9)}'+
-  '.ka-reply{position:absolute;left:50%;bottom:calc(28% + 96px);transform:translateX(-50%);'+
+  '.ka-reply{position:absolute;left:50%;bottom:calc(22% + 130px);transform:translateX(-50%);'+
   'width:min(88vw,340px);z-index:3;text-align:center;pointer-events:none;'+
   'font-size:16px;line-height:1.45;font-weight:560;color:#F2F3F7;'+
   'text-shadow:0 2px 16px rgba(0,0,0,.65),0 0 24px rgba(0,0,0,.4);'+
@@ -204,27 +213,36 @@ function style(){
   '.ka-reply .ka-act{padding:10px 18px;border-radius:14px;border:1px solid rgba(255,255,255,.12);'+
   'background:rgba(20,28,44,.88);color:#fff;font-weight:700;font-size:14px;backdrop-filter:blur(8px)}'+
   '.ka-reply .ka-act.ok{background:linear-gradient(135deg,#5EC8FF,#3A8FE8);color:#0A101C;border:0}'+
-  '.ka-hint{position:absolute;left:50%;bottom:calc(28% - 28px);transform:translateX(-50%);'+
-  'z-index:3;font-size:12px;color:rgba(180,190,210,.85);text-align:center;'+
-  'text-shadow:0 1px 8px rgba(0,0,0,.5);pointer-events:none;transition:opacity .25s;'+
-  'white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis}'+
-  '.ka-confirm{position:absolute;left:50%;bottom:calc(28% + 40px);transform:translateX(-50%);z-index:4}'+
+  '.ka-hint{position:relative;z-index:3;font-size:12.5px;color:rgba(180,190,210,.9);text-align:center;'+
+  'text-shadow:0 1px 8px rgba(0,0,0,.55);pointer-events:none;'+
+  'white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis;'+
+  'min-height:18px;line-height:1.3;padding:0 8px}'+
   '';
   document.head.appendChild(s);
 }
 
 function kaEmo(emotion,duration){
-  try{if(window.FinnChar)window.FinnChar.flashEmotion(document.getElementById('kaFinnAvatar'),emotion,duration);}catch(x){}
+  try{
+    var root=document.getElementById('kaFinnAvatar');
+    if(window.FinnChar&&root){
+      if(duration&&duration>0)window.FinnChar.flashEmotion(root,emotion,duration);
+      else{
+        // устойчивая эмоция без автосброса в idle
+        if(window.FinnChar.setEmotion)window.FinnChar.setEmotion(root,emotion);
+        else window.FinnChar.flashEmotion(root,emotion,duration||999999);
+      }
+    }
+  }catch(x){}
   var b=document.getElementById('kaBubble');
   if(!b)return;
   b.classList.remove('thinking','listening');
   if(emotion==='thinking')b.classList.add('thinking');
+  if(emotion==='listening'){b.classList.add('listening');}
 }
 
 function showReply(text,actions){
   var el=document.getElementById('kaReply');
   if(!el)return;
-  // dissolve previous
   el.classList.remove('show');
   el.classList.add('hide');
   setTimeout(function(){
@@ -270,25 +288,37 @@ function setListeningUI(on){
   var o=document.getElementById('kaOrb');
   var b=document.getElementById('kaBubble');
   if(o)o.classList.toggle('listening',!!on);
-  if(b)b.classList.toggle('listening',!!on);
+  if(b){
+    b.classList.toggle('listening',!!on);
+    if(on)b.classList.remove('thinking');
+  }
+  if(on)kaEmo('thinking'); // «слушает» — заинтересованное лицо
 }
 
 function startListen(){
   if(!SR){status('Нет распознавания речи');return;}
-  if(listening)return;
-  wantListen=true;restarts=0;
+  if(listening||_micStarting)return;
+  wantListen=true;
+  _micStarting=true;
+  restarts=0;
+  status('Слушаю… говори');
+  setListeningUI(true);
   createRecognition();
 }
 
 function createRecognition(){
-  if(!wantListen||listening)return;
+  if(!wantListen){_micStarting=false;return;}
+  if(listening){_micStarting=false;return;}
+  try{if(rec){try{rec.abort();}catch(x){}rec=null;}}catch(x){}
   rec=new SR();
   rec.lang='ru-RU';
   rec.interimResults=true;
   rec.continuous=false;
   rec.maxAlternatives=3;
   rec.onstart=function(){
-    listening=true;restarts=0;
+    listening=true;
+    _micStarting=false;
+    restarts=0;
     setListeningUI(true);
     status('Слушаю…');
   };
@@ -302,48 +332,66 @@ function createRecognition(){
     if(interim)status('… '+interim.trim());
     var t=final.trim();
     if(!t)return;
-    // one-shot: stop after result unless confirming
+    // one-shot: сразу стоп, без рестартов
     wantListen=false;
+    _micStarting=false;
     stopListen();
-    if(isOnlyWake(t)){status('Да, слушаю…');setTimeout(startListen,250);return;}
+    if(isOnlyWake(t)){status('Да, слушаю…');setTimeout(function(){startListen();},300);return;}
     handle(t);
   };
   rec.onerror=function(e){
     var code=e&&e.error||'';
     listening=false;
+    _micStarting=false;
     setListeningUI(false);
-    try{rec.abort();}catch(x){}rec=null;
+    try{if(rec)rec.abort();}catch(x){}
+    rec=null;
+    // без автоперезапуска — иначе мигание
+    if(code==='not-allowed'){wantListen=false;status('Нет доступа к микрофону');kaEmo('alert',1800);return;}
     if(code==='no-speech'||code==='aborted'){
-      if(wantListen){setTimeout(createRecognition,300);return;}
-      status('Нажми микрофон');return;
+      wantListen=false;
+      status('Нажми микрофон');
+      kaEmo('idle');
+      return;
     }
-    if(code==='not-allowed'){wantListen=false;status('Нет доступа к микрофону');return;}
-    if(wantListen){setTimeout(createRecognition,400);return;}
+    wantListen=false;
     status('Нажми микрофон');
+    kaEmo('idle');
   };
   rec.onend=function(){
     listening=false;
+    _micStarting=false;
     setListeningUI(false);
     rec=null;
+    // критично: НЕ перезапускаем сами — только по кнопке или явному startListen
     if(wantListen){
-      setTimeout(function(){if(wantListen)createRecognition();},280);
+      // редкий случай: onend до onresult — один мягкий retry
+      wantListen=false;
+      status('Нажми микрофон');
+      kaEmo('idle');
     }
   };
-  try{rec.start();}catch(e){rec=null;listening=false;wantListen=false;status('Микрофон не запустился');}
+  try{rec.start();}catch(e){
+    rec=null;listening=false;wantListen=false;_micStarting=false;
+    setListeningUI(false);
+    status('Микрофон не запустился');
+    kaEmo('alert',1600);
+  }
 }
 
 function stopListen(){
   wantListen=false;
-  if(rec){try{rec.stop();}catch(e){try{rec.abort();}catch(x){}}rec=null;}
+  _micStarting=false;
+  if(rec){try{rec.onend=null;rec.onerror=null;rec.stop();}catch(e){try{rec.abort();}catch(x){}}rec=null;}
   listening=false;
   setListeningUI(false);
 }
 
-function isMicLocked(){return false;} // floating mode: no lock
+function isMicLocked(){return false;}
 
 function maybeResumeListen(ms){
-  // после ответа — только ручной микрофон
   status('Нажми микрофон');
+  kaEmo('idle');
 }
 
 function confirmWord(t){return /^(да|ага|угу|подтверждаю|сделай|выполняй|верно|правильно|ок|окей|yes|удали)$/i.test(norm(t));}
