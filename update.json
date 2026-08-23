@@ -1,6 +1,6 @@
 {
-  "versionCode": 29,
-  "versionName": "3.4.3",
+  "versionCode": 30,
+  "versionName": "3.5.0",
   "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/latest/download/Fin.apk",
-  "notes": "3.4.3 — фикс скролла без pull-to-refresh, моргание Финна, новое приветственное обучение"
+  "notes": "3.5.0 — новый главный экран: доступно, лимит, прогноз, ближайшие платежи, смены, Финн-подсказки. Финансовая логика без изменений."
 }
