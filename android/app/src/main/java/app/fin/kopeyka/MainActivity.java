@@ -4,8 +4,10 @@ import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.IntentSender;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.content.pm.PackageInstaller;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
@@ -39,6 +41,9 @@ import androidx.webkit.WebViewClientCompat;
 import org.json.JSONObject;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.OutputStream;
+import android.app.PendingIntent;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
@@ -56,6 +61,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String PREFS = "fin_update";
     private static final String KEY_SKIP_CODE = "skip_code";
     private static final String KEY_SKIP_UNTIL = "skip_until";
+    private static final String KEY_PENDING_APK = "pending_apk";
     private static final long SKIP_MS = 48L * 60L * 60L * 1000L;
 
     private WebView webView;
@@ -197,6 +203,8 @@ public class MainActivity extends AppCompatActivity {
                 checkForUpdate();
                 try { UpdateCheckReceiver.scheduleSoon(this); } catch (Exception ignored) {}
             }
+            // продолжить установку APK после выдачи разрешения «неизвестные источники»
+            maybeResumePendingInstall();
         }
     }
 
@@ -452,43 +460,159 @@ public class MainActivity extends AppCompatActivity {
 
     private void installApk(File apk) {
         try {
-            // Не спамим диалогом сразу после попытки установки
+            if (apk == null || !apk.exists() || apk.length() < 100_000L) {
+                Toast.makeText(this, "APK не найден или повреждён. Попробуй ещё раз.", Toast.LENGTH_LONG).show();
+                return;
+            }
+
+            // Не спамим диалогом обновления сразу после попытки
             getSharedPreferences(PREFS, MODE_PRIVATE).edit()
                     .putInt(KEY_SKIP_CODE, 999999)
                     .putLong(KEY_SKIP_UNTIL, System.currentTimeMillis() + 30L * 60L * 1000L)
+                    .putString(KEY_PENDING_APK, apk.getAbsolutePath())
                     .apply();
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !getPackageManager().canRequestPackageInstalls()) {
-                startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                        Uri.parse("package:" + getPackageName())));
-                Toast.makeText(this, "Разреши установку из этого источника, вернись в Финн и снова нажми «Установить».", Toast.LENGTH_LONG).show();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                    && !getPackageManager().canRequestPackageInstalls()) {
+                try {
+                    startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                            Uri.parse("package:" + getPackageName())));
+                    Toast.makeText(this,
+                            "Разреши установку из этого источника, вернись в приложение — установка продолжится.",
+                            Toast.LENGTH_LONG).show();
+                } catch (Exception e) {
+                    Toast.makeText(this, "Открой настройки и разреши установку неизвестных приложений для Финны.", Toast.LENGTH_LONG).show();
+                }
                 return;
             }
-            Uri apkUri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", apk);
-            Intent install = new Intent(Intent.ACTION_VIEW);
-            install.setDataAndType(apkUri, "application/vnd.android.package-archive");
-            install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+
+            // 1) Современный путь — PackageInstaller (надёжнее на Android 10+)
             try {
-                startActivity(install);
-                Toast.makeText(this, "В установщике нажми «Установить». Если ошибки — удали старое приложение и поставь APK заново (сначала «Сохранить копию» в настройках).", Toast.LENGTH_LONG).show();
-            } catch (ActivityNotFoundException nf) {
-                // Систему не удалось напрямую открыть установщик пакетов (часто из-за
-                // ограничений видимости пакетов на Android 11+). Открываем страницу
-                // релиза в браузере — там открытие/установка apk всегда работает.
-                android.util.Log.e("FinUpdate", "installer intent not resolved: " + nf.getMessage(), nf);
-                try {
-                    Intent openReleases = new Intent(Intent.ACTION_VIEW, Uri.parse(RELEASES_PAGE_URL));
-                    openReleases.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                    startActivity(openReleases);
-                    Toast.makeText(this, "Не нашёл установщик пакетов на устройстве. Открыл страницу релиза в браузере — скачай APK там и открой файл.", Toast.LENGTH_LONG).show();
-                } catch (Exception e2) {
-                    Toast.makeText(this, "Не удалось открыть установщик. Скачай APK вручную: " + RELEASES_PAGE_URL, Toast.LENGTH_LONG).show();
-                }
+                installWithPackageInstaller(apk);
+                Toast.makeText(this, "Открываю установщик… подтверди установку.", Toast.LENGTH_SHORT).show();
+                return;
+            } catch (Exception e) {
+                android.util.Log.e("FinUpdate", "PackageInstaller failed: " + e.getMessage(), e);
+            }
+
+            // 2) Fallback — ACTION_VIEW через FileProvider
+            try {
+                installWithViewIntent(apk);
+                Toast.makeText(this, "В установщике нажми «Установить».", Toast.LENGTH_LONG).show();
+                return;
+            } catch (Exception e) {
+                android.util.Log.e("FinUpdate", "VIEW install failed: " + e.getMessage(), e);
+            }
+
+            // 3) Последний шанс — страница релизов
+            try {
+                Intent openReleases = new Intent(Intent.ACTION_VIEW, Uri.parse(RELEASES_PAGE_URL));
+                openReleases.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(openReleases);
+                Toast.makeText(this,
+                        "Не удалось открыть установщик. Скачай APK вручную со страницы релиза.",
+                        Toast.LENGTH_LONG).show();
+            } catch (Exception e2) {
+                Toast.makeText(this, "Не удалось запустить установщик. Скачай APK: " + RELEASES_PAGE_URL, Toast.LENGTH_LONG).show();
             }
         } catch (Exception e) {
-            Toast.makeText(this, "Не удалось открыть установщик: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            android.util.Log.e("FinUpdate", "installApk: " + e.getMessage(), e);
+            Toast.makeText(this, "Не удалось запустить установщик: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
+
+    private void installWithPackageInstaller(File apk) throws Exception {
+        PackageInstaller installer = getPackageManager().getPackageInstaller();
+        PackageInstaller.SessionParams params =
+                new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+        try {
+            params.setAppPackageName(getPackageName());
+        } catch (Exception ignored) {}
+        if (Build.VERSION.SDK_INT >= 34) {
+            try {
+                params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_REQUIRED);
+            } catch (Exception ignored) {}
+        }
+        int sessionId = installer.createSession(params);
+        PackageInstaller.Session session = installer.openSession(sessionId);
+        try {
+            try (OutputStream out = session.openWrite("fin-update.apk", 0, apk.length());
+                 FileInputStream in = new FileInputStream(apk)) {
+                byte[] buf = new byte[64 * 1024];
+                int n;
+                while ((n = in.read(buf)) != -1) {
+                    out.write(buf, 0, n);
+                }
+                session.fsync(out);
+            }
+            Intent callback = new Intent(this, MainActivity.class);
+            callback.setAction("app.fin.kopeyka.INSTALL_STATUS");
+            callback.putExtra("android.content.pm.extra.SESSION_ID", sessionId);
+            int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+            // PackageInstaller status extras требуют mutable на части API
+            if (Build.VERSION.SDK_INT >= 31) flags |= PendingIntent.FLAG_MUTABLE;
+            else if (Build.VERSION.SDK_INT >= 23) flags |= PendingIntent.FLAG_IMMUTABLE;
+            PendingIntent pi = PendingIntent.getActivity(this, sessionId, callback, flags);
+            session.commit(pi.getIntentSender());
+        } finally {
+            try { session.close(); } catch (Exception ignored) {}
+        }
+    }
+
+    private void installWithViewIntent(File apk) throws Exception {
+        String authority = getPackageName() + ".fileprovider";
+        Uri apkUri = FileProvider.getUriForFile(this, authority, apk);
+        Intent install = new Intent(Intent.ACTION_VIEW);
+        install.setDataAndType(apkUri, "application/vnd.android.package-archive");
+        install.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        // На части прошивок без ClipData URI-permission не доходит до установщика
+        install.setClipData(android.content.ClipData.newRawUri("apk", apkUri));
+        // Явно выдаём read package installer'ам, если резолвятся
+        try {
+            java.util.List<android.content.pm.ResolveInfo> res =
+                    getPackageManager().queryIntentActivities(install, PackageManager.MATCH_DEFAULT_ONLY);
+            for (android.content.pm.ResolveInfo ri : res) {
+                grantUriPermission(ri.activityInfo.packageName, apkUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            }
+        } catch (Exception ignored) {}
+        if (install.resolveActivity(getPackageManager()) == null) {
+            // альтернативное действие
+            Intent alt = new Intent(Intent.ACTION_INSTALL_PACKAGE);
+            alt.setData(apkUri);
+            alt.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+            alt.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
+            alt.putExtra(Intent.EXTRA_RETURN_RESULT, true);
+            if (alt.resolveActivity(getPackageManager()) != null) {
+                startActivity(alt);
+                return;
+            }
+            throw new ActivityNotFoundException("No package installer activity");
+        }
+        startActivity(install);
+    }
+
+    /** Продолжить установку после возврата из настроек «неизвестные источники». */
+    private void maybeResumePendingInstall() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                    && !getPackageManager().canRequestPackageInstalls()) return;
+            String path = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_PENDING_APK, null);
+            if (path == null || path.isEmpty()) return;
+            File apk = new File(path);
+            if (!apk.exists() || apk.length() < 100_000L) {
+                getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove(KEY_PENDING_APK).apply();
+                return;
+            }
+            // один раз
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove(KEY_PENDING_APK).apply();
+            installApk(apk);
+        } catch (Exception e) {
+            android.util.Log.e("FinUpdate", "resume install: " + e.getMessage(), e);
+        }
+    }
+
+
 
     @Override public void onBackPressed() {
         if (webView != null && webView.canGoBack()) webView.goBack();
