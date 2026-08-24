@@ -2,14 +2,15 @@
 'use strict';
 var GROQ_KEY='kopeyka_groq_key',GROQ_URL='https://api.groq.com/openai/v1/chat/completions',MODEL_KEY='finna_groq_model';
 var MODEL_CATALOG=[
-  {id:'openai/gpt-oss-20b', title:'Быстрая', sub:'GPT-OSS 20B · мгновенные ответы'},
-  {id:'llama-3.1-8b-instant', title:'Молния', sub:'Llama 3.1 8B · самая быстрая'},
-  {id:'openai/gpt-oss-120b', title:'Умная', sub:'GPT-OSS 120B · глубже думает'},
-  {id:'llama-3.3-70b-versatile', title:'Универсал', sub:'Llama 3.3 70B · баланс качества'},
-  {id:'qwen/qwen3-32b', title:'Альтернатива', sub:'Qwen 3 32B · другой стиль'}
+  // quality: выше = умнее/лучше для задач; auto выбирает среди available по quality, затем по скорости
+  {id:'openai/gpt-oss-120b', title:'Умная', sub:'GPT-OSS 120B · глубже думает', quality:100},
+  {id:'llama-3.3-70b-versatile', title:'Универсал', sub:'Llama 3.3 70B · баланс качества', quality:85},
+  {id:'qwen/qwen3-32b', title:'Альтернатива', sub:'Qwen 3 32B · другой стиль', quality:75},
+  {id:'openai/gpt-oss-20b', title:'Быстрая', sub:'GPT-OSS 20B · мгновенные ответы', quality:55},
+  {id:'llama-3.1-8b-instant', title:'Молния', sub:'Llama 3.1 8B · самая быстрая', quality:40}
 ];
 var MODELS=MODEL_CATALOG.map(function(m){return m.id;});
-var MODEL='openai/gpt-oss-20b';
+var MODEL='openai/gpt-oss-120b';
 var _aiLastCall=0,_aiBackoffUntil=0,_aiMinGap=900,_aiInflight=null,_aiModelIdx=0;
 function getModel(){
   try{
@@ -18,11 +19,13 @@ function getModel(){
   }catch(e){}
   return MODEL;
 }
-function setModel(id){
+function setModel(id, opts){
   id=String(id||'').trim();
   if(MODELS.indexOf(id)<0)id=MODEL;
   try{localStorage.setItem(MODEL_KEY,id);}catch(e){}
   _aiModelIdx=Math.max(0,MODELS.indexOf(id));
+  opts=opts||{};
+  if(opts.manual){setManualModelLock(true);setAutoModelEnabled(true);} // manual pick, но авто вернётся если модель умрёт
   try{if(typeof window.__finnaModelChanged==='function')window.__finnaModelChanged(id);}catch(e){}
   return id;
 }
@@ -80,7 +83,96 @@ function probeModelStatuses(force){
     return _modelStatusCache;
   });
 }
+
+var MODEL_AUTO_KEY='finna_model_auto';
+var MODEL_MANUAL_KEY='finna_model_manual'; // если true — пользователь выбрал вручную, авто не трогает пока модель жива
+function isAutoModelEnabled(){
+  try{
+    var v=localStorage.getItem(MODEL_AUTO_KEY);
+    if(v===null||v===undefined||v==='')return true; // по умолчанию авто
+    return v==='1'||v==='true';
+  }catch(e){return true;}
+}
+function setAutoModelEnabled(on){
+  try{localStorage.setItem(MODEL_AUTO_KEY, on?'1':'0');}catch(e){}
+}
+function isManualModelLock(){
+  try{return localStorage.getItem(MODEL_MANUAL_KEY)==='1';}catch(e){return false;}
+}
+function setManualModelLock(on){
+  try{if(on)localStorage.setItem(MODEL_MANUAL_KEY,'1');else localStorage.removeItem(MODEL_MANUAL_KEY);}catch(e){}
+}
+
+function levelScore(level){
+  return ({excellent:50,good:40,ok:25,slow:10,unknown:5,busy:2,missing:0,bad:0,offline:0,nokey:0})[level]||0;
+}
+
+/** Лучшая доступная модель: умнее (quality) + живое соединение */
+function pickBestModel(excludeId){
+  var best=null, bestScore=-1;
+  for(var i=0;i<MODEL_CATALOG.length;i++){
+    var m=MODEL_CATALOG[i];
+    if(excludeId&&m.id===excludeId)continue;
+    var st=_modelStatusCache[m.id]||{};
+    if(st.available===false)continue;
+    if(st.level==='missing'||st.level==='bad'||st.level==='offline'||st.level==='nokey')continue;
+    // если статусов ещё нет — считаем кандидата
+    var q=typeof m.quality==='number'?m.quality:50;
+    var ls=levelScore(st.level);
+    var score=q*10+ls;
+    if(st.ms!=null&&st.ms>0)score+=Math.max(0,20-Math.floor(st.ms/100));
+    if(score>bestScore){bestScore=score;best=m.id;}
+  }
+  // если probe ещё не знает available — fallback по quality
+  if(!best){
+    var ordered=MODEL_CATALOG.slice().sort(function(a,b){return (b.quality||0)-(a.quality||0);});
+    for(var j=0;j<ordered.length;j++){
+      if(excludeId&&ordered[j].id===excludeId)continue;
+      return ordered[j].id;
+    }
+  }
+  return best||MODEL;
+}
+
+/**
+ * Автовыбор лучшей рабочей модели.
+ * force=true — игнорировать manual lock (например после ошибки API).
+ * return Promise<string|null> id если сменили, null если оставили
+ */
+function autoSelectBestModel(force){
+  force=!!force;
+  if(!isAutoModelEnabled()&&!force)return Promise.resolve(null);
+  return probeModelStatuses(false).then(function(){
+    var cur=getModel();
+    var st=_modelStatusCache[cur]||{};
+    var curDead=st.available===false||st.level==='missing'||st.level==='bad'||st.level==='offline'||st.level==='nokey'||st.level==='busy';
+    // ручной выбор держим, пока модель жива
+    if(isManualModelLock()&&!force&&!curDead)return null;
+    var best=pickBestModel(curDead?cur:null);
+    if(!best)return null;
+    // если текущая жива и почти лучшая — не дёргаем
+    if(!curDead&&best===cur)return null;
+    if(!curDead&&!force){
+      var curMeta=modelMeta(cur), bestMeta=modelMeta(best);
+      var cq=(curMeta&&curMeta.quality)||0, bq=(bestMeta&&bestMeta.quality)||0;
+      // не переключаем на чуть лучше без force
+      if(bq-cq<15&&levelScore(st.level)>=levelScore((_modelStatusCache[best]||{}).level))return null;
+    }
+    var prev=cur;
+    setManualModelLock(false);
+    setModel(best);
+    try{
+      if(prev!==best&&typeof window.toast==='function'){
+        var meta=modelMeta(best);
+        window.toast('Модель: '+(meta.title||best)+(force?' (авто)':''));
+      }
+    }catch(e){}
+    return best;
+  }).catch(function(){return null;});
+}
+
 function getKey(){try{var k=(localStorage.getItem(GROQ_KEY)||'').trim();if(k)return k;}catch(e){}return (function(){try{return atob(['Z3NrX3N0','VVZMNHJF','VFJFQk56','OGs3ZWV2','V0dkeWIz','RllIeUMx','ZHJUbk1j','ZWU3TzBC','eHk4N0E3','M08='].join(''));}catch(e){return '';}})();}
+
 function setKey(key){try{key=String(key||'').trim();if(key)localStorage.setItem(GROQ_KEY,key);else localStorage.removeItem(GROQ_KEY);}catch(e){}}
 function hasKey(){return !!getKey();}
 function norm(s){return String(s||'').toLowerCase().replace(/ё/g,'е').replace(/[^a-zа-я0-9\s]+/gi,' ').replace(/\s+/g,' ').trim();}
@@ -328,12 +420,12 @@ function askConversation(history,userText){
         if(!response.ok){
           var message=data&&data.error&&data.error.message?data.error.message:('HTTP '+response.status);
           if(response.status===401)message='Неверный ключ Groq';
-          if(response.status===429){
-            var cur=getModel(), idx=MODELS.indexOf(cur);
-            var next=MODELS[(idx+1)%MODELS.length];
-            if(next&&next!==cur){setModel(next);}
-            _aiBackoffUntil=Date.now()+12000;
-            message='ИИ перегружен. Подожди 10–15 сек'+(next&&next!==cur?' · переключил модель':'')+'.';
+          if(response.status===429||response.status===503||/model/i.test(message)){
+            var cur=getModel();
+            var next=pickBestModel(cur);
+            if(next&&next!==cur){setManualModelLock(false);setModel(next);}
+            _aiBackoffUntil=Date.now()+(response.status===429?12000:4000);
+            message=(response.status===429?'ИИ перегружен':'Модель недоступна')+'.'+(next&&next!==cur?' Переключил на лучшую доступную.':' Подожди немного.');
           }
           throw new Error(message);
         }
@@ -354,5 +446,5 @@ function askConversation(history,userText){
 function askAgent(text){return askConversation([],text);}
 function ask(text){return askAgent(text).then(function(result){return result.mode==='answer'?(result.text||''):(result.summary||result.text||'');});}
 function testKey(){return askAgent('Ответь одним словом: готово').then(function(){return 'Ключ работает ✓';});}
-window.kopeykaAI={getKey:getKey,setKey:setKey,hasKey:hasKey,getModel:getModel,setModel:setModel,listModels:listModels,modelMeta:modelMeta,getModelStatus:getModelStatus,probeModelStatuses:probeModelStatuses,ask:ask,askAgent:askAgent,askConversation:askConversation,testKey:testKey,buildContext:getContext,isCoolingDown:function(){return Date.now()<_aiBackoffUntil;}};
+window.kopeykaAI={getKey:getKey,setKey:setKey,hasKey:hasKey,getModel:getModel,setModel:setModel,listModels:listModels,modelMeta:modelMeta,getModelStatus:getModelStatus,probeModelStatuses:probeModelStatuses,autoSelectBestModel:autoSelectBestModel,pickBestModel:pickBestModel,isAutoModelEnabled:isAutoModelEnabled,setAutoModelEnabled:setAutoModelEnabled,ask:ask,askAgent:askAgent,askConversation:askConversation,testKey:testKey,buildContext:getContext,isCoolingDown:function(){return Date.now()<_aiBackoffUntil;}};
 })();

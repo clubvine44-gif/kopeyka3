@@ -800,7 +800,7 @@ html.fin-tour-scroll .card{content-visibility:visible!important;contain:none!imp
     <span>Платежи</span>
   </button>
 </nav>
-<div class="fab-wrap"><div class="radial" id="radial"><button data-act="income"><span class="ic">➕</span> Доход</button><button data-act="expense"><span class="ic">➖</span> Расход</button><button data-act="reserve"><span class="ic">🏦</span> Резерв</button><button data-act="debt"><span class="ic">📉</span> Долг</button><button data-act="oblig"><span class="ic">📅</span> Обязательный</button></div><button class="fab" id="fab" aria-label="Добавить"><span aria-hidden="true">+</span></button></div><div class="modal-bg" id="modalBg"></div><div class="modal-bg" id="dlgLayer"></div><div class="toast" id="toast"></div><script src="finn-char.js?v=2026082406"></script><script src="app.js?v=2026082406"></script><script src="profile.js?v=2026082406"></script><script src="onboard.js?v=2026082406"></script><script src="cloud.js?v=2026082406"></script><script src="products.js?v=2026082406"></script><script src="engine.js?v=2026082406"></script><script src="ai.js?v=2026082406"></script><script src="assistant-v2.js?v=2026082406"></script><script src="voice.js?v=2026082406"></script><script src="finn3d.js?v=2026082406"></script><script src="finn-wake.js?v=2026082406"></script><script>window.__kopeykaBuild='2026082406';window.__FIN_NATIVE=true;</script><script>
+<div class="fab-wrap"><div class="radial" id="radial"><button data-act="income"><span class="ic">➕</span> Доход</button><button data-act="expense"><span class="ic">➖</span> Расход</button><button data-act="reserve"><span class="ic">🏦</span> Резерв</button><button data-act="debt"><span class="ic">📉</span> Долг</button><button data-act="oblig"><span class="ic">📅</span> Обязательный</button></div><button class="fab" id="fab" aria-label="Добавить"><span aria-hidden="true">+</span></button></div><div class="modal-bg" id="modalBg"></div><div class="modal-bg" id="dlgLayer"></div><div class="toast" id="toast"></div><script src="finn-char.js?v=2026082407"></script><script src="app.js?v=2026082407"></script><script src="profile.js?v=2026082407"></script><script src="onboard.js?v=2026082407"></script><script src="cloud.js?v=2026082407"></script><script src="products.js?v=2026082407"></script><script src="engine.js?v=2026082407"></script><script src="ai.js?v=2026082407"></script><script src="assistant-v2.js?v=2026082407"></script><script src="voice.js?v=2026082407"></script><script src="finn3d.js?v=2026082407"></script><script src="finn-wake.js?v=2026082407"></script><script>window.__kopeykaBuild='2026082407';window.__FIN_NATIVE=true;</script><script>
 (function(){
   function tryTestPush(){
     try{
@@ -900,13 +900,15 @@ html.fin-tour-scroll .card{content-visibility:visible!important;contain:none!imp
   }
   function current(){
     try{if(window.kopeykaAI&&window.kopeykaAI.getModel)return window.kopeykaAI.getModel();}catch(e){}
-    try{return localStorage.getItem('finna_groq_model')||'openai/gpt-oss-20b';}catch(e){return 'openai/gpt-oss-20b';}
+    try{return localStorage.getItem('finna_groq_model')||'openai/gpt-oss-120b';}catch(e){return 'openai/gpt-oss-120b';}
   }
   function label(){
     var el=document.getElementById('finModelLabel');
     if(!el)return;
     var m=meta(current());
-    el.textContent=m.title||'Модель';
+    var auto=true;
+    try{if(window.kopeykaAI&&window.kopeykaAI.isAutoModelEnabled)auto=window.kopeykaAI.isAutoModelEnabled();}catch(e){}
+    el.textContent=(m.title||'Модель')+(auto?' · авто':'');
   }
   function closeMenu(){
     var t=document.getElementById('finTitle');
@@ -921,11 +923,11 @@ html.fin-tour-scroll .card{content-visibility:visible!important;contain:none!imp
     try{if(window.kopeykaAI&&window.kopeykaAI.listModels)list=window.kopeykaAI.listModels();}catch(e){}
     if(!list||!list.length){
       list=[
-        {id:'openai/gpt-oss-20b',title:'Быстрая',sub:'GPT-OSS 20B · мгновенные ответы'},
-        {id:'llama-3.1-8b-instant',title:'Молния',sub:'Llama 3.1 8B · самая быстрая'},
         {id:'openai/gpt-oss-120b',title:'Умная',sub:'GPT-OSS 120B · глубже думает'},
         {id:'llama-3.3-70b-versatile',title:'Универсал',sub:'Llama 3.3 70B · баланс качества'},
-        {id:'qwen/qwen3-32b',title:'Альтернатива',sub:'Qwen 3 32B · другой стиль'}
+        {id:'qwen/qwen3-32b',title:'Альтернатива',sub:'Qwen 3 32B · другой стиль'},
+        {id:'openai/gpt-oss-20b',title:'Быстрая',sub:'GPT-OSS 20B · мгновенные ответы'},
+        {id:'llama-3.1-8b-instant',title:'Молния',sub:'Llama 3.1 8B · самая быстрая'}
       ];
     }
     var cur=current();
@@ -935,6 +937,28 @@ html.fin-tour-scroll .card{content-visibility:visible!important;contain:none!imp
       try{if(window.kopeykaAI&&window.kopeykaAI.getModelStatus)st=window.kopeykaAI.getModelStatus(m.id)||st;}catch(e){}
       return '<div class="mm-status"><i class="mm-dot '+(st.level||'unknown')+'"></i><span>'+(st.label||'')+'</span></div>';
     }
+    // пункт авто
+    (function(){
+      var autoOn=true;
+      try{if(window.kopeykaAI&&window.kopeykaAI.isAutoModelEnabled)autoOn=window.kopeykaAI.isAutoModelEnabled();}catch(e){}
+      var ab=document.createElement('button');
+      ab.type='button';
+      ab.className='mm-item'+(autoOn?' active':'');
+      ab.innerHTML='<b>Автовыбор</b><span>Сам берёт самую умную из доступных</span>';
+      ab.onclick=function(e){
+        e.preventDefault();e.stopPropagation();
+        try{
+          if(window.kopeykaAI){
+            if(window.kopeykaAI.setAutoModelEnabled)window.kopeykaAI.setAutoModelEnabled(true);
+            if(window.kopeykaAI.autoSelectBestModel){
+              window.kopeykaAI.autoSelectBestModel(true).then(function(){label();renderList();});
+            }
+          }
+        }catch(x){}
+        try{if(window.toast)window.toast('Автовыбор модели включён');}catch(x){}
+      };
+      box.appendChild(ab);
+    })();
     list.forEach(function(m){
       var b=document.createElement('button');
       b.type='button';
@@ -942,11 +966,13 @@ html.fin-tour-scroll .card{content-visibility:visible!important;contain:none!imp
       b.innerHTML='<b>'+m.title+'</b><span>'+m.sub+'</span>'+statusHtml(m);
       b.onclick=function(e){
         e.preventDefault();e.stopPropagation();
-        try{if(window.kopeykaAI&&window.kopeykaAI.setModel)window.kopeykaAI.setModel(m.id);
-        else localStorage.setItem('finna_groq_model',m.id);}catch(x){}
+        try{
+          if(window.kopeykaAI&&window.kopeykaAI.setModel)window.kopeykaAI.setModel(m.id,{manual:true});
+          else localStorage.setItem('finna_groq_model',m.id);
+        }catch(x){}
         label();
         closeMenu();
-        try{if(window.toast)window.toast('Модель: '+m.title);}catch(x){}
+        try{if(window.toast)window.toast('Модель: '+m.title+' (вручную)');}catch(x){}
       };
       box.appendChild(b);
     });
@@ -956,8 +982,11 @@ html.fin-tour-scroll .card{content-visibility:visible!important;contain:none!imp
           if(!document.getElementById('finTitle')||!document.getElementById('finTitle').classList.contains('open'))return;
           var again=document.getElementById('finModelList');
           if(!again)return;
-          Array.prototype.forEach.call(again.querySelectorAll('.mm-item'),function(btn,i){
-            var m=list[i];if(!m)return;
+          // обновить только статус-строки у моделей (после пункта Авто)
+          var buttons=again.querySelectorAll('.mm-item');
+          var offset=1; // первый — Автовыбор
+          list.forEach(function(m,i){
+            var btn=buttons[i+offset];if(!btn)return;
             var st=btn.querySelector('.mm-status');
             if(st)st.outerHTML=statusHtml(m);
           });
@@ -993,10 +1022,25 @@ html.fin-tour-scroll .card{content-visibility:visible!important;contain:none!imp
       closeMenu();
     });
     window.__finnaModelChanged=function(){label();};
+    // автовыбор лучшей доступной при старте
+    setTimeout(function(){
+      try{
+        if(window.kopeykaAI&&window.kopeykaAI.autoSelectBestModel){
+          window.kopeykaAI.autoSelectBestModel(false).then(function(){label();});
+        }
+      }catch(e){}
+    },600);
+    // периодически (раз в 5 мин) подстраховаться
+    setInterval(function(){
+      try{
+        if(window.kopeykaAI&&window.kopeykaAI.autoSelectBestModel){
+          window.kopeykaAI.autoSelectBestModel(false).then(function(){label();});
+        }
+      }catch(e){}
+    },5*60*1000);
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){setTimeout(boot,80);});
   else setTimeout(boot,80);
-  // ai.js may load a bit later
   setTimeout(label,400);
   setTimeout(label,1200);
 })();
