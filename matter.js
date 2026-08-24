@@ -127,12 +127,24 @@ function startSynthAmbient(){
   }catch(e){ambient=null;}
 }
 function stopAmbient(){
-  try{if(roomAudio){roomAudio.pause();roomAudio.src='';roomAudio=null;}}catch(e){}
-  if(!ambient||ambient.type==='mp3'){ambient=null;return;}
   try{
-    ambient.nodes.forEach(function(n){try{n.stop&&n.stop();}catch(e){} try{n.disconnect&&n.disconnect();}catch(e){}});
-    ambient.master.disconnect();
+    if(roomAudio){
+      roomAudio.pause();
+      // не убиваем unlockedRoomAudio — иначе при повторном входе в комнату музыка молчит
+      if(roomAudio!==unlockedRoomAudio){
+        try{roomAudio.src='';}catch(e){}
+      }else{
+        try{roomAudio.currentTime=0;}catch(e){}
+      }
+      roomAudio=null;
+    }
   }catch(e){}
+  if(ambient&&ambient.type==='synth'){
+    try{
+      ambient.nodes.forEach(function(n){try{n.stop&&n.stop();}catch(e){} try{n.disconnect&&n.disconnect();}catch(e){}});
+      ambient.master.disconnect();
+    }catch(e){}
+  }
   ambient=null;
 }
 
@@ -173,19 +185,19 @@ function ensureRoot(){
     '<div id="matterRoom" class="m-room" hidden>'+
       '<div class="m-room-scene" id="matterRoomScene">'+
         '<div class="m-room-bg"></div>'+
-        /* TINY pinpoint hotspots — centers from reference image */
-        '<button type="button" class="m-hot" data-obj="diary"  style="left:20%;top:88%" title="Дневник"></button>'+
-        '<button type="button" class="m-hot" data-obj="book"   style="left:50%;top:72%" title="Книга"></button>'+
-        '<button type="button" class="m-hot" data-obj="plant"  style="left:72%;top:55%" title="Растение"></button>'+
+        /* Hotspots: крупнее зона нажатия, центр по объектам комнаты */
+        '<button type="button" class="m-hot" data-obj="diary"  style="left:18%;top:86%" title="Дневник"></button>'+
+        '<button type="button" class="m-hot" data-obj="book"   style="left:50%;top:70%" title="Книга"></button>'+
+        '<button type="button" class="m-hot" data-obj="plant"  style="left:72%;top:54%" title="Растение"></button>'+
         '<button type="button" class="m-hot" data-obj="piggy"  style="left:76%;top:40%" title="Копилка"></button>'+
-        '<button type="button" class="m-hot" data-obj="goals"  style="left:80%;top:28%" title="Цели"></button>'+
-        '<button type="button" class="m-hot" data-obj="window" style="left:48%;top:32%" title="Окно"></button>'+
-        '<button type="button" class="m-hot" data-obj="desk"   style="left:45%;top:48%" title="Стол"></button>'+
-        '<button type="button" class="m-hot" data-obj="bed"    style="left:15%;top:52%" title="Кровать"></button>'+
-        '<button type="button" class="m-hot" data-obj="lamp"   style="left:34%;top:45%" title="Лампа"></button>'+
-        '<button type="button" class="m-hot" data-obj="focus"  style="left:8%;top:38%"  title="Фокус"></button>'+
-        '<button type="button" class="m-hot" data-obj="door"   style="left:93%;top:48%" title="Выход"></button>'+
-        '<button type="button" class="m-hot" data-obj="globe"  style="left:88%;top:88%" title="Светильник"></button>'+
+        '<button type="button" class="m-hot" data-obj="goals"  style="left:80%;top:27%" title="Цели"></button>'+
+        '<button type="button" class="m-hot" data-obj="window" style="left:48%;top:30%" title="Окно"></button>'+
+        '<button type="button" class="m-hot" data-obj="desk"   style="left:46%;top:48%" title="Стол"></button>'+
+        '<button type="button" class="m-hot" data-obj="bed"    style="left:14%;top:52%" title="Кровать"></button>'+
+        '<button type="button" class="m-hot" data-obj="lamp"   style="left:34%;top:44%" title="Лампа"></button>'+
+        '<button type="button" class="m-hot" data-obj="focus"  style="left:9%;top:38%"  title="Фокус"></button>'+
+        '<button type="button" class="m-hot" data-obj="door"   style="left:92%;top:48%" title="Выход"></button>'+
+        '<button type="button" class="m-hot" data-obj="globe"  style="left:88%;top:86%" title="Светильник"></button>'+
         /* room Finn + close */
         '<div id="matterRoomFinn" class="m-room-finn" hidden>'+
           '<canvas id="matterRoomFinnCanvas" width="120" height="120"></canvas>'+
@@ -212,10 +224,12 @@ function ensureRoot(){
   ctx=canvas.getContext('2d');
   document.getElementById('matterExit').onclick=function(){exitMatter();};
   document.getElementById('mPanelClose').onclick=function(){hidePanel();};
-  document.getElementById('matterFinnClose').onclick=function(){
+  document.getElementById('matterFinnClose').onclick=function(e){
+    if(e){e.preventDefault();e.stopPropagation();}
     var f=document.getElementById('matterRoomFinn');
-    if(f)f.hidden=true;
-    if(finn)finn.inRoom=false;
+    if(f){f.hidden=true;f.style.display='none';}
+    if(finn){finn.inRoom=false;finn.state='idle';}
+    try{if(rec){rec.abort();rec=null;}}catch(err){}
   };
   document.getElementById('mReaderClose').onclick=function(){closeReader();};
   root.querySelectorAll('.m-hot').forEach(function(b){
@@ -255,12 +269,12 @@ function injectCSS(){
 '.m-room{position:absolute;inset:0;z-index:10;background:#0a0604}'+
 '.m-room-scene{position:absolute;inset:0;overflow:hidden}'+
 '.m-room-bg{position:absolute;inset:0;background:#0a0604 url(matter-room.jpg) center center/cover no-repeat}'+
-/* TINY hotspots ~20px, centered via translate */
-'.m-hot{position:absolute;width:22px;height:22px;margin:0;padding:0;border:0;background:transparent;'+
+/* Hotspots ~56px hit area — легко попасть, визуально почти невидимы */
+'.m-hot{position:absolute;width:56px;height:56px;margin:0;padding:0;border:0;background:transparent;'+
   'border-radius:50%;transform:translate(-50%,-50%);z-index:3;cursor:pointer;-webkit-tap-highlight-color:transparent;'+
   'pointer-events:auto}'+
-'.m-hot:active{background:rgba(255,220,120,.18);box-shadow:0 0 16px rgba(255,200,80,.35)}'+
-'.m-room-finn{position:absolute;left:50%;bottom:12%;transform:translateX(-50%);z-index:8;width:120px;height:120px;pointer-events:none}'+
+'.m-hot:active{background:rgba(255,220,120,.14);box-shadow:0 0 20px rgba(255,200,80,.3)}'+
+'.m-room-finn{position:absolute;left:12%;bottom:14%;transform:none;z-index:8;width:120px;height:120px;pointer-events:none}'+
 '.m-room-finn canvas{width:120px;height:120px;display:block;pointer-events:none}'+
 '.m-finn-x{position:absolute;top:-4px;right:-4px;width:28px;height:28px;border-radius:50%;'+
   'background:rgba(20,12,18,.85);border:1px solid rgba(255,255,255,.2);color:#F8E8F0;font-size:13px;'+
@@ -313,12 +327,12 @@ function buildStars(){
   stars=[];
   var goals=getGoals();
   var n=goals.length;
-  var cx=W*0.42, cy=H*0.48;
+  var cx=W*0.40, cy=H*0.46;
   goals.forEach(function(g,i){
-    var ang=(-Math.PI*0.55)+(i/(Math.max(1,n-1)||1))*Math.PI*1.05;
-    var r=Math.min(W,H)*0.2+((i*37)%36);
-    var x=cx+Math.cos(ang)*r*1.1;
-    var y=cy+Math.sin(ang)*r*0.72;
+    var ang=(-Math.PI*0.58)+(i/(Math.max(1,n-1)||1))*Math.PI*1.16;
+    var r=Math.min(W,H)*(0.26+0.04*(i%3))+((i*53)%48);
+    var x=cx+Math.cos(ang)*r*1.18;
+    var y=cy+Math.sin(ang)*r*0.78;
     var hue=g.type==='debt'?8:(g.urgent?38:200);
     stars.push({
       id:g.id,g:g,x:x,y:y,baseR:g.type==='debt'?3.2:(4+g.pct/40),
@@ -454,16 +468,73 @@ function drawFinnFace(c, cx, cy, size, t){
 }
 
 function drawFinnStar(c, x, y, t){
-  var pulse=0.75+0.25*Math.sin(t*3);
-  var r=7*pulse;
-  var g=c.createRadialGradient(x,y,0,x,y,r*4);
-  g.addColorStop(0,'rgba(253,230,138,0.9)');
-  g.addColorStop(0.3,'rgba(244,114,182,0.55)');
-  g.addColorStop(1,'rgba(168,85,247,0)');
-  c.fillStyle=g;
-  c.beginPath();c.arc(x,y,r*4,0,Math.PI*2);c.fill();
+  // Настоящая горящая звезда: корона, лучи, вспышки, искры
+  var pulse=0.82+0.18*Math.sin(t*2.6);
+  var flare=0.55+0.45*Math.sin(t*5.1+1.2);
+  var r=9*pulse;
+
+  // дальний ореол
+  var g0=c.createRadialGradient(x,y,0,x,y,r*9);
+  g0.addColorStop(0,'rgba(255,240,200,0.55)');
+  g0.addColorStop(0.15,'rgba(255,180,120,0.28)');
+  g0.addColorStop(0.4,'rgba(232,120,249,0.14)');
+  g0.addColorStop(1,'rgba(80,40,140,0)');
+  c.fillStyle=g0;
+  c.beginPath();c.arc(x,y,r*9,0,Math.PI*2);c.fill();
+
+  // корона / плазма
+  var g1=c.createRadialGradient(x,y,0,x,y,r*4.2);
+  g1.addColorStop(0,'rgba(255,255,255,0.95)');
+  g1.addColorStop(0.18,'rgba(255,230,160,0.85)');
+  g1.addColorStop(0.45,'rgba(255,140,180,0.45)');
+  g1.addColorStop(0.75,'rgba(180,80,255,0.18)');
+  g1.addColorStop(1,'rgba(80,30,120,0)');
+  c.fillStyle=g1;
+  c.beginPath();c.arc(x,y,r*4.2,0,Math.PI*2);c.fill();
+
+  // лучи (cross + diagonal)
+  c.save();
+  c.translate(x,y);
+  c.rotate(t*0.35);
+  for(var k=0;k<8;k++){
+    c.rotate(Math.PI/4);
+    var len=r*(3.2+flare*1.8+(k%2?0.6:0));
+    var w=r*(0.35+(k%2?0.15:0.08))*flare;
+    var lg=c.createLinearGradient(0,0,0,-len);
+    lg.addColorStop(0,'rgba(255,255,255,0.95)');
+    lg.addColorStop(0.25,'rgba(255,220,160,0.55)');
+    lg.addColorStop(0.7,'rgba(244,114,182,0.18)');
+    lg.addColorStop(1,'rgba(168,85,247,0)');
+    c.fillStyle=lg;
+    c.beginPath();
+    c.moveTo(-w,0);
+    c.lineTo(0,-len);
+    c.lineTo(w,0);
+    c.closePath();
+    c.fill();
+  }
+  c.restore();
+
+  // ядро
   c.fillStyle='#fff';
   c.beginPath();c.arc(x,y,r*0.55,0,Math.PI*2);c.fill();
+  var core=c.createRadialGradient(x,y,0,x,y,r*1.1);
+  core.addColorStop(0,'#fff');
+  core.addColorStop(0.5,'#FFE8A8');
+  core.addColorStop(1,'rgba(255,160,200,0.4)');
+  c.fillStyle=core;
+  c.beginPath();c.arc(x,y,r*1.05,0,Math.PI*2);c.fill();
+
+  // искры вокруг
+  for(var i=0;i<10;i++){
+    var a=t*1.7+i*0.62;
+    var dist=r*(2.4+1.6*Math.sin(t*3+i));
+    var sx=x+Math.cos(a)*dist;
+    var sy=y+Math.sin(a)*dist*0.85;
+    var sa=0.35+0.55*Math.abs(Math.sin(t*4+i));
+    c.fillStyle='rgba(255,240,200,'+sa+')';
+    c.beginPath();c.arc(sx,sy,1.1+1.4*sa,0,Math.PI*2);c.fill();
+  }
 }
 
 /* ---------- phases ---------- */
@@ -471,18 +542,19 @@ var bh={r:2,max:0,swirl:0,fall:0,done:false};
 
 function startEnter(){
   phase='blackhole';
-  bh={r:2,max:Math.max(W,H)*0.95,swirl:0,fall:0,done:false};
+  bh={r:1.5,max:Math.max(W,H)*1.05,swirl:0,fall:0,done:false,t:0,bgStars:null};
   particles=[];
-  for(var i=0;i<70;i++){
+  for(var i=0;i<110;i++){
     particles.push({
       a:Math.random()*Math.PI*2,
-      r:20+Math.random()*40,
-      sp:0.8+Math.random()*1.8,
-      s:1+Math.random()*2
+      r:12+Math.random()*Math.min(W,H)*0.35,
+      sp:0.7+Math.random()*2.2,
+      s:0.8+Math.random()*2.2
     });
   }
   resetFinn();
   lastT=performance.now();
+  // не прячем chrome мгновенно — первые кадры BH поверх приложения (полупрозрачно)
   loop();
 }
 
@@ -522,7 +594,7 @@ function enterRoom(){
     finn.state='room';
     finn.inRoom=true;
     var rf=document.getElementById('matterRoomFinn');
-    if(rf)rf.hidden=false;
+    if(rf){rf.hidden=false;rf.style.display='';}
     drawRoomFinn();
     setTimeout(function(){finnSay('Я здесь. Что сделаем?');},400);
   }
@@ -892,43 +964,100 @@ function loop(t){
 }
 
 function drawBlackHole(dt){
-  ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
-  var cx=W/2, cy=H*0.55;
-  bh.swirl+=dt*2.2;
-  bh.r+= (bh.max*0.55 - bh.r)*Math.min(1,dt*1.1);
-  if(bh.r>bh.max*0.35) bh.fall+=dt;
+  var cx=W/2, cy=H*0.52;
+  // рост из точки + ускорение «падения»
+  bh.swirl+=dt*(2.4+bh.r/Math.max(1,bh.max)*3.5);
+  var target=bh.max*0.72;
+  bh.r+= (target - bh.r)*Math.min(1,dt*0.85);
+  if(bh.r<8) bh.r+=dt*14; // быстрый старт из точки
+  bh.t=(bh.t||0)+dt;
+  if(bh.r>bh.max*0.28) bh.fall+=dt;
 
-  particles.forEach(function(p){
-    p.a+=dt*p.sp;
-    p.r=Math.max(4,p.r-dt*18*(bh.r/bh.max));
-    var x=cx+Math.cos(p.a+bh.swirl)*p.r*(0.6+bh.r/bh.max);
-    var y=cy+Math.sin(p.a+bh.swirl)*p.r*0.55*(0.6+bh.r/bh.max);
-    var a=0.15+0.5*(1-p.r/80);
+  // фон: сначала полупрозрачный (ещё видно приложение), потом космос
+  var fadeIn=Math.min(1, bh.t/0.9);
+  var veil=Math.min(0.92, 0.25+fadeIn*0.7+bh.fall*0.35);
+  ctx.fillStyle='rgba(0,0,0,'+veil+')';
+  ctx.fillRect(0,0,W,H);
+
+  // мерцающие фоновые звёзды
+  if(!bh.bgStars){
+    bh.bgStars=[];
+    for(var i=0;i<110;i++){
+      bh.bgStars.push({
+        x:Math.random()*W, y:Math.random()*H,
+        r:0.4+Math.random()*1.6,
+        ph:Math.random()*6.28, sp:1.5+Math.random()*3
+      });
+    }
+  }
+  bh.bgStars.forEach(function(s){
+    var a=0.15+0.75*(0.5+0.5*Math.sin(bh.t*s.sp+s.ph));
+    // лёгкий засос к центру
+    var dx=s.x-cx, dy=s.y-cy;
+    var dist=Math.sqrt(dx*dx+dy*dy)||1;
+    if(bh.r>20){
+      s.x-=dx/dist*dt*(8+bh.r*0.04);
+      s.y-=dy/dist*dt*(8+bh.r*0.04);
+      // орбитальный закрут
+      s.x+=(-dy/dist)*dt*bh.swirl*2.5;
+      s.y+=(dx/dist)*dt*bh.swirl*2.5;
+    }
     ctx.beginPath();
-    ctx.fillStyle='rgba(180,210,255,'+a+')';
-    ctx.arc(x,y,p.s,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='rgba(210,230,255,'+a+')';
+    ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fill();
   });
 
-  for(var i=0;i<18;i++){
-    var rr=bh.r*(0.35+i*0.04);
+  // вихрь частиц (аккреция)
+  particles.forEach(function(p){
+    p.a+=dt*p.sp*(1.2+bh.r/bh.max);
+    p.r=Math.max(3,p.r-dt*(10+bh.r*0.02));
+    if(p.r<6 && Math.random()<0.08){
+      p.r=30+Math.random()*bh.r*0.9;
+      p.a=Math.random()*Math.PI*2;
+    }
+    var rr=p.r*(0.55+0.55*bh.r/Math.max(1,bh.max*0.6));
+    var x=cx+Math.cos(p.a+bh.swirl)*rr;
+    var y=cy+Math.sin(p.a+bh.swirl)*rr*0.52;
+    var a=0.2+0.55*(1-p.r/120);
     ctx.beginPath();
-    ctx.strokeStyle='rgba(120,160,255,'+(0.04+i*0.008)+')';
-    ctx.lineWidth=2;
-    ctx.ellipse(cx,cy,rr,rr*0.38,bh.swirl*0.15,0,Math.PI*2);
+    ctx.fillStyle='rgba(160,200,255,'+a+')';
+    ctx.arc(x,y,p.s*(0.8+bh.r/bh.max),0,Math.PI*2);ctx.fill();
+  });
+
+  // диск аккреции — эллипсы
+  for(var i=0;i<22;i++){
+    var rr=bh.r*(0.28+i*0.045);
+    ctx.beginPath();
+    ctx.strokeStyle='rgba(120,170,255,'+(0.03+i*0.007)+')';
+    ctx.lineWidth=1.5+i*0.05;
+    ctx.ellipse(cx,cy,rr,rr*0.36,bh.swirl*0.12,0,Math.PI*2);
     ctx.stroke();
   }
-  var grd=ctx.createRadialGradient(cx,cy,0,cx,cy,bh.r*0.55);
-  grd.addColorStop(0,'rgba(0,0,0,1)');
-  grd.addColorStop(0.55,'rgba(10,10,20,1)');
-  grd.addColorStop(0.85,'rgba(40,60,120,0.35)');
-  grd.addColorStop(1,'rgba(0,0,0,0)');
-  ctx.beginPath();ctx.fillStyle=grd;ctx.arc(cx,cy,bh.r*0.55,0,Math.PI*2);ctx.fill();
 
+  // фотонное кольцо
+  if(bh.r>12){
+    ctx.beginPath();
+    ctx.strokeStyle='rgba(255,220,180,'+(0.25+0.35*Math.sin(bh.t*4))+')';
+    ctx.lineWidth=2.5;
+    ctx.ellipse(cx,cy,bh.r*0.62,bh.r*0.22,bh.swirl*0.08,0,Math.PI*2);
+    ctx.stroke();
+  }
+
+  // горизонт событий
+  var grd=ctx.createRadialGradient(cx,cy,0,cx,cy,bh.r*0.58);
+  grd.addColorStop(0,'rgba(0,0,0,1)');
+  grd.addColorStop(0.5,'rgba(5,5,15,1)');
+  grd.addColorStop(0.78,'rgba(30,50,110,0.45)');
+  grd.addColorStop(0.92,'rgba(180,200,255,0.25)');
+  grd.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.beginPath();ctx.fillStyle=grd;ctx.arc(cx,cy,bh.r*0.58,0,Math.PI*2);ctx.fill();
+
+  // эффект падения — затемнение + лёгкий zoom vignette
   if(bh.fall>0){
-    var v=Math.min(1,bh.fall/1.4);
+    var v=Math.min(1,bh.fall/1.15);
     ctx.fillStyle='rgba(0,0,0,'+v+')';
     ctx.fillRect(0,0,W,H);
-    if(v>0.92){enterConstellation();}
+    if(v>0.94){enterConstellation();}
   }
 }
 
@@ -1090,8 +1219,15 @@ function drawRoomFinn(){
   if(!c||!finn||!finn.inRoom)return;
   var rc=c.getContext('2d');
   rc.clearRect(0,0,120,120);
-  // slightly larger in room
-  drawFinnFace(rc, 60, 64, 48, performance.now()/1000);
+  // glow under face
+  var t=performance.now()/1000;
+  var g=rc.createRadialGradient(60,64,4,60,64,56);
+  g.addColorStop(0,'rgba(255,220,160,0.45)');
+  g.addColorStop(0.4,'rgba(232,120,249,0.22)');
+  g.addColorStop(1,'rgba(80,40,120,0)');
+  rc.fillStyle=g;
+  rc.beginPath();rc.arc(60,64,56,0,Math.PI*2);rc.fill();
+  drawFinnFace(rc, 60, 64, 50, t);
 }
 
 /* ---------- public API ---------- */
@@ -1113,11 +1249,14 @@ function enterMatter(){
   root.classList.add('on');
   root.setAttribute('aria-hidden','false');
   document.body.classList.add('matter-lock');
-  try{
-    var tb=document.querySelector('.topbar');if(tb)tb.style.visibility='hidden';
-    var bn=document.querySelector('.bottom-nav');if(bn)bn.style.visibility='hidden';
-    var fw=document.querySelector('.fab-wrap');if(fw)fw.style.visibility='hidden';
-  }catch(e){}
+  // chrome гасим с небольшой задержкой — пока растёт дыра, ещё видно приложение
+  setTimeout(function(){
+    try{
+      var tb=document.querySelector('.topbar');if(tb)tb.style.visibility='hidden';
+      var bn=document.querySelector('.bottom-nav');if(bn)bn.style.visibility='hidden';
+      var fw=document.querySelector('.fab-wrap');if(fw)fw.style.visibility='hidden';
+    }catch(e){}
+  },480);
   resize();
   hidePanel();
   closeReader();
@@ -1151,6 +1290,8 @@ function exitMatter(){
   }catch(e){}
 }
 
+// отключаем кривой второй слой matter-finn.js, если он успел загрузиться
+try{if(window.__MatterFinn){try{window.__MatterFinn.hideRoomFinn&&window.__MatterFinn.hideRoomFinn();}catch(e){}window.__MatterFinn={finn:{mode:'off'},startFall:function(){},startListen:function(){},showRoomFinn:function(){},hideRoomFinn:function(){}};}}catch(e){}
 window.FinMatter={
   enter:enterMatter,
   exit:exitMatter,
