@@ -268,8 +268,12 @@ public class MainActivity extends AppCompatActivity {
                 int skipCode = prefs.getInt(KEY_SKIP_CODE, 0);
                 long skipUntil = prefs.getLong(KEY_SKIP_UNTIL, 0L);
                 long nowMs = System.currentTimeMillis();
-                // 999999 = пользователь уже запускал установщик — молчим до skipUntil
-                if (nowMs < skipUntil && (skipCode == remoteCode || skipCode == 999999)) return;
+                // «Позже» или уже пробовали ЭТУ версию — не долбим. Старый флаг 999999 игнорим.
+                if (skipCode == remoteCode && nowMs < skipUntil) return;
+                if (skipCode == 999999) {
+                    // миграция со сломанного skip: сбрасываем
+                    prefs.edit().putInt(KEY_SKIP_CODE, 0).putLong(KEY_SKIP_UNTIL, 0L).apply();
+                }
 
                 runOnUiThread(() -> showUpdateDialog(remoteCode, remoteName, apkUrl, notes));
             } catch (Exception e) {
@@ -313,6 +317,11 @@ public class MainActivity extends AppCompatActivity {
         if (install != null) install.setOnClickListener(v -> {
             dlg.dismiss();
             updateDialogShowing.set(false);
+            // на 45 мин не предлагать ЭТУ же versionCode снова (новая версия прилетит)
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                    .putInt(KEY_SKIP_CODE, code)
+                    .putLong(KEY_SKIP_UNTIL, System.currentTimeMillis() + 45L * 60L * 1000L)
+                    .apply();
             downloadAndInstall(apkUrl, name);
         });
         dlg.setOnCancelListener(d -> skip.run());
@@ -479,11 +488,7 @@ public class MainActivity extends AppCompatActivity {
             installInFlight = true;
             lastInstallAttemptAt = now;
 
-            // Скрываем диалог обновления на 24ч для текущей remote-версии (чтобы не долбило)
-            getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-                    .putInt(KEY_SKIP_CODE, 999999)
-                    .putLong(KEY_SKIP_UNTIL, now + 24L * 60L * 60L * 1000L)
-                    .apply();
+            // Не блокируем будущие версии. Кулдаун установщика — через lastInstallAttemptAt.
             updateDialogShowing.set(false);
             downloading.set(false);
 
