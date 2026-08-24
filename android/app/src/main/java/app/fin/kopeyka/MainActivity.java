@@ -353,7 +353,7 @@ public class MainActivity extends AppCompatActivity {
                             if (finalLen > 0) {
                                 { ProgressBar pb = progressDlg.findViewById(R.id.progBar); if (pb != null) pb.setIndeterminate(false); }
                                 { ProgressBar pb = progressDlg.findViewById(R.id.progBar); if (pb != null) pb.setMax(100); }
-                                { ProgressBar pb = progressDlg.findViewById(R.id.progBar); if (pb != null) { pb.setIndeterminate(false); pb.setProgress(0); } TextView pct = progressDlg.findViewById(R.id.progPct); if (pct != null) pct.setText(0 + "%"); }
+                                { ProgressBar pb = progressDlg.findViewById(R.id.progBar); if (pb != null) { pb.setIndeterminate(false); pb.setProgress(0); } TextView pctV = progressDlg.findViewById(R.id.progPct); if (pctV != null) pctV.setText(0 + "%"); }
                                 { TextView pm = progressDlg.findViewById(R.id.progMsg); if (pm != null) pm.setText("Загрузка… 0%"); }
                             } else {
                                 { ProgressBar pb = progressDlg.findViewById(R.id.progBar); if (pb != null) pb.setIndeterminate(true); }
@@ -379,7 +379,7 @@ public class MainActivity extends AppCompatActivity {
                             runOnUiThread(() -> {
                                 try {
                                     if (progressDlg != null && progressDlg.isShowing()) {
-                                        { ProgressBar pb = progressDlg.findViewById(R.id.progBar); if (pb != null) { pb.setIndeterminate(false); pb.setProgress(p); } TextView pct = progressDlg.findViewById(R.id.progPct); if (pct != null) pct.setText(p + "%"); }
+                                        { ProgressBar pb = progressDlg.findViewById(R.id.progBar); if (pb != null) { pb.setIndeterminate(false); pb.setProgress(p); } TextView pctV = progressDlg.findViewById(R.id.progPct); if (pctV != null) pctV.setText(p + "%"); }
                                         { TextView pm = progressDlg.findViewById(R.id.progMsg); if (pm != null) pm.setText("Загрузка… " + p + "%"); }
                                     }
                                 } catch (Exception ignored) {}
