@@ -296,7 +296,7 @@
   (function () {
     if (document.querySelector('script[data-matter-finn]')) return;
     var s = document.createElement('script');
-    s.src = 'matter-finn.js?v=2026082501';
+    s.src = 'matter-finn.js?v=2026082502';
     s.setAttribute('data-matter-finn', '1');
     document.body.appendChild(s);
   })();
