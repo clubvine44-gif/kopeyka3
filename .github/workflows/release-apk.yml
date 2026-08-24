@@ -65,7 +65,7 @@ jobs:
           set -e
           WWW="android/app/src/main/assets/www"
           mkdir -p "$WWW"
-          for f in index.html app.js ai.js assistant-v2.js assistant.js cloud.js engine.js finn-char.js finn3d.js finn-wake.js matter.js matter-room.jpg voice.js onboard.js profile.js products.js sw.js manifest.json icon.svg widget.html ai-bootstrap.js; do
+          for f in index.html app.js ai.js assistant-v2.js assistant.js cloud.js engine.js finn-char.js finn3d.js finn-wake.js matter.js matter-finn.js matter-room.jpg voice.js onboard.js profile.js products.js sw.js manifest.json icon.svg widget.html ai-bootstrap.js; do
             if [ -f "$f" ]; then cp -f "$f" "$WWW/"; fi
           done
           python3 - <<'PY'
@@ -139,7 +139,7 @@ jobs:
             'versionCode': vc,
             'versionName': vn,
             'apkUrl': f'https://github.com/clubvine44-gif/kopeyka3/releases/download/v{vn}/Fin.apk',
-            'notes': f'{vn} — обновление Финна (versionCode {vc})'
+            'notes': f'{vn} — Фина-звезда с пламенем, морф при падении, заход в дверь (versionCode {vc})'
           }
           Path('update.json').write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
           PY
