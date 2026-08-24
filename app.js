@@ -1862,7 +1862,7 @@ function bindFabHold(){
 }
 function setup(){
   var fab=document.getElementById('fab'),radial=document.getElementById('radial');
-  if(radial){radial.querySelectorAll('button').forEach(function(btn){btn.onclick=function(){radial.classList.remove('show');if(fab)fab.classList.remove('open');var a=btn.dataset.act;if(a==='income')addIncome();else if(a==='expense')addExpense();else if(a==='reserve')addReserve();else if(a==='debt')addDebt();else if(a==='oblig')addObligation();};});}
+  if(radial){radial.querySelectorAll('button').forEach(function(btn){btn.onclick=function(){radial.classList.remove('show');if(fab)fab.classList.remove('open');var a=btn.dataset.act;if(a==='income')addIncome();else if(a==='expense')addExpense();else if(a==='reserve')addReserve();else if(a==='debt')addDebt();else if(a==='oblig')addObligation();else if(a==='matter'){try{if(window.FinMatter)window.FinMatter.enter();else toast('Материя загружается…');}catch(e){toast('Не удалось открыть Материю');}}};});}
   bindFabHold();
   var av=document.getElementById('finnAvatar');
   if(av&&!av._bound){
