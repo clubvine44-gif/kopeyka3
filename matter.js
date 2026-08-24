@@ -1,4 +1,4 @@
-/* МАТЕРИЯ v4 + finn loader */
+/* МАТЕРИЯ v4.1.8 */
 (function () {
   'use strict';
   var LS_KEY = 'kopeyka_matter_v1';
@@ -43,8 +43,33 @@
     } catch (e) {}
   }
   var ambientNodes = null;
+  var roomAudio = null;
   function startAmbient() {
-    stopAmbient(); var a = ac(); if (!a) return;
+    stopAmbient();
+    // MP3 комнаты, если есть
+    try {
+      if (!roomAudio) {
+        roomAudio = new Audio('matter-room.mp3');
+        roomAudio.loop = true;
+        roomAudio.volume = 0;
+        roomAudio.preload = 'auto';
+      }
+      roomAudio.currentTime = 0;
+      var p = roomAudio.play();
+      if (p && p.then) p.then(function () {
+        var step = 0;
+        var fade = setInterval(function () {
+          step++;
+          roomAudio.volume = Math.min(0.45, step * 0.03);
+          if (roomAudio.volume >= 0.45) clearInterval(fade);
+        }, 80);
+      }).catch(function () { startSynthAmbient(); });
+      else startSynthAmbient();
+    } catch (e) { startSynthAmbient(); }
+  }
+  function startSynthAmbient() {
+    stopAmbient();
+    var a = ac(); if (!a) return;
     try {
       if (a.state === 'suspended') a.resume();
       var master = a.createGain(); master.gain.value = 0; master.connect(a.destination);
@@ -60,10 +85,28 @@
     } catch (e) { ambientNodes = null; }
   }
   function stopAmbient() {
+    if (roomAudio) {
+      try { roomAudio.pause(); roomAudio.currentTime = 0; roomAudio.volume = 0; } catch (e) {}
+    }
     if (!ambientNodes) return;
     try { ambientNodes.list.forEach(function (n) { try { n.stop(); } catch (e) {} }); ambientNodes.master.disconnect(); } catch (e) {}
     ambientNodes = null;
   }
+
+  // точечные хотспоты (~20–24px) по центрам объектов
+  var HOTSPOTS = [
+    { id: 'bed', left: 12, top: 52 },
+    { id: 'window', left: 48, top: 20 },
+    { id: 'desk', left: 46, top: 46 },
+    { id: 'goals', left: 86, top: 20 },
+    { id: 'piggy', left: 86, top: 41 },
+    { id: 'plant', left: 78, top: 72 },
+    { id: 'book', left: 47, top: 82 },
+    { id: 'diary', left: 14, top: 90 },
+    { id: 'lamp', left: 92, top: 90 },
+    { id: 'door', left: 96, top: 48 }
+  ];
+
   var css = '#matterRoot{position:fixed;inset:0;z-index:9999;display:none;background:#000;overflow:hidden;font-family:Georgia,serif;touch-action:none}'
     + '#matterRoot.open{display:block}#mtCanvas{position:absolute;inset:0;width:100%;height:100%;display:block;background:#000}'
     + '.mt-hud{position:absolute;left:0;right:0;top:0;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 8px;display:flex;justify-content:flex-end;z-index:5;pointer-events:none}'
@@ -74,7 +117,8 @@
     + '@keyframes mtSun{from{filter:brightness(.88)}to{filter:brightness(1.2)}}'
     + '#matterRoom{position:absolute;inset:0;display:none;overflow:hidden;z-index:3;background:#0a0604}#matterRoom.show{display:block}'
     + '.rm-bg{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;object-position:center center;border:0;display:block;pointer-events:none}'
-    + '.rm-hot{position:absolute;border:0;background:transparent;padding:0;z-index:4;-webkit-tap-highlight-color:transparent}.rm-hot:active{background:rgba(255,200,120,.06)}'
+    + '.rm-hot{position:absolute;width:22px;height:22px;margin-left:-11px;margin-top:-11px;border:0;background:transparent;padding:0;z-index:4;border-radius:50%;-webkit-tap-highlight-color:transparent}'
+    + '.rm-hot:active{background:rgba(255,220,140,.12)}'
     + '.mt-float{position:absolute;left:50%;top:50%;transform:translate(-50%,-48%) scale(.94);opacity:0;pointer-events:none;z-index:10;width:min(340px,88vw);background:rgba(6,8,14,.55);backdrop-filter:blur(16px);border:1px solid rgba(255,220,160,.18);border-radius:20px;padding:20px 18px;color:#f2e8d4;transition:opacity .35s,transform .4s;font-family:system-ui,sans-serif}'
     + '.mt-float.show{opacity:1;transform:translate(-50%,-50%) scale(1);pointer-events:auto}.mt-float h3{font-size:16px;margin:0 0 10px;color:#ffe9b8}.mt-float .mt-meta{font-size:13px;color:rgba(220,210,190,.85);line-height:1.5}'
     + '.mt-float .mt-close,.mt-float .mt-act{margin-top:14px;width:100%;padding:11px;border-radius:12px;border:0;font-weight:600;font-size:14px}'
@@ -86,36 +130,46 @@
     + '.rd-top button{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#e8e0d0}'
     + '.rd-top .rd-name{flex:1;font-size:13px;color:#f0e6d0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
     + '.rd-progress{height:3px;background:rgba(255,255,255,.08);margin:0 14px 8px;border-radius:99px;overflow:hidden}.rd-progress i{display:block;height:100%;background:linear-gradient(90deg,#E5A75E,#F0C060)}'
-    + '.rd-body{flex:1;overflow:hidden;padding:0 18px}.rd-page{height:100%;overflow-y:auto;color:#e8e0d0;font-size:17px;line-height:1.65;padding:8px 0 24px;white-space:pre-wrap}'
-    + '.rd-nav{display:flex;gap:10px;padding:10px 14px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid rgba(255,255,255,.08)}'
-    + '.rd-nav button{flex:1;padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:#e8e0d0;font-weight:600;font-family:system-ui,sans-serif}'
-    + '.rd-nav .rd-info{min-width:70px;text-align:center;font-size:12px;color:rgba(200,190,170,.7);align-self:center;font-family:system-ui,sans-serif}'
+    + '.rd-body{flex:1;overflow:hidden;padding:0 18px;position:relative}.rd-page{height:100%;overflow:hidden;color:#e8e0d0;font-size:17px;line-height:1.65;padding:12px 0 16px;white-space:pre-wrap;touch-action:pan-y}'
+    + '.rd-info-bar{text-align:center;font-size:12px;color:rgba(200,190,170,.65);padding:8px 14px calc(12px + env(safe-area-inset-bottom,0px));font-family:system-ui,sans-serif}'
     + '.rd-lib{padding:12px 14px;overflow-y:auto;flex:1}.rd-item{padding:12px 14px;margin-bottom:8px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08)}'
     + '.rd-item b{display:block;font-size:14px;color:#f0e6d0;margin-bottom:6px}.rd-bar{height:4px;background:rgba(255,255,255,.08);border-radius:99px;overflow:hidden;margin-top:4px}.rd-bar i{display:block;height:100%;background:#E5A75E}'
     + '.rd-add{width:100%;padding:14px;border-radius:14px;border:1px dashed rgba(255,220,160,.3);background:transparent;color:#E5A75E;font-weight:600;margin-bottom:12px;font-family:system-ui,sans-serif}'
     + '.radial button.matter-act{border-top:1px solid rgba(255,255,255,.08);margin-top:4px;color:#C4D4FF}';
   var styleEl = document.createElement('style'); styleEl.textContent = css; document.head.appendChild(styleEl);
-  var HOTSPOTS = [
-    { id: 'bed', style: 'left:1%;top:38%;width:26%;height:30%' }, { id: 'window', style: 'left:30%;top:12%;width:36%;height:20%' },
-    { id: 'desk', style: 'left:28%;top:40%;width:36%;height:14%' }, { id: 'goals', style: 'right:5%;top:14%;width:18%;height:14%' },
-    { id: 'piggy', style: 'right:7%;top:36%;width:16%;height:11%' }, { id: 'plant', style: 'right:12%;bottom:18%;width:20%;height:20%' },
-    { id: 'book', style: 'left:34%;bottom:12%;width:26%;height:13%' }, { id: 'diary', style: 'left:2%;bottom:1%;width:28%;height:16%' },
-    { id: 'lamp', style: 'right:2%;bottom:2%;width:14%;height:12%' }, { id: 'door', style: 'right:0%;top:24%;width:13%;height:46%' }
-  ];
+
   var root = document.createElement('div'); root.id = 'matterRoot';
-  var hotHtml = HOTSPOTS.map(function (h) { return '<button type="button" class="rm-hot" data-obj="' + h.id + '" style="' + h.style + '"></button>'; }).join('');
-  root.innerHTML = '<canvas id="mtCanvas"></canvas><div class="mt-brand" id="mtBrand" hidden><span class="mt-title-main">МАТЕРИЯ</span><span class="mt-title-sub">СОЗВЕЗДИЕ · КОМНАТА</span></div><div class="mt-hud"><button type="button" class="mt-exit" id="mtExit">✕</button></div><div id="matterRoom"><img class="rm-bg" id="rmBg" alt="" draggable="false"/>' + hotHtml + '</div><div class="mt-float" id="mtFloat"><div id="mtFloatBody"></div></div><div id="mtReader"><div class="rd-top"><button type="button" id="rdBack">←</button><div class="rd-name" id="rdName">Книги</div></div><div class="rd-progress" id="rdProgWrap" hidden><i id="rdProg" style="width:0%"></i></div><div class="rd-lib" id="rdLib"></div><div class="rd-body" id="rdBody" hidden><div class="rd-page" id="rdPage"></div></div><div class="rd-nav" id="rdNav" hidden><button type="button" id="rdPrev">← Назад</button><span class="rd-info" id="rdInfo">1 / 1</span><button type="button" id="rdNext">Далее →</button></div><input type="file" id="rdFile" accept=".fb2,application/x-fictionbook+xml,text/xml" hidden/></div>';
+  var hotHtml = HOTSPOTS.map(function (h) {
+    return '<button type="button" class="rm-hot" data-obj="' + h.id + '" style="left:' + h.left + '%;top:' + h.top + '%"></button>';
+  }).join('');
+  root.innerHTML = '<canvas id="mtCanvas"></canvas>'
+    + '<div class="mt-brand" id="mtBrand" hidden><span class="mt-title-main">МАТЕРИЯ</span><span class="mt-title-sub">СОЗВЕЗДИЕ · КОМНАТА</span></div>'
+    + '<div class="mt-hud"><button type="button" class="mt-exit" id="mtExit">✕</button></div>'
+    + '<div id="matterRoom"><img class="rm-bg" id="rmBg" alt="" draggable="false"/>' + hotHtml + '</div>'
+    + '<div class="mt-float" id="mtFloat"><div id="mtFloatBody"></div></div>'
+    + '<div id="mtReader">'
+    + '<div class="rd-top"><button type="button" id="rdBack">←</button><div class="rd-name" id="rdName">Книги</div></div>'
+    + '<div class="rd-progress" id="rdProgWrap" hidden><i id="rdProg" style="width:0%"></i></div>'
+    + '<div class="rd-lib" id="rdLib"></div>'
+    + '<div class="rd-body" id="rdBody" hidden><div class="rd-page" id="rdPage"></div></div>'
+    + '<div class="rd-info-bar" id="rdInfoBar" hidden>1 / 1 · свайп влево/вправо</div>'
+    + '<input type="file" id="rdFile" accept=".fb2,application/x-fictionbook+xml,text/xml" hidden/>'
+    + '</div>';
   document.body.appendChild(root);
+
   var canvas = document.getElementById('mtCanvas'); var ctx = canvas.getContext('2d', { alpha: false });
   var W = 0, H = 0, dpr = 1, phase = 'idle', rafId = 0, t0 = 0, lastT = 0;
   var bgStars = [], goals = [], particles = [], bh = { r: 2, max: 400, swirl: 0, fall: 0 };
-  var door = { x: 0, y: 0, open: 0, opening: false }, needResize = true;
+  var door = { x: 0, y: 0, open: 0, opening: false, tilt: -0.28 }, needResize = true;
   var reader = { mode: 'lib', pages: [], page: 0, title: '', bookId: null };
+  var histDepth = 0;
+
   function loadRoomImage() {
     var img = document.getElementById('rmBg'); if (!img) return;
-    ['matter-room.jpg', 'matter-room.png'].forEach(function (u) { var p = new Image(); p.onload = function () { img.src = p.src; }; p.src = u + '?v=7'; });
+    ['matter-room.jpg', 'matter-room.png'].forEach(function (u) { var p = new Image(); p.onload = function () { img.src = p.src; }; p.src = u + '?v=8'; });
   }
   loadRoomImage();
+
   function mountRadial() {
     var radial = document.getElementById('radial'); if (!radial || radial.querySelector('[data-act="matter"]')) return;
     var btn = document.createElement('button'); btn.type = 'button'; btn.setAttribute('data-act', 'matter'); btn.className = 'matter-act';
@@ -126,6 +180,7 @@
   function mountAll() { var el = document.getElementById('matterEnterWrap'); if (el && el.parentNode) el.parentNode.removeChild(el); mountRadial(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { setTimeout(mountAll, 200); }); else setTimeout(mountAll, 200);
   setTimeout(mountAll, 1200);
+
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 1.75); W = window.innerWidth | 0; H = window.innerHeight | 0;
     var bw = Math.floor(W * dpr), bh2 = Math.floor(H * dpr);
@@ -133,6 +188,7 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); needResize = false;
   }
   window.addEventListener('resize', function () { needResize = true; }, { passive: true });
+
   function seedSpace() {
     bgStars = []; var nStars = Math.min(110, Math.floor((W * H) / 9500));
     for (var i = 0; i < nStars; i++) bgStars.push({ x: Math.random() * W, y: Math.random() * H, r: 0.4 + Math.random() * 1.25, ph: Math.random() * 6.28, sp: 0.25 + Math.random() * 0.6 });
@@ -143,9 +199,14 @@
       g.x = cx + Math.cos(ang) * rad * 1.1; g.y = cy + Math.sin(ang) * rad * 0.7;
       g.hue = g.type === 'dream' ? 42 : 200; g.pulse = Math.random() * 6;
     });
-    door.x = W * 0.86; door.y = H * 0.58; door.open = 0; door.opening = false;
+    door.x = W * 0.84; door.y = H * 0.55; door.open = 0; door.opening = false; door.tilt = -0.32;
     window.__matterDoor = { x: door.x, y: door.y };
   }
+
+  function pushHist(tag) {
+    try { history.pushState({ matter: tag }, ''); histDepth++; } catch (e) {}
+  }
+
   function enterMatter() {
     try { ac(); } catch (e) {}
     needResize = true; resize(); root.classList.add('open');
@@ -155,18 +216,66 @@
     bh = { r: 2, max: Math.max(W, H) * 0.95, swirl: 0, fall: 0 }; particles = [];
     for (var i = 0; i < Math.min(60, Math.floor(W / 9)); i++) particles.push({ a: Math.random() * Math.PI * 2, r: 20 + Math.random() * 48, sp: 0.85 + Math.random() * 1.8, s: 1 + Math.random() * 2 });
     t0 = performance.now(); lastT = t0; if (rafId) cancelAnimationFrame(rafId); rafId = requestAnimationFrame(loop);
+    pushHist('matter');
   }
   function exitMatter() {
     phase = 'idle'; if (rafId) cancelAnimationFrame(rafId); rafId = 0; stopAmbient(); closeReader();
     root.classList.remove('open'); document.getElementById('matterRoom').classList.remove('show');
     document.getElementById('mtBrand').hidden = true; hideFloat();
+    try { if (window.__MatterFinn && window.__MatterFinn.hideRoomFinn) window.__MatterFinn.hideRoomFinn(); } catch (e) {}
   }
   document.getElementById('mtExit').onclick = exitMatter;
-  function enterSpace() { phase = 'space'; needResize = true; resize(); seedSpace(); document.getElementById('mtBrand').hidden = false; }
+
+  function enterSpace() {
+    phase = 'space'; needResize = true; resize(); seedSpace();
+    document.getElementById('mtBrand').hidden = false;
+    canvas.style.display = 'block';
+  }
   function openDoor() { if (door.opening) return; door.opening = true; playCreak(); }
   window.__matterOpenDoor = openDoor;
-  function enterRoom() { phase = 'room'; canvas.style.display = 'none'; document.getElementById('mtBrand').hidden = true; document.getElementById('matterRoom').classList.add('show'); loadRoomImage(); startAmbient(); }
-  function leaveRoom() { stopAmbient(); document.getElementById('matterRoom').classList.remove('show'); canvas.style.display = 'block'; hideFloat(); closeReader(); door.open = 0; door.opening = false; enterSpace(); }
+
+  function enterRoom() {
+    phase = 'room';
+    canvas.style.display = 'none';
+    document.getElementById('mtBrand').hidden = true;
+    document.getElementById('matterRoom').classList.add('show');
+    loadRoomImage();
+    startAmbient();
+    pushHist('room');
+    setTimeout(function () {
+      try { if (window.__MatterFinn && window.__MatterFinn.showRoomFinn) window.__MatterFinn.showRoomFinn(); } catch (e) {}
+    }, 400);
+  }
+  function leaveRoom() {
+    stopAmbient();
+    document.getElementById('matterRoom').classList.remove('show');
+    canvas.style.display = 'block';
+    hideFloat(); closeReader();
+    door.open = 0; door.opening = false;
+    try { if (window.__MatterFinn && window.__MatterFinn.hideRoomFinn) window.__MatterFinn.hideRoomFinn(); } catch (e) {}
+    enterSpace();
+  }
+
+  // Android / системный «назад»: комната → созвездие → выход
+  function handleBack() {
+    if (phase === 'idle') return false;
+    var rd = document.getElementById('mtReader');
+    if (rd && rd.classList.contains('show')) {
+      if (reader.mode === 'read') { closeReader(); openReader(); return true; }
+      closeReader(); return true;
+    }
+    var fl = document.getElementById('mtFloat');
+    if (fl && fl.classList.contains('show')) { hideFloat(); return true; }
+    if (phase === 'room') { leaveRoom(); return true; }
+    if (phase === 'space' || phase === 'blackhole') { exitMatter(); return true; }
+    return false;
+  }
+  window.addEventListener('popstate', function () {
+    if (handleBack()) { /* consumed */ }
+  });
+  // для WebView: если приложение вызывает
+  window.__matterBack = handleBack;
+
   function loop(ts) {
     if (phase === 'idle') return; rafId = requestAnimationFrame(loop);
     var dt = Math.min(0.048, (ts - lastT) / 1000); lastT = ts; if (needResize) resize();
@@ -204,31 +313,72 @@
     drawConstellationDoor(t);
     window.__matterDoor = { x: door.x, y: door.y };
   }
+
+  /** Дверь-созвездие: крупнее, чуть по диагонали, неровный контур */
   function drawConstellationDoor(t) {
-    var dx = door.x, dy = door.y, sc = 1 + door.open * 0.28, hw = 18 * sc, hh = 32 * sc;
-    var pg = ctx.createRadialGradient(dx, dy, 0, dx, dy, hh * 1.4);
-    pg.addColorStop(0, 'rgba(120,170,255,' + (0.14 + door.open * 0.28) + ')'); pg.addColorStop(1, 'rgba(20,40,80,0)');
-    ctx.fillStyle = pg; ctx.beginPath(); ctx.arc(dx, dy, hh * 1.4, 0, Math.PI * 2); ctx.fill();
-    var pts = [[-hw, hh], [-hw, -hh * 0.5], [-hw * 0.5, -hh], [0, -hh * 1.15], [hw * 0.5, -hh], [hw, -hh * 0.5], [hw, hh]];
-    ctx.strokeStyle = 'rgba(180,210,255,' + (0.4 + 0.35 * door.open) + ')'; ctx.lineWidth = 1.3; ctx.beginPath();
-    for (var i = 0; i < pts.length; i++) { var px = dx + pts[i][0], py = dy + pts[i][1]; if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); }
+    var dx = door.x, dy = door.y, sc = 1 + door.open * 0.35;
+    var tilt = door.tilt;
+    var cos = Math.cos(tilt), sin = Math.sin(tilt);
+    function rot(px, py) {
+      return { x: dx + (px * cos - py * sin) * sc, y: dy + (px * sin + py * cos) * sc };
+    }
+    // точки дверного силуэта (неровные)
+    var local = [
+      [-22, 38], [-24, 12], [-18, -18], [-8, -36], [4, -42],
+      [18, -34], [26, -12], [24, 16], [20, 40], [6, 46], [-10, 44]
+    ];
+    var pts = local.map(function (p) { return rot(p[0], p[1]); });
+
+    var glowR = 70 * sc;
+    var pg = ctx.createRadialGradient(dx, dy, 0, dx, dy, glowR);
+    pg.addColorStop(0, 'rgba(140,180,255,' + (0.16 + door.open * 0.3) + ')');
+    pg.addColorStop(1, 'rgba(20,40,80,0)');
+    ctx.fillStyle = pg; ctx.beginPath(); ctx.arc(dx, dy, glowR, 0, Math.PI * 2); ctx.fill();
+
+    ctx.strokeStyle = 'rgba(190,215,255,' + (0.45 + 0.4 * door.open) + ')';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    for (var i = 0; i < pts.length; i++) {
+      if (i === 0) ctx.moveTo(pts[i].x, pts[i].y);
+      else ctx.lineTo(pts[i].x, pts[i].y);
+    }
     ctx.closePath(); ctx.stroke();
+
+    // внутренние связи созвездия
+    ctx.strokeStyle = 'rgba(160,200,255,' + (0.18 + door.open * 0.2) + ')';
+    ctx.lineWidth = 1;
+    var links = [[0, 2], [2, 4], [4, 6], [6, 8], [8, 0], [1, 5], [3, 7], [5, 9]];
+    for (var L = 0; L < links.length; L++) {
+      var a = pts[links[L][0]], b = pts[links[L][1]];
+      if (!a || !b) continue;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+
     for (var j = 0; j < pts.length; j++) {
-      var qx = dx + pts[j][0], qy = dy + pts[j][1], pr = 2.1 * (0.85 + 0.15 * Math.sin(t * 2 + j));
-      ctx.beginPath(); ctx.fillStyle = 'rgba(255,245,220,' + (0.7 + 0.3 * Math.sin(t * 1.5 + j)) + ')'; ctx.arc(qx, qy, pr, 0, Math.PI * 2); ctx.fill();
+      var pr = 2.4 * (0.85 + 0.15 * Math.sin(t * 2.2 + j));
+      ctx.beginPath();
+      ctx.fillStyle = 'rgba(255,245,220,' + (0.75 + 0.25 * Math.sin(t * 1.6 + j)) + ')';
+      ctx.arc(pts[j].x, pts[j].y, pr, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
+
   canvas.addEventListener('click', function (ev) {
     if (phase !== 'space') return;
     var rect = canvas.getBoundingClientRect(); var x = ev.clientX - rect.left, y = ev.clientY - rect.top;
-    if (Math.abs(x - door.x) < 36 && Math.abs(y - door.y) < 50) { openDoor(); return; }
+    if (Math.hypot(x - door.x, y - door.y) < 55) { openDoor(); return; }
     var best = null, bestD = 40 * 40;
     for (var i = 0; i < goals.length; i++) { var s = goals[i], d = (x - s.x) * (x - s.x) + (y - s.y) * (y - s.y); if (d < bestD) { bestD = d; best = s; } }
     if (best) showFloat('<h3>' + best.title + '</h3><p class="mt-meta">Прогресс: ' + Math.round((best.progress || 0) * 100) + '%</p><button type="button" class="mt-close" id="mtFClose">Закрыть</button>');
   }, { passive: true });
+
   function showFloat(html) { var f = document.getElementById('mtFloat'); document.getElementById('mtFloatBody').innerHTML = html; f.classList.add('show'); var c = document.getElementById('mtFClose'); if (c) c.onclick = hideFloat; }
   function hideFloat() { document.getElementById('mtFloat').classList.remove('show'); }
-  root.querySelectorAll('.rm-hot').forEach(function (b) { b.addEventListener('click', function (e) { e.preventDefault(); onObj(b.getAttribute('data-obj')); }); });
+
+  root.querySelectorAll('.rm-hot').forEach(function (b) {
+    b.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); onObj(b.getAttribute('data-obj')); });
+  });
+
   function onObj(id) {
     if (id === 'door') { leaveRoom(); return; }
     if (id === 'piggy') { showFloat('<h3>Копилка</h3><p class="mt-meta">В резервах: <b style="color:#ffd9a8">' + readReserveTotal().toLocaleString('ru-RU') + ' ₽</b></p><button type="button" class="mt-close" id="mtFClose">Закрыть</button>'); return; }
@@ -248,55 +398,132 @@
     if (id === 'bed') { showFloat('<h3>Кровать</h3><p class="mt-meta">Место, где можно выдохнуть.</p><button type="button" class="mt-close" id="mtFClose">Закрыть</button>'); return; }
     if (id === 'lamp') { showFloat('<h3>Свет</h3><p class="mt-meta">Тёплый огонёк.</p><button type="button" class="mt-close" id="mtFClose">Закрыть</button>'); return; }
   }
-  function openReader() { hideFloat(); document.getElementById('mtReader').classList.add('show'); reader.mode = 'lib'; document.getElementById('rdLib').hidden = false; document.getElementById('rdBody').hidden = true; document.getElementById('rdNav').hidden = true; document.getElementById('rdProgWrap').hidden = true; document.getElementById('rdName').textContent = 'Книги'; renderLibrary(); }
-  function closeReader() { document.getElementById('mtReader').classList.remove('show'); if (reader.bookId != null && reader.pages.length) { var list = loadBooks(); for (var i = 0; i < list.length; i++) if (list[i].id === reader.bookId) { list[i].page = reader.page; list[i].progress = reader.pages.length ? reader.page / reader.pages.length : 0; break; } saveBooks(list); } }
-  document.getElementById('rdBack').onclick = function () { if (reader.mode === 'read') { closeReader(); openReader(); return; } closeReader(); };
+
+  function openReader() {
+    hideFloat();
+    document.getElementById('mtReader').classList.add('show');
+    reader.mode = 'lib';
+    document.getElementById('rdLib').hidden = false;
+    document.getElementById('rdBody').hidden = true;
+    document.getElementById('rdInfoBar').hidden = true;
+    document.getElementById('rdProgWrap').hidden = true;
+    document.getElementById('rdName').textContent = 'Книги';
+    renderLibrary();
+  }
+  function closeReader() {
+    document.getElementById('mtReader').classList.remove('show');
+    if (reader.bookId != null && reader.pages.length) {
+      var list = loadBooks();
+      for (var i = 0; i < list.length; i++) if (list[i].id === reader.bookId) {
+        list[i].page = reader.page;
+        list[i].progress = reader.pages.length ? reader.page / reader.pages.length : 0;
+        break;
+      }
+      saveBooks(list);
+    }
+  }
+  document.getElementById('rdBack').onclick = function () {
+    if (reader.mode === 'read') { closeReader(); openReader(); return; }
+    closeReader();
+  };
+
   function renderLibrary() {
     var box = document.getElementById('rdLib'), list = loadBooks(), html = '<button type="button" class="rd-add" id="rdAdd">+ Загрузить FB2</button>';
     if (!list.length) html += '<p style="color:rgba(200,190,170,.55);font-size:13px;text-align:center;margin-top:24px">Пока пусто. Загрузи FB2.</p>';
-    list.forEach(function (b) { var pct = Math.round((b.progress || 0) * 100); html += '<div class="rd-item" data-bid="' + b.id + '"><b>' + (b.title || 'Книга') + '</b><span style="font-size:11px;color:rgba(200,190,170,.55)">' + pct + '%</span><div class="rd-bar"><i style="width:' + pct + '%"></i></div></div>'; });
-    box.innerHTML = html; document.getElementById('rdAdd').onclick = function () { document.getElementById('rdFile').click(); };
+    list.forEach(function (b) {
+      var pct = Math.round((b.progress || 0) * 100);
+      html += '<div class="rd-item" data-bid="' + b.id + '"><b>' + (b.title || 'Книга') + '</b><span style="font-size:11px;color:rgba(200,190,170,.55)">' + pct + '%</span><div class="rd-bar"><i style="width:' + pct + '%"></i></div></div>';
+    });
+    box.innerHTML = html;
+    document.getElementById('rdAdd').onclick = function () { document.getElementById('rdFile').click(); };
     box.querySelectorAll('.rd-item').forEach(function (el) { el.onclick = function () { openBook(el.getAttribute('data-bid')); }; });
   }
+
   document.getElementById('rdFile').onchange = function (ev) {
     var f = ev.target.files && ev.target.files[0]; if (!f) return;
-    var ro = new FileReader(); ro.onload = function () {
+    var ro = new FileReader();
+    ro.onload = function () {
       try {
-        var text = String(ro.result || ''), parsed = parseFb2(text); if (!parsed.pages.length) { alert('Не удалось прочитать FB2'); return; }
+        var text = String(ro.result || ''), parsed = parseFb2(text);
+        if (!parsed.pages.length) { alert('Не удалось прочитать FB2'); return; }
         var list = loadBooks(), id = 'b_' + Date.now();
         list.unshift({ id: id, title: parsed.title || f.name, pages: parsed.pages, page: 0, total: parsed.pages.length, progress: 0 });
         saveBooks(list); openBook(id);
       } catch (e) { alert('Ошибка чтения'); }
-    }; ro.readAsText(f, 'UTF-8'); ev.target.value = '';
+    };
+    ro.readAsText(f, 'UTF-8'); ev.target.value = '';
   };
+
   function parseFb2(xml) {
-    var title = 'Книга'; try { var tm = xml.match(/<book-title[^>]*>([\s\S]*?)<\/book-title>/i); if (tm) title = tm[1].replace(/<[^>]+>/g, '').trim() || title; } catch (e) {}
-    var body = xml; try { var bm = xml.match(/<body[^>]*>([\s\S]*?)<\/body>/i); if (bm) body = bm[1]; } catch (e) {}
+    var title = 'Книга';
+    try { var tm = xml.match(/<book-title[^>]*>([\s\S]*?)<\/book-title>/i); if (tm) title = tm[1].replace(/<[^>]+>/g, '').trim() || title; } catch (e) {}
+    var body = xml;
+    try { var bm = xml.match(/<body[^>]*>([\s\S]*?)<\/body>/i); if (bm) body = bm[1]; } catch (e) {}
     body = body.replace(/<p[^>]*>/gi, '\n').replace(/<\/p>/gi, '\n').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
-    var pages = []; for (var i = 0; i < body.length; i += 900) pages.push(body.slice(i, i + 900));
-    if (!pages.length) pages = ['(пусто)']; return { title: title, pages: pages };
+    // страницы короче, чтобы текст целиком на экран без скролла
+    var chunk = 520;
+    var pages = [];
+    for (var i = 0; i < body.length; i += chunk) pages.push(body.slice(i, i + chunk));
+    if (!pages.length) pages = ['(пусто)'];
+    return { title: title, pages: pages };
   }
+
   function openBook(id) {
-    var list = loadBooks(), b = null; for (var i = 0; i < list.length; i++) if (list[i].id === id) { b = list[i]; break; }
+    var list = loadBooks(), b = null;
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) { b = list[i]; break; }
     if (!b || !b.pages || !b.pages.length) return;
-    reader.mode = 'read'; reader.bookId = b.id; reader.title = b.title; reader.pages = b.pages; reader.page = Math.min(b.page || 0, b.pages.length - 1);
-    document.getElementById('rdLib').hidden = true; document.getElementById('rdBody').hidden = false; document.getElementById('rdNav').hidden = false; document.getElementById('rdProgWrap').hidden = false;
-    document.getElementById('rdName').textContent = b.title; renderPage();
+    reader.mode = 'read'; reader.bookId = b.id; reader.title = b.title; reader.pages = b.pages;
+    reader.page = Math.min(b.page || 0, b.pages.length - 1);
+    document.getElementById('rdLib').hidden = true;
+    document.getElementById('rdBody').hidden = false;
+    document.getElementById('rdInfoBar').hidden = false;
+    document.getElementById('rdProgWrap').hidden = false;
+    document.getElementById('rdName').textContent = b.title;
+    renderPage();
   }
+
   function renderPage() {
     document.getElementById('rdPage').textContent = reader.pages[reader.page] || '';
-    document.getElementById('rdInfo').textContent = (reader.page + 1) + ' / ' + reader.pages.length;
+    document.getElementById('rdInfoBar').textContent = (reader.page + 1) + ' / ' + reader.pages.length + ' · свайп влево/вправо';
     document.getElementById('rdProg').style.width = (reader.pages.length ? ((reader.page + 1) / reader.pages.length) * 100 : 0) + '%';
-    var list = loadBooks(); for (var i = 0; i < list.length; i++) if (list[i].id === reader.bookId) { list[i].page = reader.page; list[i].progress = reader.pages.length ? (reader.page + 1) / reader.pages.length : 0; break; } saveBooks(list);
+    var list = loadBooks();
+    for (var i = 0; i < list.length; i++) if (list[i].id === reader.bookId) {
+      list[i].page = reader.page;
+      list[i].progress = reader.pages.length ? (reader.page + 1) / reader.pages.length : 0;
+      break;
+    }
+    saveBooks(list);
   }
-  document.getElementById('rdPrev').onclick = function () { if (reader.page > 0) { reader.page--; renderPage(); document.getElementById('rdPage').scrollTop = 0; } };
-  document.getElementById('rdNext').onclick = function () { if (reader.page < reader.pages.length - 1) { reader.page++; renderPage(); document.getElementById('rdPage').scrollTop = 0; } };
-  window.FinMatter = { enter: enterMatter, exit: exitMatter, isOpen: function () { return phase !== 'idle'; } };
-  // load Finn star module
+
+  // свайп страниц
+  (function () {
+    var pageEl = document.getElementById('rdPage');
+    var sx = 0, sy = 0;
+    pageEl.addEventListener('touchstart', function (e) {
+      if (!e.touches[0]) return;
+      sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+    }, { passive: true });
+    pageEl.addEventListener('touchend', function (e) {
+      if (!e.changedTouches[0] || reader.mode !== 'read') return;
+      var dx = e.changedTouches[0].clientX - sx;
+      var dy = e.changedTouches[0].clientY - sy;
+      if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return;
+      if (dx < 0 && reader.page < reader.pages.length - 1) { reader.page++; renderPage(); }
+      else if (dx > 0 && reader.page > 0) { reader.page--; renderPage(); }
+    }, { passive: true });
+  })();
+
+  window.FinMatter = {
+    enter: enterMatter,
+    exit: exitMatter,
+    back: handleBack,
+    isOpen: function () { return phase !== 'idle'; }
+  };
+
   (function () {
     if (document.querySelector('script[data-matter-finn]')) return;
     var s = document.createElement('script');
-    s.src = 'matter-finn.js?v=2026082502';
+    s.src = 'matter-finn.js?v=2026082503';
     s.setAttribute('data-matter-finn', '1');
     document.body.appendChild(s);
   })();
