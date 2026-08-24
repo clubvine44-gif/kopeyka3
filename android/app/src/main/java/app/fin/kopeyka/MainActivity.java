@@ -429,7 +429,12 @@ public class MainActivity extends AppCompatActivity {
 
                 runOnUiThread(() -> {
                     try { if (progressDlg != null && progressDlg.isShowing()) progressDlg.dismiss(); } catch (Exception ignored) {}
-                    installApk(apk);
+                    // небольшой delay — иначе на части устройств intent установщика глотается поверх диалога
+                    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                        installInFlight = false;
+                        lastInstallAttemptAt = 0L;
+                        installApk(apk);
+                    }, 350);
                 });
             } catch (Exception e) {
                 android.util.Log.e("FinUpdate", "download failed: " + e.getMessage(), e);
@@ -481,7 +486,7 @@ public class MainActivity extends AppCompatActivity {
 
             long now = System.currentTimeMillis();
             // анти-мигание: не чаще одного запуска установщика в 3 минуты
-            if (installInFlight || (now - lastInstallAttemptAt) < 180_000L) {
+            if (installInFlight || (now - lastInstallAttemptAt) < 12_000L) {
                 Toast.makeText(this, "Установщик уже запускался. Подтверди установку в системном окне или подожди пару минут.", Toast.LENGTH_LONG).show();
                 return;
             }
@@ -518,16 +523,17 @@ public class MainActivity extends AppCompatActivity {
                     .remove("pending_from_settings")
                     .apply();
 
+            // VIEW/INSTALL intent — системный установщик открывается сразу (без рестарта приложения)
             try {
-                installWithPackageInstaller(apk);
-                Toast.makeText(this, "Подтверди установку в системном окне.", Toast.LENGTH_SHORT).show();
+                installWithViewIntent(apk);
+                Toast.makeText(this, "В установщике нажми «Установить».", Toast.LENGTH_LONG).show();
             } catch (Exception e) {
-                android.util.Log.e("FinUpdate", "PackageInstaller failed: " + e.getMessage(), e);
+                android.util.Log.e("FinUpdate", "VIEW install failed: " + e.getMessage(), e);
                 try {
-                    installWithViewIntent(apk);
-                    Toast.makeText(this, "В установщике нажми «Установить».", Toast.LENGTH_LONG).show();
+                    installWithPackageInstaller(apk);
+                    Toast.makeText(this, "Подтверди установку в системном окне.", Toast.LENGTH_SHORT).show();
                 } catch (Exception e2) {
-                    android.util.Log.e("FinUpdate", "VIEW install failed: " + e2.getMessage(), e2);
+                    android.util.Log.e("FinUpdate", "PackageInstaller failed: " + e2.getMessage(), e2);
                     installInFlight = false;
                     try {
                         Intent openReleases = new Intent(Intent.ACTION_VIEW, Uri.parse(RELEASES_PAGE_URL));

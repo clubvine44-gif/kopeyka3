@@ -150,15 +150,25 @@ function stopAmbient(){
 
 /* ---------- soft Finn speech (like main app) ---------- */
 function finnSay(text){
-  // visual bubble near Finn
-  var el=document.getElementById('matterFinnBubble');
-  if(el){
-    el.textContent=text;
-    el.classList.add('show');
-    clearTimeout(finnSay._t);
-    finnSay._t=setTimeout(function(){el.classList.remove('show');},4200);
+  // диалог в стиле основного приложения (ka-reply), не крошечный бабл
+  var el=document.getElementById('matterDialog');
+  if(!el){
+    el=document.createElement('div');
+    el.id='matterDialog';
+    el.className='m-dialog';
+    if(root)root.appendChild(el);
   }
-  // TTS if available
+  el.textContent=text||'';
+  el.classList.add('show');
+  clearTimeout(finnSay._t);
+  finnSay._t=setTimeout(function(){el.classList.remove('show');},4500);
+  // room bubble too if visible
+  var b=document.getElementById('matterFinnBubble');
+  if(b&&finn&&finn.inRoom){
+    b.textContent=text;
+    b.classList.add('show');
+    setTimeout(function(){b.classList.remove('show');},4200);
+  }
   try{
     if(window.speechSynthesis){
       window.speechSynthesis.cancel();
@@ -180,24 +190,24 @@ function ensureRoot(){
     '<div id="matterHud" class="m-hud" hidden>'+
       '<button type="button" class="m-exit" id="matterExit">✕</button>'+
       '<div class="m-title">МОЯ МАТЕРИЯ</div>'+
-      '<div class="m-hint" id="matterHint">Коснись звезды или двери-созвездия</div>'+
+      '<!-- hint removed -->'+
     '</div>'+
     '<div id="matterRoom" class="m-room" hidden>'+
       '<div class="m-room-scene" id="matterRoomScene">'+
         '<div class="m-room-bg"></div>'+
-        /* Hotspots: крупнее зона нажатия, центр по объектам комнаты */
-        '<button type="button" class="m-hot" data-obj="diary"  style="left:18%;top:86%" title="Дневник"></button>'+
-        '<button type="button" class="m-hot" data-obj="book"   style="left:50%;top:70%" title="Книга"></button>'+
-        '<button type="button" class="m-hot" data-obj="plant"  style="left:72%;top:54%" title="Растение"></button>'+
-        '<button type="button" class="m-hot" data-obj="piggy"  style="left:76%;top:40%" title="Копилка"></button>'+
-        '<button type="button" class="m-hot" data-obj="goals"  style="left:80%;top:27%" title="Цели"></button>'+
-        '<button type="button" class="m-hot" data-obj="window" style="left:48%;top:30%" title="Окно"></button>'+
-        '<button type="button" class="m-hot" data-obj="desk"   style="left:46%;top:48%" title="Стол"></button>'+
-        '<button type="button" class="m-hot" data-obj="bed"    style="left:14%;top:52%" title="Кровать"></button>'+
-        '<button type="button" class="m-hot" data-obj="lamp"   style="left:34%;top:44%" title="Лампа"></button>'+
-        '<button type="button" class="m-hot" data-obj="focus"  style="left:9%;top:38%"  title="Фокус"></button>'+
-        '<button type="button" class="m-hot" data-obj="door"   style="left:92%;top:48%" title="Выход"></button>'+
-        '<button type="button" class="m-hot" data-obj="globe"  style="left:88%;top:86%" title="Светильник"></button>'+
+        /* Hotspots: размер зоны ≈ размер объекта; дневник точно на книге-дневнике */
+        '<button type="button" class="m-hot m-hot-sm" data-obj="diary"  style="left:22%;top:90%" title="Дневник"></button>'+
+        '<button type="button" class="m-hot m-hot-md" data-obj="book"   style="left:50%;top:71%" title="Книга"></button>'+
+        '<button type="button" class="m-hot m-hot-md" data-obj="plant"  style="left:73%;top:55%" title="Растение"></button>'+
+        '<button type="button" class="m-hot m-hot-sm" data-obj="piggy"  style="left:77%;top:40%" title="Копилка"></button>'+
+        '<button type="button" class="m-hot m-hot-md" data-obj="goals"  style="left:81%;top:26%" title="Цели"></button>'+
+        '<button type="button" class="m-hot m-hot-lg" data-obj="window" style="left:48%;top:28%" title="Окно"></button>'+
+        '<button type="button" class="m-hot m-hot-lg" data-obj="desk"   style="left:47%;top:49%" title="Стол"></button>'+
+        '<button type="button" class="m-hot m-hot-lg" data-obj="bed"    style="left:15%;top:55%" title="Кровать"></button>'+
+        '<button type="button" class="m-hot m-hot-sm" data-obj="lamp"   style="left:35%;top:44%" title="Лампа"></button>'+
+        '<button type="button" class="m-hot m-hot-md" data-obj="focus"  style="left:10%;top:38%" title="Фокус"></button>'+
+        '<button type="button" class="m-hot m-hot-md" data-obj="door"   style="left:93%;top:48%" title="Выход"></button>'+
+        '<button type="button" class="m-hot m-hot-sm" data-obj="globe"  style="left:88%;top:87%" title="Светильник"></button>'+
         /* room Finn + close */
         '<div id="matterRoomFinn" class="m-room-finn" hidden>'+
           '<canvas id="matterRoomFinnCanvas" width="120" height="120"></canvas>'+
@@ -269,11 +279,14 @@ function injectCSS(){
 '.m-room{position:absolute;inset:0;z-index:10;background:#0a0604}'+
 '.m-room-scene{position:absolute;inset:0;overflow:hidden}'+
 '.m-room-bg{position:absolute;inset:0;background:#0a0604 url(matter-room.jpg) center center/cover no-repeat}'+
-/* Hotspots ~56px hit area — легко попасть, визуально почти невидимы */
-'.m-hot{position:absolute;width:56px;height:56px;margin:0;padding:0;border:0;background:transparent;'+
+/* Hotspots: невидимые, разные размеры под объекты */
+'.m-hot{position:absolute;margin:0;padding:0;border:0;background:transparent;'+
   'border-radius:50%;transform:translate(-50%,-50%);z-index:3;cursor:pointer;-webkit-tap-highlight-color:transparent;'+
   'pointer-events:auto}'+
-'.m-hot:active{background:rgba(255,220,120,.14);box-shadow:0 0 20px rgba(255,200,80,.3)}'+
+'.m-hot-sm{width:64px;height:64px}'+
+'.m-hot-md{width:80px;height:80px}'+
+'.m-hot-lg{width:110px;height:96px;border-radius:24px}'+
+'.m-hot:active{background:rgba(255,220,120,.12);box-shadow:0 0 22px rgba(255,200,80,.28)}'+
 '.m-room-finn{position:absolute;left:12%;bottom:14%;transform:none;z-index:8;width:120px;height:120px;pointer-events:none}'+
 '.m-room-finn canvas{width:120px;height:120px;display:block;pointer-events:none}'+
 '.m-finn-x{position:absolute;top:-4px;right:-4px;width:28px;height:28px;border-radius:50%;'+
@@ -308,7 +321,7 @@ function injectCSS(){
 '.m-reader-foot{text-align:center;padding:8px;font-size:12px;color:rgba(200,190,170,.6)}'+
 /* HTML hidden must beat display:flex — иначе при входе виден пустой «Книга» */
 '.m-reader[hidden],.m-panel[hidden],.m-hud[hidden],.m-room[hidden],.m-room-finn[hidden]{display:none!important}'+
-'body.matter-lock{overflow:hidden!important}';
+'.m-dialog{position:absolute;left:50%;bottom:calc(22% + 120px);transform:translateX(-50%) translateY(8px);'+'z-index:15;max-width:min(92vw,360px);max-height:28vh;overflow:auto;padding:14px 16px;border-radius:18px;'+'background:rgba(12,16,28,.88);border:1px solid rgba(255,255,255,.12);color:#E8ECF4;'+'font-size:15px;line-height:1.4;font-family:system-ui,sans-serif;text-align:center;'+'opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;'+'backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 8px 32px rgba(0,0,0,.45)}'+'.m-dialog.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}'+'.m-finn-close-space{position:absolute;z-index:16;width:36px;height:36px;border-radius:50%;'+'background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.22);color:#f5efe6;font-size:16px;'+'display:none;align-items:center;justify-content:center;padding:0}'+'.m-finn-close-space.show{display:flex}'+'body.matter-lock{overflow:hidden!important}';
   document.head.appendChild(s);
 }
 
@@ -326,25 +339,66 @@ function resize(){
 function buildStars(){
   stars=[];
   var goals=getGoals();
-  var n=goals.length;
-  var cx=W*0.40, cy=H*0.46;
-  goals.forEach(function(g,i){
-    var ang=(-Math.PI*0.58)+(i/(Math.max(1,n-1)||1))*Math.PI*1.16;
-    var r=Math.min(W,H)*(0.26+0.04*(i%3))+((i*53)%48);
-    var x=cx+Math.cos(ang)*r*1.18;
-    var y=cy+Math.sin(ang)*r*0.78;
-    var hue=g.type==='debt'?8:(g.urgent?38:200);
+  // Реальные относительные координаты Большой Медведицы (7) и Малой (7)
+  // Нормализованы 0..1 внутри bounding box созвездия
+  var ursaMajor=[
+    [0.12,0.42],[0.28,0.38],[0.42,0.40],[0.55,0.44], // ковш дно+бок
+    [0.62,0.28],[0.48,0.18],[0.32,0.22]               // ручка
+  ];
+  var ursaMinor=[
+    [0.78,0.22], // Полярная
+    [0.74,0.32],[0.70,0.42],[0.68,0.52], // ручка
+    [0.62,0.58],[0.72,0.62],[0.80,0.56]  // ковш
+  ];
+  // связи для линий (индексы внутри своей группы)
+  var majLinks=[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,2]];
+  var minLinks=[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,3]];
+  var scale=Math.min(W,H);
+  var ox=W*0.08, oy=H*0.22;
+  var bw=W*0.84, bh=H*0.48;
+  function place(pts, links, list, group){
+    var placed=[];
+    pts.forEach(function(p,i){
+      var g=list[i]||null;
+      var x=ox+p[0]*bw, y=oy+p[1]*bh;
+      var hue=g?(g.type==='debt'?8:(g.urgent?38:205)):210;
+      var st={
+        id:g?g.id:('empty_'+group+'_'+i), g:g, x:x, y:y,
+        baseR:g?(g.type==='debt'?3.4:(4.2+Math.min(5,(g.pct||0)/28))):2.6,
+        hue:hue, pulse:i*0.7, bright:g?(0.6+(g.pct||0)/220):0.35,
+        group:group, idx:i
+      };
+      stars.push(st);
+      placed.push(st);
+    });
+    // store links as pairs of star refs later via indices
+    placed._links=links;
+    return placed;
+  }
+  var majGoals=goals.slice(0,7);
+  var minGoals=goals.slice(7,14);
+  var maj=place(ursaMajor, majLinks, majGoals, 'maj');
+  var min=place(ursaMinor, minLinks, minGoals, 'min');
+  // link metadata for drawSpace
+  window.__matterLinks=[];
+  majLinks.forEach(function(lk){ window.__matterLinks.push([maj[lk[0]], maj[lk[1]]]); });
+  minLinks.forEach(function(lk){ window.__matterLinks.push([min[lk[0]], min[lk[1]]]); });
+  // leftover goals — soft arc near major
+  goals.slice(14).forEach(function(g,i){
+    var ang=(-0.4)+(i*0.35);
+    var x=ox+bw*0.5+Math.cos(ang)*bw*0.22;
+    var y=oy+bh*0.85+Math.sin(ang)*bh*0.12;
     stars.push({
-      id:g.id,g:g,x:x,y:y,baseR:g.type==='debt'?3.2:(4+g.pct/40),
-      hue:hue,pulse:Math.random()*Math.PI*2,bright:0.55+g.pct/250
+      id:g.id,g:g,x:x,y:y,baseR:3.5+Math.min(4,(g.pct||0)/40),
+      hue:g.type==='debt'?8:(g.urgent?38:200),pulse:i,bright:0.55+(g.pct||0)/250
     });
   });
-  for(var i=0;i<70;i++){
+  for(var i=0;i<90;i++){
     stars.push({
       id:'bg'+i,g:null,
       x:Math.random()*W,y:Math.random()*H,
-      baseR:0.35+Math.random()*1.3,
-      hue:210+Math.random()*40,pulse:Math.random()*6,bright:0.18+Math.random()*0.45,
+      baseR:0.3+Math.random()*1.2,
+      hue:210+Math.random()*40,pulse:Math.random()*6,bright:0.12+Math.random()*0.35,
       bg:true
     });
   }
@@ -373,168 +427,118 @@ function buildStars(){
 function resetFinn(){
   finn={
     state:'star', // star | fall | morph | idle | toDoor | enter | room
-    x:W*0.5, y:H*0.18,
-    tx:W*0.5, ty:H*0.18,
+    x:W*0.5, y:H*0.16,
+    tx:W*0.5, ty:H*0.16,
     scale:1, alpha:1,
     trail:[], sparks:[],
     faceT:0, blink:0,
     inRoom:false,
-    size:52
+    size:58
   };
 }
 
 function drawFinnFace(c, cx, cy, size, t){
-  // Pink coin-body matching finn-char.js + flame/glow aura (no rings)
+  // Горящая звезда/солнце вблизи: плазма, корона, лицо читается
   var s=size;
   c.save();
   c.translate(cx,cy);
+  var pulse=0.92+0.08*Math.sin(t*3.1);
 
-  // outer soft glow / "burning"
-  var g0=c.createRadialGradient(0,0,s*0.2,0,0,s*1.55);
-  g0.addColorStop(0,'rgba(232,120,249,0.35)');
-  g0.addColorStop(0.4,'rgba(168,85,247,0.18)');
-  g0.addColorStop(1,'rgba(80,40,120,0)');
+  // дальняя корона
+  var g0=c.createRadialGradient(0,0,s*0.15,0,0,s*2.1);
+  g0.addColorStop(0,'rgba(255,255,240,0.85)');
+  g0.addColorStop(0.2,'rgba(255,210,120,0.55)');
+  g0.addColorStop(0.45,'rgba(255,120,60,0.28)');
+  g0.addColorStop(0.75,'rgba(255,60,100,0.1)');
+  g0.addColorStop(1,'rgba(80,20,40,0)');
   c.fillStyle=g0;
-  c.beginPath();c.arc(0,0,s*1.55,0,Math.PI*2);c.fill();
+  c.beginPath();c.arc(0,0,s*2.1*pulse,0,Math.PI*2);c.fill();
 
-  // warm flame fringe
-  var g1=c.createRadialGradient(0,-s*0.15,s*0.15,0,0,s*1.15);
-  g1.addColorStop(0,'rgba(253,230,138,0.22)');
-  g1.addColorStop(0.45,'rgba(244,114,182,0.16)');
-  g1.addColorStop(1,'rgba(168,85,247,0)');
-  c.fillStyle=g1;
-  c.beginPath();c.arc(0,0,s*1.15,0,Math.PI*2);c.fill();
+  // языки пламени (статичные по углу, пульс по длине — не «планеты»)
+  for(var i=0;i<12;i++){
+    var ang=(i/12)*Math.PI*2+t*0.15;
+    var len=s*(1.15+0.35*Math.sin(t*4+i)+0.15*pulse);
+    c.save();
+    c.rotate(ang);
+    var fl=c.createLinearGradient(0,0,0,-len);
+    fl.addColorStop(0,'rgba(255,255,220,0.95)');
+    fl.addColorStop(0.35,'rgba(255,180,60,0.65)');
+    fl.addColorStop(0.7,'rgba(255,80,40,0.25)');
+    fl.addColorStop(1,'rgba(255,40,80,0)');
+    c.fillStyle=fl;
+    c.beginPath();
+    c.moveTo(-s*0.12,0);
+    c.quadraticCurveTo(-s*0.04,-len*0.55,0,-len);
+    c.quadraticCurveTo(s*0.04,-len*0.55,s*0.12,0);
+    c.closePath();
+    c.fill();
+    c.restore();
+  }
 
-  // body
-  var body=c.createRadialGradient(-s*0.2,-s*0.25,0,0,0,s*0.95);
-  body.addColorStop(0,'#FFF5FB');
-  body.addColorStop(0.28,'#F9A8D4');
-  body.addColorStop(0.62,'#E879F9');
-  body.addColorStop(1,'#A855F7');
+  // тело — раскалённое ядро
+  var body=c.createRadialGradient(-s*0.15,-s*0.2,0,0,0,s*0.95);
+  body.addColorStop(0,'#FFFFFF');
+  body.addColorStop(0.25,'#FFF3C4');
+  body.addColorStop(0.55,'#FFB020');
+  body.addColorStop(0.82,'#FF6A20');
+  body.addColorStop(1,'#E04060');
   c.fillStyle=body;
   c.beginPath();c.arc(0,0,s*0.92,0,Math.PI*2);c.fill();
 
-  // core dark
-  var core=c.createRadialGradient(0,-s*0.08,0,0,0,s*0.62);
-  core.addColorStop(0,'#1E1030');
-  core.addColorStop(1,'#0C0614');
-  c.fillStyle=core;
-  c.beginPath();c.arc(0,0,s*0.62,0,Math.PI*2);c.fill();
+  // лёгкий розовый ободок (узнаваемость Фины)
+  c.strokeStyle='rgba(255,140,200,0.45)';
+  c.lineWidth=Math.max(1.5,s*0.04);
+  c.beginPath();c.arc(0,0,s*0.94,0,Math.PI*2);c.stroke();
 
-  // shine
-  c.fillStyle='rgba(255,255,255,0.45)';
-  c.beginPath();c.ellipse(-s*0.22,-s*0.28,s*0.28,s*0.14, -0.3,0,Math.PI*2);c.fill();
-
-  // bows
-  c.fillStyle='#F472B6';
-  c.beginPath();c.ellipse(-s*0.55,-s*0.72,s*0.16,s*0.1, -0.5,0,Math.PI*2);c.fill();
-  c.beginPath();c.ellipse(s*0.55,-s*0.72,s*0.16,s*0.1, 0.5,0,Math.PI*2);c.fill();
-  // gem
-  var gem=c.createRadialGradient(0,-s*0.78,0,0,-s*0.78,s*0.12);
-  gem.addColorStop(0,'#FDE68A');gem.addColorStop(1,'#F472B6');
-  c.fillStyle=gem;
-  c.beginPath();c.arc(0,-s*0.78,s*0.1,0,Math.PI*2);c.fill();
-  c.fillStyle='rgba(255,255,255,0.7)';
-  c.beginPath();c.arc(-s*0.03,-s*0.81,s*0.03,0,Math.PI*2);c.fill();
-
-  // cyan eyes
-  var eyeOpen=finn&&finn.blink>0?0.15:1;
-  var ey= s*0.02;
-  [['-0.28','0'],['0.28','0']].forEach(function(pair){
-    var ex=parseFloat(pair[0])*s;
+  // глаза — яркие cyan на раскалённом фоне
+  var eyeOpen=finn&&finn.blink>0?0.12:1;
+  [[-0.28,0.02],[0.28,0.02]].forEach(function(p){
+    var ex=p[0]*s, ey=p[1]*s;
+    c.fillStyle='rgba(20,10,30,0.35)';
+    c.beginPath();c.ellipse(ex,ey,s*0.16,s*0.19*eyeOpen,0,0,Math.PI*2);c.fill();
     c.fillStyle='#67E8F9';
-    c.beginPath();c.ellipse(ex,ey,s*0.14,s*0.17*eyeOpen,0,0,Math.PI*2);c.fill();
+    c.beginPath();c.ellipse(ex,ey,s*0.13,s*0.16*eyeOpen,0,0,Math.PI*2);c.fill();
     if(eyeOpen>0.5){
       c.fillStyle='#fff';
-      c.beginPath();c.arc(ex-s*0.04,ey-s*0.05,s*0.045,0,Math.PI*2);c.fill();
+      c.beginPath();c.arc(ex-s*0.04,ey-s*0.05,s*0.04,0,Math.PI*2);c.fill();
     }
   });
 
-  // mouth smile
-  c.strokeStyle='#F9A8D4';
-  c.lineWidth=Math.max(1.5,s*0.06);
+  // улыбка
+  c.strokeStyle='rgba(80,20,30,0.55)';
+  c.lineWidth=Math.max(1.6,s*0.055);
   c.lineCap='round';
   c.beginPath();
   c.moveTo(-s*0.2,s*0.28);
   c.quadraticCurveTo(0,s*0.42,s*0.2,s*0.28);
   c.stroke();
 
-  // cheek blush
-  c.fillStyle='rgba(244,114,182,0.28)';
-  c.beginPath();c.ellipse(-s*0.38,s*0.18,s*0.1,s*0.06,0,0,Math.PI*2);c.fill();
-  c.beginPath();c.ellipse(s*0.38,s*0.18,s*0.1,s*0.06,0,0,Math.PI*2);c.fill();
+  // блик
+  c.fillStyle='rgba(255,255,255,0.55)';
+  c.beginPath();c.ellipse(-s*0.22,-s*0.28,s*0.22,s*0.12,-0.35,0,Math.PI*2);c.fill();
 
   c.restore();
 }
 
 function drawFinnStar(c, x, y, t){
-  // Настоящая горящая звезда: корона, лучи, вспышки, искры
-  var pulse=0.82+0.18*Math.sin(t*2.6);
-  var flare=0.55+0.45*Math.sin(t*5.1+1.2);
-  var r=9*pulse;
-
-  // дальний ореол
-  var g0=c.createRadialGradient(x,y,0,x,y,r*9);
-  g0.addColorStop(0,'rgba(255,240,200,0.55)');
-  g0.addColorStop(0.15,'rgba(255,180,120,0.28)');
-  g0.addColorStop(0.4,'rgba(232,120,249,0.14)');
-  g0.addColorStop(1,'rgba(80,40,140,0)');
+  // Маленькая ещё не «родившаяся» звезда — только мягкое сияние, без орбит
+  var pulse=0.88+0.12*Math.sin(t*2.4);
+  var r=8*pulse;
+  var g0=c.createRadialGradient(x,y,0,x,y,r*7);
+  g0.addColorStop(0,'rgba(255,250,230,0.9)');
+  g0.addColorStop(0.2,'rgba(255,210,140,0.45)');
+  g0.addColorStop(0.55,'rgba(255,140,180,0.16)');
+  g0.addColorStop(1,'rgba(80,40,120,0)');
   c.fillStyle=g0;
-  c.beginPath();c.arc(x,y,r*9,0,Math.PI*2);c.fill();
-
-  // корона / плазма
-  var g1=c.createRadialGradient(x,y,0,x,y,r*4.2);
-  g1.addColorStop(0,'rgba(255,255,255,0.95)');
-  g1.addColorStop(0.18,'rgba(255,230,160,0.85)');
-  g1.addColorStop(0.45,'rgba(255,140,180,0.45)');
-  g1.addColorStop(0.75,'rgba(180,80,255,0.18)');
-  g1.addColorStop(1,'rgba(80,30,120,0)');
+  c.beginPath();c.arc(x,y,r*7,0,Math.PI*2);c.fill();
+  var g1=c.createRadialGradient(x,y,0,x,y,r*2.2);
+  g1.addColorStop(0,'#fff');
+  g1.addColorStop(0.4,'#FFE8B0');
+  g1.addColorStop(1,'rgba(255,160,120,0.15)');
   c.fillStyle=g1;
-  c.beginPath();c.arc(x,y,r*4.2,0,Math.PI*2);c.fill();
-
-  // лучи (cross + diagonal)
-  c.save();
-  c.translate(x,y);
-  c.rotate(t*0.35);
-  for(var k=0;k<8;k++){
-    c.rotate(Math.PI/4);
-    var len=r*(3.2+flare*1.8+(k%2?0.6:0));
-    var w=r*(0.35+(k%2?0.15:0.08))*flare;
-    var lg=c.createLinearGradient(0,0,0,-len);
-    lg.addColorStop(0,'rgba(255,255,255,0.95)');
-    lg.addColorStop(0.25,'rgba(255,220,160,0.55)');
-    lg.addColorStop(0.7,'rgba(244,114,182,0.18)');
-    lg.addColorStop(1,'rgba(168,85,247,0)');
-    c.fillStyle=lg;
-    c.beginPath();
-    c.moveTo(-w,0);
-    c.lineTo(0,-len);
-    c.lineTo(w,0);
-    c.closePath();
-    c.fill();
-  }
-  c.restore();
-
-  // ядро
+  c.beginPath();c.arc(x,y,r*2.2,0,Math.PI*2);c.fill();
   c.fillStyle='#fff';
   c.beginPath();c.arc(x,y,r*0.55,0,Math.PI*2);c.fill();
-  var core=c.createRadialGradient(x,y,0,x,y,r*1.1);
-  core.addColorStop(0,'#fff');
-  core.addColorStop(0.5,'#FFE8A8');
-  core.addColorStop(1,'rgba(255,160,200,0.4)');
-  c.fillStyle=core;
-  c.beginPath();c.arc(x,y,r*1.05,0,Math.PI*2);c.fill();
-
-  // искры вокруг
-  for(var i=0;i<10;i++){
-    var a=t*1.7+i*0.62;
-    var dist=r*(2.4+1.6*Math.sin(t*3+i));
-    var sx=x+Math.cos(a)*dist;
-    var sy=y+Math.sin(a)*dist*0.85;
-    var sa=0.35+0.55*Math.abs(Math.sin(t*4+i));
-    c.fillStyle='rgba(255,240,200,'+sa+')';
-    c.beginPath();c.arc(sx,sy,1.1+1.4*sa,0,Math.PI*2);c.fill();
-  }
 }
 
 /* ---------- phases ---------- */
@@ -566,8 +570,6 @@ function enterConstellation(){
   finn.x=W*0.5; finn.y=H*0.16;
   var hud=document.getElementById('matterHud');
   if(hud)hud.hidden=false;
-  var hint=document.getElementById('matterHint');
-  if(hint)hint.textContent='Коснись звезды Фины или двери-созвездия';
   if(!MS.firstEnter){MS.firstEnter=new Date().toISOString();saveState();}
   try{history.pushState({matter:'space'},'','#matter');}catch(e){}
 }
@@ -576,8 +578,6 @@ function openDoorAnim(){
   if(!door||door.opening)return;
   door.opening=true;
   playCreak();
-  var hint=document.getElementById('matterHint');
-  if(hint)hint.textContent='Дверь открывается…';
 }
 
 function enterRoom(){
@@ -744,8 +744,60 @@ function onObject(id){
     },30);
     return;
   }
-  if(id==='book'){
-    openReader();
+    if(id==='book'){
+    var books=MS.books||{};
+    var keys=Object.keys(books);
+    var html='<div style="margin-bottom:10px;opacity:.85">Твоя полка. Загрузи FB2 — прогресс сохранится на устройстве.</div>';
+    if(keys.length){
+      keys.forEach(function(k){
+        var b=books[k];
+        var pct=b.pages?Math.round(((MS.pageByBook[k]|0)+1)/b.pages*100):0;
+        html+='<button type="button" class="m-act" data-open-book="'+k+'" style="margin-top:8px;text-align:left">'+(b.title||'Книга')+' · '+pct+'%</button>';
+      });
+    }
+    html+='<button type="button" class="m-act" id="mAddBook" style="margin-top:12px">+ Загрузить FB2</button>';
+    html+='<input type="file" id="mBookFile" accept=".fb2,application/x-fictionbook+xml,text/xml" hidden/>';
+    showPanel('Книги', html);
+    setTimeout(function(){
+      var add=document.getElementById('mAddBook');
+      var file=document.getElementById('mBookFile');
+      if(add&&file){
+        add.onclick=function(){file.click();};
+        file.onchange=function(){
+          var f=file.files&&file.files[0];
+          if(!f)return;
+          var fr=new FileReader();
+          fr.onload=function(){
+            var raw=String(fr.result||'');
+            var id='b_'+Date.now();
+            var title=(f.name||'Книга').replace(/\.fb2$/i,'');
+            var pages=paginate(/<FictionBook|<body/i.test(raw)?parseFb2(raw):raw);
+            MS.books=MS.books||{};
+            MS.books[id]={title:title,raw:raw.slice(0,2e6),pages:pages.length};
+            MS.pageByBook[id]=0;
+            saveState();
+            hidePanel();
+            window.__matterReaderBookId=id;
+            openReader(raw);
+            var rt=document.getElementById('mReaderTitle');
+            if(rt)rt.textContent=title;
+          };
+          fr.readAsText(f);
+        };
+      }
+      root.querySelectorAll('[data-open-book]').forEach(function(btn){
+        btn.onclick=function(){
+          var id=btn.getAttribute('data-open-book');
+          var b=(MS.books||{})[id];
+          if(!b)return;
+          reader.bookId=id;
+          hidePanel();
+          openReader(b.raw||'');
+          var rt=document.getElementById('mReaderTitle');
+          if(rt)rt.textContent=b.title||'Книга';
+        };
+      });
+    },40);
     return;
   }
   if(id==='diary'||id==='desk'){
@@ -844,6 +896,7 @@ function paginate(text){
 }
 
 function openReader(raw){
+  if(window.__matterReaderBookId){reader.bookId=window.__matterReaderBookId;window.__matterReaderBookId=null;}
   var sample=raw||(
     'Тихая полка.\n\n'+
     'Здесь можно читать то, что важно именно тебе. Добавь FB2-файл позже — прогресс сохранится.\n\n'+
@@ -1072,15 +1125,17 @@ function drawSpace(dt,t){
   ctx.fillStyle=ng;ctx.fillRect(0,0,W,H);
   ctx.globalAlpha=1;
 
-  var goals=stars.filter(function(s){return s.g;});
-  ctx.strokeStyle='rgba(140,180,255,0.12)';
-  ctx.lineWidth=1;
-  for(var i=0;i<goals.length-1;i++){
+  // линии созвездий Большой/Малой Медведицы
+  var links=window.__matterLinks||[];
+  ctx.strokeStyle='rgba(160,200,255,0.22)';
+  ctx.lineWidth=1.2;
+  links.forEach(function(pair){
+    if(!pair[0]||!pair[1])return;
     ctx.beginPath();
-    ctx.moveTo(goals[i].x,goals[i].y);
-    ctx.lineTo(goals[i+1].x,goals[i+1].y);
+    ctx.moveTo(pair[0].x,pair[0].y);
+    ctx.lineTo(pair[1].x,pair[1].y);
     ctx.stroke();
-  }
+  });
 
   stars.forEach(function(s){
     var pulse=0.65+0.35*Math.sin(t*1.4+s.pulse);
@@ -1172,6 +1227,41 @@ function drawSpace(dt,t){
   ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
 }
 
+
+function ensureSpaceCloseBtn(){
+  var b=document.getElementById('matterSpaceFinnClose');
+  if(b)return b;
+  if(!root)return null;
+  b=document.createElement('button');
+  b.id='matterSpaceFinnClose';
+  b.type='button';
+  b.className='m-finn-close-space';
+  b.textContent='✕';
+  b.setAttribute('aria-label','Скрыть Фину');
+  b.onclick=function(e){
+    e.preventDefault();e.stopPropagation();
+    if(!finn)return;
+    finn.state='star';
+    finn.x=W*0.5;finn.y=H*0.16;finn.scale=1;finn.alpha=1;
+    b.classList.remove('show');
+    var d=document.getElementById('matterDialog');
+    if(d)d.classList.remove('show');
+  };
+  root.appendChild(b);
+  return b;
+}
+function syncSpaceCloseBtn(){
+  var b=ensureSpaceCloseBtn();
+  if(!b||!finn)return;
+  if(finn.state==='idle'||finn.state==='morph'){
+    b.classList.add('show');
+    b.style.left=(finn.x+finn.size*0.55)+'px';
+    b.style.top=(finn.y-finn.size*0.85)+'px';
+  }else{
+    b.classList.remove('show');
+  }
+}
+
 function updateFinn(dt,t){
   if(!finn)return;
   // blink
@@ -1193,7 +1283,7 @@ function updateFinn(dt,t){
     }
   }else if(finn.state==='morph'){
     finn.scale=Math.min(1.15,finn.scale+dt*2.2);
-    if(finn.scale>=1.12){finn.scale=1;finn.state='idle';}
+    if(finn.scale>=1.12){finn.scale=1;finn.state='idle';finn.tx=W*0.5;finn.ty=H*0.72;finn.x=finn.tx;finn.y=finn.ty;}
   }else if(finn.state==='toDoor'){
     finn.x+=(finn.tx-finn.x)*Math.min(1,dt*2.4);
     finn.y+=(finn.ty-finn.y)*Math.min(1,dt*2.4);
@@ -1209,9 +1299,12 @@ function updateFinn(dt,t){
     finn.scale=Math.max(0.05,finn.scale-dt*2.5);
     finn.alpha=finn.scale;
   }else if(finn.state==='idle'){
-    finn.x+=Math.sin(t*1.1)*0.15;
-    finn.y+=Math.cos(t*0.9)*0.12;
+    // держим внизу экрана, лёгкое дыхание
+    var bx=W*0.5, by=H*0.72;
+    finn.x=bx+Math.sin(t*1.1)*3;
+    finn.y=by+Math.cos(t*0.9)*2;
   }
+  syncSpaceCloseBtn();
 }
 
 function drawRoomFinn(){
