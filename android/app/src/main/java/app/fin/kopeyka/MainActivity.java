@@ -76,7 +76,6 @@ public class MainActivity extends AppCompatActivity {
     private AlertDialog progressDlg;
     private long lastInstallAttemptAt = 0L;
     private boolean installInFlight = false;
-    private boolean matterBackPending = false;
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -91,6 +90,7 @@ public class MainActivity extends AppCompatActivity {
         setupWebView();
         refreshLayout.setOnRefreshListener(() -> webView.reload());
         refreshLayout.setEnabled(false);
+        // Не даём SwipeRefresh перехватывать скролл в модалках/настройках
         refreshLayout.setOnChildScrollUpCallback((parent, child) -> true);
         refreshLayout.setEnabled(false);
         ensureMicPermission();
@@ -198,6 +198,7 @@ public class MainActivity extends AppCompatActivity {
         if (webView != null) {
             webView.onResume();
             long now = System.currentTimeMillis();
+            // не дёргаем проверку обновлений при каждом мгновенном resume (мигание UI)
             boolean cool = (now - lastResumeAt) > 120_000L;
             long prevResume = lastResumeAt;
             lastResumeAt = now;
@@ -205,6 +206,7 @@ public class MainActivity extends AppCompatActivity {
                 checkForUpdate();
                 try { UpdateCheckReceiver.scheduleSoon(this); } catch (Exception ignored) {}
             }
+            // Только если ждали разрешение «неизвестные источники» — один раз
             maybeResumePendingInstall();
         }
     }
@@ -219,6 +221,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     void forceCheckUpdate() {
+        // сброс snooze чтобы проверка была принудительной
         getSharedPreferences(PREFS, MODE_PRIVATE).edit()
                 .putInt(KEY_SKIP_CODE, 0)
                 .putLong(KEY_SKIP_UNTIL, 0L)
@@ -265,8 +268,10 @@ public class MainActivity extends AppCompatActivity {
                 int skipCode = prefs.getInt(KEY_SKIP_CODE, 0);
                 long skipUntil = prefs.getLong(KEY_SKIP_UNTIL, 0L);
                 long nowMs = System.currentTimeMillis();
+                // «Позже» или уже пробовали ЭТУ версию — не долбим. Старый флаг 999999 игнорим.
                 if (skipCode == remoteCode && nowMs < skipUntil) return;
                 if (skipCode == 999999) {
+                    // миграция со сломанного skip: сбрасываем
                     prefs.edit().putInt(KEY_SKIP_CODE, 0).putLong(KEY_SKIP_UNTIL, 0L).apply();
                 }
 
@@ -312,6 +317,7 @@ public class MainActivity extends AppCompatActivity {
         if (install != null) install.setOnClickListener(v -> {
             dlg.dismiss();
             updateDialogShowing.set(false);
+            // на 45 мин не предлагать ЭТУ же versionCode снова (новая версия прилетит)
             getSharedPreferences(PREFS, MODE_PRIVATE).edit()
                     .putInt(KEY_SKIP_CODE, code)
                     .putLong(KEY_SKIP_UNTIL, System.currentTimeMillis() + 45L * 60L * 1000L)
@@ -322,6 +328,7 @@ public class MainActivity extends AppCompatActivity {
         dlg.show();
     }
 
+    /** Прямое скачивание APK с проверкой ZIP-сигнатуры — без битых файлов DownloadManager. */
     private void downloadAndInstall(String apkUrl, String versionName) {
         if (!downloading.compareAndSet(false, true)) return;
         runOnUiThread(() -> {
@@ -356,6 +363,7 @@ public class MainActivity extends AppCompatActivity {
                 if (status != 200) throw new IllegalStateException("HTTP " + status);
 
                 String ctype = String.valueOf(c.getContentType()).toLowerCase();
+                // GitHub иногда отдаёт application/octet-stream — это ок
                 if (ctype.contains("text/html") || ctype.contains("text/plain"))
                     throw new IllegalStateException("Сервер вернул текст вместо APK. Релиз ещё не готов.");
 
@@ -365,17 +373,13 @@ public class MainActivity extends AppCompatActivity {
                     try {
                         if (progressDlg != null) {
                             if (finalLen > 0) {
-                                ProgressBar pb = progressDlg.findViewById(R.id.progBar);
-                                if (pb != null) { pb.setIndeterminate(false); pb.setMax(100); pb.setProgress(0); }
-                                TextView pctV = progressDlg.findViewById(R.id.progPct);
-                                if (pctV != null) pctV.setText("0%");
-                                TextView pm = progressDlg.findViewById(R.id.progMsg);
-                                if (pm != null) pm.setText("Загрузка… 0%");
+                                { ProgressBar pb = progressDlg.findViewById(R.id.progBar); if (pb != null) pb.setIndeterminate(false); }
+                                { ProgressBar pb = progressDlg.findViewById(R.id.progBar); if (pb != null) pb.setMax(100); }
+                                { ProgressBar pb = progressDlg.findViewById(R.id.progBar); if (pb != null) { pb.setIndeterminate(false); pb.setProgress(0); } TextView pctV = progressDlg.findViewById(R.id.progPct); if (pctV != null) pctV.setText(0 + "%"); }
+                                { TextView pm = progressDlg.findViewById(R.id.progMsg); if (pm != null) pm.setText("Загрузка… 0%"); }
                             } else {
-                                ProgressBar pb = progressDlg.findViewById(R.id.progBar);
-                                if (pb != null) pb.setIndeterminate(true);
-                                TextView pm = progressDlg.findViewById(R.id.progMsg);
-                                if (pm != null) pm.setText("Загрузка…");
+                                { ProgressBar pb = progressDlg.findViewById(R.id.progBar); if (pb != null) pb.setIndeterminate(true); }
+                                { TextView pm = progressDlg.findViewById(R.id.progMsg); if (pm != null) pm.setText("Загрузка…"); }
                             }
                         }
                     } catch (Exception ignored) {}
@@ -397,12 +401,8 @@ public class MainActivity extends AppCompatActivity {
                             runOnUiThread(() -> {
                                 try {
                                     if (progressDlg != null && progressDlg.isShowing()) {
-                                        ProgressBar pb = progressDlg.findViewById(R.id.progBar);
-                                        if (pb != null) { pb.setIndeterminate(false); pb.setProgress(p); }
-                                        TextView pctV = progressDlg.findViewById(R.id.progPct);
-                                        if (pctV != null) pctV.setText(p + "%");
-                                        TextView pm = progressDlg.findViewById(R.id.progMsg);
-                                        if (pm != null) pm.setText("Загрузка… " + p + "%");
+                                        { ProgressBar pb = progressDlg.findViewById(R.id.progBar); if (pb != null) { pb.setIndeterminate(false); pb.setProgress(p); } TextView pctV = progressDlg.findViewById(R.id.progPct); if (pctV != null) pctV.setText(p + "%"); }
+                                        { TextView pm = progressDlg.findViewById(R.id.progMsg); if (pm != null) pm.setText("Загрузка… " + p + "%"); }
                                     }
                                 } catch (Exception ignored) {}
                             });
@@ -416,6 +416,7 @@ public class MainActivity extends AppCompatActivity {
                 if (total < 100_000) throw new IllegalStateException("Файл слишком маленький (" + total + " байт) — это не APK");
                 if (contentLen > 0 && total < contentLen * 0.95) throw new IllegalStateException("Скачивание оборвалось");
 
+                // APK = ZIP, магия PK\x03\x04
                 java.io.RandomAccessFile raf = new java.io.RandomAccessFile(apk, "r");
                 byte[] magic = new byte[4];
                 raf.readFully(magic);
@@ -479,6 +480,7 @@ public class MainActivity extends AppCompatActivity {
             }
 
             long now = System.currentTimeMillis();
+            // анти-мигание: не чаще одного запуска установщика в 3 минуты
             if (installInFlight || (now - lastInstallAttemptAt) < 180_000L) {
                 Toast.makeText(this, "Установщик уже запускался. Подтверди установку в системном окне или подожди пару минут.", Toast.LENGTH_LONG).show();
                 return;
@@ -486,16 +488,18 @@ public class MainActivity extends AppCompatActivity {
             installInFlight = true;
             lastInstallAttemptAt = now;
 
+            // Не блокируем будущие версии. Кулдаун установщика — через lastInstallAttemptAt.
             updateDialogShowing.set(false);
             downloading.set(false);
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                     && !getPackageManager().canRequestPackageInstalls()) {
+                // Только в этом случае сохраняем pending — продолжим ПОСЛЕ настроек один раз
                 getSharedPreferences(PREFS, MODE_PRIVATE).edit()
                         .putString(KEY_PENDING_APK, apk.getAbsolutePath())
                         .putBoolean("pending_from_settings", true)
                         .apply();
-                installInFlight = false;
+                installInFlight = false; // разрешим повтор после возврата из настроек
                 try {
                     startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                             Uri.parse("package:" + getPackageName())));
@@ -508,6 +512,7 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
 
+            // Обычный запуск установщика — pending НЕ пишем (иначе onResume зациклится)
             getSharedPreferences(PREFS, MODE_PRIVATE).edit()
                     .remove(KEY_PENDING_APK)
                     .remove("pending_from_settings")
@@ -534,6 +539,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
             } finally {
+                // Через 2с снимаем inFlight, но lastInstallAttemptAt держит кулдаун 3 мин
                 new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> installInFlight = false, 2000);
             }
         } catch (Exception e) {
@@ -567,6 +573,7 @@ public class MainActivity extends AppCompatActivity {
                 }
                 session.fsync(out);
             }
+            // Broadcast, не Activity — иначе MainActivity мигает в цикле
             Intent callback = new Intent(this, UpdateCheckReceiver.class);
             callback.setAction("app.fin.kopeyka.INSTALL_STATUS");
             int flags = PendingIntent.FLAG_UPDATE_CURRENT;
@@ -608,6 +615,7 @@ public class MainActivity extends AppCompatActivity {
         startActivity(install);
     }
 
+    /** Только после возврата из настроек «неизвестные источники» — один раз. */
     private void maybeResumePendingInstall() {
         try {
             SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
@@ -615,6 +623,7 @@ public class MainActivity extends AppCompatActivity {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                     && !getPackageManager().canRequestPackageInstalls()) return;
             String path = prefs.getString(KEY_PENDING_APK, null);
+            // сразу гасим флаги — до вызова install, чтобы onResume не зациклил
             prefs.edit()
                     .remove(KEY_PENDING_APK)
                     .remove("pending_from_settings")
@@ -622,6 +631,7 @@ public class MainActivity extends AppCompatActivity {
             if (path == null || path.isEmpty()) return;
             File apk = new File(path);
             if (!apk.exists() || apk.length() < 100_000L) return;
+            // сброс кулдауна только для этого осознанного продолжения
             lastInstallAttemptAt = 0L;
             installInFlight = false;
             installApk(apk);
@@ -630,24 +640,26 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+
+
+
+
     @Override public void onBackPressed() {
-        if (webView == null) {
-            super.onBackPressed();
+        if (webView != null) {
+            // Matter / in-app back first (room → constellation, etc.)
+            webView.evaluateJavascript(
+                "(function(){try{if(window.__matterBack&&window.__matterBack())return true;if(window.FinMatter&&window.FinMatter.back&&window.FinMatter.back())return true;}catch(e){}return false;})()",
+                value -> {
+                    boolean handled = value != null && value.contains("true");
+                    if (!handled) {
+                        if (webView.canGoBack()) webView.goBack();
+                        else MainActivity.super.onBackPressed();
+                    }
+                }
+            );
             return;
         }
-        if (matterBackPending) return;
-        matterBackPending = true;
-        webView.evaluateJavascript(
-                "(function(){try{if(typeof window.__matterBack==='function'&&window.__matterBack())return true;" +
-                "if(window.FinMatter&&window.FinMatter.back&&window.FinMatter.back())return true;}" +
-                "catch(e){}return false;})()",
-                value -> {
-                    matterBackPending = false;
-                    boolean handled = value != null && value.contains("true");
-                    if (handled) return;
-                    if (webView != null && webView.canGoBack()) webView.goBack();
-                    else MainActivity.super.onBackPressed();
-                });
+        super.onBackPressed();
     }
 
     @Override protected void onDestroy() {
