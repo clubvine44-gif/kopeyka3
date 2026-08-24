@@ -172,23 +172,49 @@
 
   function drawStar(t) {
     var x = finn.x, y = finn.y;
-    var flick = 0.9 + 0.1 * Math.sin(t * 5);
-    var r = 9 * flick * finn.scale;
-    drawFlameAura(x, y, r, t, 1.05);
-    octx.beginPath();
-    octx.fillStyle = 'rgba(255,252,245,' + (0.96 * flick) + ')';
-    octx.arc(x, y, r * 0.9, 0, Math.PI * 2);
-    octx.fill();
-    octx.strokeStyle = 'rgba(255,230,160,' + (0.4 * flick) + ')';
-    octx.lineWidth = 1.2;
-    octx.lineCap = 'round';
-    for (var k = 0; k < 6; k++) {
-      var ang = t * 0.5 + k * Math.PI / 3;
-      var len = r * (2.2 + 0.6 * Math.sin(t * 4.2 + k));
+    var flick = 0.88 + 0.12 * Math.sin(t * 5) + 0.05 * Math.sin(t * 11.3);
+    var r = 10 * flick * finn.scale;
+
+    // мощная многослойная корона — настоящая горящая звезда, не значок
+    drawFlameAura(x, y, r * 1.5, t, 1.4);
+    drawFlameAura(x, y, r * 0.85, t * 1.18, 1.0);
+
+    // раскалённое ядро градиентом (не плоский круг)
+    var core = octx.createRadialGradient(x, y, 0, x, y, r * 1.15);
+    core.addColorStop(0, 'rgba(255,255,255,' + (0.98 * flick) + ')');
+    core.addColorStop(0.32, 'rgba(255,246,220,' + (0.96 * flick) + ')');
+    core.addColorStop(0.62, 'rgba(255,200,115,' + (0.62 * flick) + ')');
+    core.addColorStop(1, 'rgba(255,140,40,0)');
+    octx.beginPath(); octx.fillStyle = core;
+    octx.arc(x, y, r * 1.15, 0, Math.PI * 2); octx.fill();
+
+    // толстые светящиеся вспышки-лучи (градиент вдоль луча, не линия)
+    for (var k = 0; k < 8; k++) {
+      var ang = t * 0.32 + k * Math.PI / 4;
+      var len = r * (2.7 + 1.1 * Math.sin(t * 3.6 + k * 1.7));
+      var ex = x + Math.cos(ang) * len, ey = y + Math.sin(ang) * len;
+      var rayGrad = octx.createLinearGradient(x, y, ex, ey);
+      rayGrad.addColorStop(0, 'rgba(255,246,220,' + (0.6 * flick) + ')');
+      rayGrad.addColorStop(0.4, 'rgba(255,190,95,' + (0.3 * flick) + ')');
+      rayGrad.addColorStop(1, 'rgba(255,120,30,0)');
+      octx.strokeStyle = rayGrad;
+      octx.lineWidth = r * 0.24 * (0.6 + 0.4 * Math.sin(t * 4 + k));
+      octx.lineCap = 'round';
       octx.beginPath();
-      octx.moveTo(x + Math.cos(ang) * r * 1.05, y + Math.sin(ang) * r * 1.05);
-      octx.lineTo(x + Math.cos(ang) * len, y + Math.sin(ang) * len);
+      octx.moveTo(x + Math.cos(ang) * r * 0.85, y + Math.sin(ang) * r * 0.85);
+      octx.lineTo(ex, ey);
       octx.stroke();
+    }
+
+    // мерцающие искры короны
+    for (var s = 0; s < 4; s++) {
+      var sa = t * 0.75 + s * 1.9;
+      var sr = r * (2.1 + 0.5 * Math.sin(t * 2.1 + s));
+      var sx = x + Math.cos(sa) * sr, sy = y + Math.sin(sa) * sr;
+      octx.beginPath();
+      octx.fillStyle = 'rgba(255,232,175,' + (0.45 + 0.35 * Math.sin(t * 6 + s)) + ')';
+      octx.arc(sx, sy, 1.3, 0, Math.PI * 2);
+      octx.fill();
     }
   }
 

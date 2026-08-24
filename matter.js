@@ -292,6 +292,8 @@ function injectCSS(){
   'font-family:Georgia,"Times New Roman",serif;white-space:pre-wrap;user-select:none;'+
   '-webkit-user-select:none;touch-action:pan-y}'+
 '.m-reader-foot{text-align:center;padding:8px;font-size:12px;color:rgba(200,190,170,.6)}'+
+/* HTML hidden must beat display:flex — иначе при входе виден пустой «Книга» */
+'.m-reader[hidden],.m-panel[hidden],.m-hud[hidden],.m-room[hidden],.m-room-finn[hidden]{display:none!important}'+
 'body.matter-lock{overflow:hidden!important}';
   document.head.appendChild(s);
 }
@@ -511,7 +513,7 @@ function enterRoom(){
   roomOpen=true;
   MS.visitedRoom=true;saveState();
   var room=document.getElementById('matterRoom');
-  if(room)room.hidden=false;
+  if(room){room.hidden=false;room.style.display='';}
   var hud=document.getElementById('matterHud');
   if(hud)hud.hidden=true;
   startAmbient();
@@ -628,11 +630,11 @@ function showPanel(title, html){
   var p=document.getElementById('matterPanel');
   document.getElementById('mPanelTitle').textContent=title;
   document.getElementById('mPanelBody').innerHTML=html;
-  if(p)p.hidden=false;
+  if(p){p.hidden=false;p.style.display='';}
 }
 function hidePanel(){
   var p=document.getElementById('matterPanel');
-  if(p)p.hidden=true;
+  if(p){p.hidden=true;p.style.display='none';}
 }
 
 function onObject(id){
@@ -784,7 +786,7 @@ function openReader(raw){
   reader.idx=MS.pageByBook[reader.bookId]|0;
   if(reader.idx>=reader.pages.length)reader.idx=0;
   var r=document.getElementById('matterReader');
-  if(r)r.hidden=false;
+  if(r){r.hidden=false;r.style.display='';}
   renderPage();
 }
 
@@ -800,7 +802,7 @@ function renderPage(){
 
 function closeReader(){
   var r=document.getElementById('matterReader');
-  if(r)r.hidden=true;
+  if(r){r.hidden=true;r.style.display='none';}
 }
 
 function setupReaderSwipe(){
@@ -1119,9 +1121,10 @@ function enterMatter(){
   resize();
   hidePanel();
   closeReader();
-  var room=document.getElementById('matterRoom');if(room)room.hidden=true;
-  var hud=document.getElementById('matterHud');if(hud)hud.hidden=true;
-  var rf=document.getElementById('matterRoomFinn');if(rf)rf.hidden=true;
+  var room=document.getElementById('matterRoom');if(room){room.hidden=true;room.style.display='none';}
+  var hud=document.getElementById('matterHud');if(hud){hud.hidden=true;}
+  var rf=document.getElementById('matterRoomFinn');if(rf){rf.hidden=true;}
+  var panel=document.getElementById('matterPanel');if(panel){panel.hidden=true;panel.style.display='none';}
   stopAmbient();
   startEnter();
 }

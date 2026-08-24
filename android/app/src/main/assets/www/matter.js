@@ -9,6 +9,7 @@ var W=0,H=0,dpr=1, lastT=0, ambient=null, roomOpen=false;
 var MS=loadState();
 var finn=null; // canvas Finn state
 var roomAudio=null;
+var unlockedRoomAudio=null;
 var listenOnce=false;
 var rec=null;
 
@@ -83,8 +84,19 @@ function playCreak(){
 }
 function startAmbient(){
   stopAmbient();
-  // Prefer room MP3
+  // Используем заранее «разблокированный» на клике элемент, если он есть —
+  // иначе .play() после setTimeout будет заблокирован политикой автозапуска.
   try{
+    if(unlockedRoomAudio){
+      roomAudio=unlockedRoomAudio;
+      roomAudio.loop=true;
+      roomAudio.volume=0.28;
+      roomAudio.currentTime=0;
+      var p2=roomAudio.play();
+      if(p2&&p2.catch)p2.catch(function(){ startSynthAmbient(); });
+      ambient={type:'mp3'};
+      return;
+    }
     roomAudio=new Audio('matter-room.mp3');
     roomAudio.loop=true;
     roomAudio.volume=0.28;
@@ -280,6 +292,8 @@ function injectCSS(){
   'font-family:Georgia,"Times New Roman",serif;white-space:pre-wrap;user-select:none;'+
   '-webkit-user-select:none;touch-action:pan-y}'+
 '.m-reader-foot{text-align:center;padding:8px;font-size:12px;color:rgba(200,190,170,.6)}'+
+/* HTML hidden must beat display:flex — иначе при входе виден пустой «Книга» */
+'.m-reader[hidden],.m-panel[hidden],.m-hud[hidden],.m-room[hidden],.m-room-finn[hidden]{display:none!important}'+
 'body.matter-lock{overflow:hidden!important}';
   document.head.appendChild(s);
 }
@@ -499,7 +513,7 @@ function enterRoom(){
   roomOpen=true;
   MS.visitedRoom=true;saveState();
   var room=document.getElementById('matterRoom');
-  if(room)room.hidden=false;
+  if(room){room.hidden=false;room.style.display='';}
   var hud=document.getElementById('matterHud');
   if(hud)hud.hidden=true;
   startAmbient();
@@ -616,11 +630,11 @@ function showPanel(title, html){
   var p=document.getElementById('matterPanel');
   document.getElementById('mPanelTitle').textContent=title;
   document.getElementById('mPanelBody').innerHTML=html;
-  if(p)p.hidden=false;
+  if(p){p.hidden=false;p.style.display='';}
 }
 function hidePanel(){
   var p=document.getElementById('matterPanel');
-  if(p)p.hidden=true;
+  if(p){p.hidden=true;p.style.display='none';}
 }
 
 function onObject(id){
@@ -772,7 +786,7 @@ function openReader(raw){
   reader.idx=MS.pageByBook[reader.bookId]|0;
   if(reader.idx>=reader.pages.length)reader.idx=0;
   var r=document.getElementById('matterReader');
-  if(r)r.hidden=false;
+  if(r){r.hidden=false;r.style.display='';}
   renderPage();
 }
 
@@ -788,7 +802,7 @@ function renderPage(){
 
 function closeReader(){
   var r=document.getElementById('matterReader');
-  if(r)r.hidden=true;
+  if(r){r.hidden=true;r.style.display='none';}
 }
 
 function setupReaderSwipe(){
@@ -1083,6 +1097,19 @@ function drawRoomFinn(){
 /* ---------- public API ---------- */
 function enterMatter(){
   ensureRoot();
+  // разблокировка аудио — обязательно синхронно в обработчике клика,
+  // иначе .play() внутри setTimeout при входе в комнату будет заблокирован
+  try{
+    if(!unlockedRoomAudio){
+      unlockedRoomAudio=new Audio('matter-room.mp3');
+      unlockedRoomAudio.loop=true;
+      unlockedRoomAudio.volume=0;
+      var up=unlockedRoomAudio.play();
+      if(up&&up.then)up.then(function(){
+        try{unlockedRoomAudio.pause();unlockedRoomAudio.currentTime=0;unlockedRoomAudio.volume=0.28;}catch(e){}
+      }).catch(function(){ unlockedRoomAudio=null; });
+    }
+  }catch(e){unlockedRoomAudio=null;}
   root.classList.add('on');
   root.setAttribute('aria-hidden','false');
   document.body.classList.add('matter-lock');
@@ -1094,9 +1121,10 @@ function enterMatter(){
   resize();
   hidePanel();
   closeReader();
-  var room=document.getElementById('matterRoom');if(room)room.hidden=true;
-  var hud=document.getElementById('matterHud');if(hud)hud.hidden=true;
-  var rf=document.getElementById('matterRoomFinn');if(rf)rf.hidden=true;
+  var room=document.getElementById('matterRoom');if(room){room.hidden=true;room.style.display='none';}
+  var hud=document.getElementById('matterHud');if(hud){hud.hidden=true;}
+  var rf=document.getElementById('matterRoomFinn');if(rf){rf.hidden=true;}
+  var panel=document.getElementById('matterPanel');if(panel){panel.hidden=true;panel.style.display='none';}
   stopAmbient();
   startEnter();
 }
