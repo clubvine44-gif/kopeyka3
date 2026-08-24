@@ -33,6 +33,10 @@ public class UpdateCheckReceiver extends BroadcastReceiver {
 
     @Override
     public void onReceive(Context context, Intent intent) {
+        // колбэк PackageInstaller — не запускаем проверку обновлений
+        if (intent != null && "app.fin.kopeyka.INSTALL_STATUS".equals(intent.getAction())) {
+            return;
+        }
         final PendingResult pr = goAsync();
         new Thread(() -> {
             try {

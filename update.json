@@ -1,6 +1,6 @@
 {
-  "versionCode": 64,
-  "versionName": "3.9.6",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v3.9.6/Fin.apk",
-  "notes": "3.9.6 — обновление Финна (versionCode 64)"
+  "versionCode": 65,
+  "versionName": "3.9.7",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v3.9.7/Fin.apk",
+  "notes": "3.9.7 — исправлен цикл мигания установщика обновлений"
 }

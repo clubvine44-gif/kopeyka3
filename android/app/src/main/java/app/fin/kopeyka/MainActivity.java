@@ -74,6 +74,8 @@ public class MainActivity extends AppCompatActivity {
     private final AtomicBoolean updateCheckRunning = new AtomicBoolean(false);
     private final AtomicBoolean downloading = new AtomicBoolean(false);
     private AlertDialog progressDlg;
+    private long lastInstallAttemptAt = 0L;
+    private boolean installInFlight = false;
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -197,13 +199,14 @@ public class MainActivity extends AppCompatActivity {
             webView.onResume();
             long now = System.currentTimeMillis();
             // не дёргаем проверку обновлений при каждом мгновенном resume (мигание UI)
-            boolean cool = (now - lastResumeAt) > 60_000L;
+            boolean cool = (now - lastResumeAt) > 120_000L;
+            long prevResume = lastResumeAt;
             lastResumeAt = now;
-            if (cool) {
+            if (cool && prevResume > 0L) {
                 checkForUpdate();
                 try { UpdateCheckReceiver.scheduleSoon(this); } catch (Exception ignored) {}
             }
-            // продолжить установку APK после выдачи разрешения «неизвестные источники»
+            // Только если ждали разрешение «неизвестные источники» — один раз
             maybeResumePendingInstall();
         }
     }
@@ -264,7 +267,9 @@ public class MainActivity extends AppCompatActivity {
                 SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
                 int skipCode = prefs.getInt(KEY_SKIP_CODE, 0);
                 long skipUntil = prefs.getLong(KEY_SKIP_UNTIL, 0L);
-                if (skipCode == remoteCode && System.currentTimeMillis() < skipUntil) return;
+                long nowMs = System.currentTimeMillis();
+                // 999999 = пользователь уже запускал установщик — молчим до skipUntil
+                if (nowMs < skipUntil && (skipCode == remoteCode || skipCode == 999999)) return;
 
                 runOnUiThread(() -> showUpdateDialog(remoteCode, remoteName, apkUrl, notes));
             } catch (Exception e) {
@@ -465,57 +470,75 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
 
-            // Не спамим диалогом обновления сразу после попытки
+            long now = System.currentTimeMillis();
+            // анти-мигание: не чаще одного запуска установщика в 3 минуты
+            if (installInFlight || (now - lastInstallAttemptAt) < 180_000L) {
+                Toast.makeText(this, "Установщик уже запускался. Подтверди установку в системном окне или подожди пару минут.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            installInFlight = true;
+            lastInstallAttemptAt = now;
+
+            // Скрываем диалог обновления на 24ч для текущей remote-версии (чтобы не долбило)
             getSharedPreferences(PREFS, MODE_PRIVATE).edit()
                     .putInt(KEY_SKIP_CODE, 999999)
-                    .putLong(KEY_SKIP_UNTIL, System.currentTimeMillis() + 30L * 60L * 1000L)
-                    .putString(KEY_PENDING_APK, apk.getAbsolutePath())
+                    .putLong(KEY_SKIP_UNTIL, now + 24L * 60L * 60L * 1000L)
                     .apply();
+            updateDialogShowing.set(false);
+            downloading.set(false);
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                     && !getPackageManager().canRequestPackageInstalls()) {
+                // Только в этом случае сохраняем pending — продолжим ПОСЛЕ настроек один раз
+                getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                        .putString(KEY_PENDING_APK, apk.getAbsolutePath())
+                        .putBoolean("pending_from_settings", true)
+                        .apply();
+                installInFlight = false; // разрешим повтор после возврата из настроек
                 try {
                     startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                             Uri.parse("package:" + getPackageName())));
                     Toast.makeText(this,
-                            "Разреши установку из этого источника, вернись в приложение — установка продолжится.",
+                            "Разреши установку из этого источника и вернись в Финну.",
                             Toast.LENGTH_LONG).show();
                 } catch (Exception e) {
-                    Toast.makeText(this, "Открой настройки и разреши установку неизвестных приложений для Финны.", Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, "Разреши установку неизвестных приложений в настройках.", Toast.LENGTH_LONG).show();
                 }
                 return;
             }
 
-            // 1) Современный путь — PackageInstaller (надёжнее на Android 10+)
+            // Обычный запуск установщика — pending НЕ пишем (иначе onResume зациклится)
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                    .remove(KEY_PENDING_APK)
+                    .remove("pending_from_settings")
+                    .apply();
+
             try {
                 installWithPackageInstaller(apk);
-                Toast.makeText(this, "Открываю установщик… подтверди установку.", Toast.LENGTH_SHORT).show();
-                return;
+                Toast.makeText(this, "Подтверди установку в системном окне.", Toast.LENGTH_SHORT).show();
             } catch (Exception e) {
                 android.util.Log.e("FinUpdate", "PackageInstaller failed: " + e.getMessage(), e);
-            }
-
-            // 2) Fallback — ACTION_VIEW через FileProvider
-            try {
-                installWithViewIntent(apk);
-                Toast.makeText(this, "В установщике нажми «Установить».", Toast.LENGTH_LONG).show();
-                return;
-            } catch (Exception e) {
-                android.util.Log.e("FinUpdate", "VIEW install failed: " + e.getMessage(), e);
-            }
-
-            // 3) Последний шанс — страница релизов
-            try {
-                Intent openReleases = new Intent(Intent.ACTION_VIEW, Uri.parse(RELEASES_PAGE_URL));
-                openReleases.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(openReleases);
-                Toast.makeText(this,
-                        "Не удалось открыть установщик. Скачай APK вручную со страницы релиза.",
-                        Toast.LENGTH_LONG).show();
-            } catch (Exception e2) {
-                Toast.makeText(this, "Не удалось запустить установщик. Скачай APK: " + RELEASES_PAGE_URL, Toast.LENGTH_LONG).show();
+                try {
+                    installWithViewIntent(apk);
+                    Toast.makeText(this, "В установщике нажми «Установить».", Toast.LENGTH_LONG).show();
+                } catch (Exception e2) {
+                    android.util.Log.e("FinUpdate", "VIEW install failed: " + e2.getMessage(), e2);
+                    installInFlight = false;
+                    try {
+                        Intent openReleases = new Intent(Intent.ACTION_VIEW, Uri.parse(RELEASES_PAGE_URL));
+                        openReleases.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(openReleases);
+                        Toast.makeText(this, "Скачай APK вручную со страницы релиза.", Toast.LENGTH_LONG).show();
+                    } catch (Exception e3) {
+                        Toast.makeText(this, "Не удалось запустить установщик.", Toast.LENGTH_LONG).show();
+                    }
+                }
+            } finally {
+                // Через 2с снимаем inFlight, но lastInstallAttemptAt держит кулдаун 3 мин
+                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> installInFlight = false, 2000);
             }
         } catch (Exception e) {
+            installInFlight = false;
             android.util.Log.e("FinUpdate", "installApk: " + e.getMessage(), e);
             Toast.makeText(this, "Не удалось запустить установщик: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
@@ -545,14 +568,13 @@ public class MainActivity extends AppCompatActivity {
                 }
                 session.fsync(out);
             }
-            Intent callback = new Intent(this, MainActivity.class);
+            // Broadcast, не Activity — иначе MainActivity мигает в цикле
+            Intent callback = new Intent(this, UpdateCheckReceiver.class);
             callback.setAction("app.fin.kopeyka.INSTALL_STATUS");
-            callback.putExtra("android.content.pm.extra.SESSION_ID", sessionId);
             int flags = PendingIntent.FLAG_UPDATE_CURRENT;
-            // PackageInstaller status extras требуют mutable на части API
             if (Build.VERSION.SDK_INT >= 31) flags |= PendingIntent.FLAG_MUTABLE;
             else if (Build.VERSION.SDK_INT >= 23) flags |= PendingIntent.FLAG_IMMUTABLE;
-            PendingIntent pi = PendingIntent.getActivity(this, sessionId, callback, flags);
+            PendingIntent pi = PendingIntent.getBroadcast(this, sessionId, callback, flags);
             session.commit(pi.getIntentSender());
         } finally {
             try { session.close(); } catch (Exception ignored) {}
@@ -566,9 +588,7 @@ public class MainActivity extends AppCompatActivity {
         install.setDataAndType(apkUri, "application/vnd.android.package-archive");
         install.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        // На части прошивок без ClipData URI-permission не доходит до установщика
         install.setClipData(android.content.ClipData.newRawUri("apk", apkUri));
-        // Явно выдаём read package installer'ам, если резолвятся
         try {
             java.util.List<android.content.pm.ResolveInfo> res =
                     getPackageManager().queryIntentActivities(install, PackageManager.MATCH_DEFAULT_ONLY);
@@ -577,12 +597,10 @@ public class MainActivity extends AppCompatActivity {
             }
         } catch (Exception ignored) {}
         if (install.resolveActivity(getPackageManager()) == null) {
-            // альтернативное действие
             Intent alt = new Intent(Intent.ACTION_INSTALL_PACKAGE);
             alt.setData(apkUri);
             alt.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
             alt.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
-            alt.putExtra(Intent.EXTRA_RETURN_RESULT, true);
             if (alt.resolveActivity(getPackageManager()) != null) {
                 startActivity(alt);
                 return;
@@ -592,25 +610,32 @@ public class MainActivity extends AppCompatActivity {
         startActivity(install);
     }
 
-    /** Продолжить установку после возврата из настроек «неизвестные источники». */
+    /** Только после возврата из настроек «неизвестные источники» — один раз. */
     private void maybeResumePendingInstall() {
         try {
+            SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+            if (!prefs.getBoolean("pending_from_settings", false)) return;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                     && !getPackageManager().canRequestPackageInstalls()) return;
-            String path = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_PENDING_APK, null);
+            String path = prefs.getString(KEY_PENDING_APK, null);
+            // сразу гасим флаги — до вызова install, чтобы onResume не зациклил
+            prefs.edit()
+                    .remove(KEY_PENDING_APK)
+                    .remove("pending_from_settings")
+                    .apply();
             if (path == null || path.isEmpty()) return;
             File apk = new File(path);
-            if (!apk.exists() || apk.length() < 100_000L) {
-                getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove(KEY_PENDING_APK).apply();
-                return;
-            }
-            // один раз
-            getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove(KEY_PENDING_APK).apply();
+            if (!apk.exists() || apk.length() < 100_000L) return;
+            // сброс кулдауна только для этого осознанного продолжения
+            lastInstallAttemptAt = 0L;
+            installInFlight = false;
             installApk(apk);
         } catch (Exception e) {
             android.util.Log.e("FinUpdate", "resume install: " + e.getMessage(), e);
         }
     }
+
+
 
 
 
