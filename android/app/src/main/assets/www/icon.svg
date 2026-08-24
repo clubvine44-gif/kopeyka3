@@ -1,11 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="128" y2="128"><stop offset="0%" stop-color="#1A1C24"/><stop offset="100%" stop-color="#0C0D12"/></linearGradient>
-    <linearGradient id="coin" x1="20" y1="16" x2="108" y2="112"><stop offset="0%" stop-color="#F5D49A"/><stop offset="45%" stop-color="#E5A75E"/><stop offset="100%" stop-color="#B86B2E"/></linearGradient>
-  </defs>
-  <rect width="128" height="128" rx="28" fill="url(#bg)"/>
-  <circle cx="64" cy="64" r="42" fill="url(#coin)"/>
-  <circle cx="64" cy="64" r="36" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="1.5"/>
-  <circle cx="64" cy="64" r="30" fill="#1A1208"/>
-  <path d="M52 44h22c1.2 0 2 .8 2 2v3.2c0 1.1-.9 2-2 2H58.5v7.2H71c1.1 0 2 .9 2 2V63c0 1.1-.9 2-2 2H58.5V82c0 1.2-.9 2.1-2.1 2.1H53c-1.2 0-2.1-.9-2.1-2.1V46c0-1.1.9-2 2.1-2z" fill="url(#coin)"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
+  <rect width="108" height="108" rx="24" fill="#0A0B0E"/>
+  <circle cx="54" cy="54" r="32" fill="#1A2235"/>
+  <circle cx="54" cy="54" r="28" fill="none" stroke="#E5A75E" stroke-width="2.4"/>
+  <circle cx="54" cy="54" r="22" fill="#E5A75E"/>
+  <circle cx="54" cy="54" r="17" fill="#1A1208"/>
+  <path fill="#F8E0A8" d="M46 44h16a2 2 0 110 4H50v6h10a2 2 0 110 4H50v8a2 2 0 11-4 0V46a2 2 0 012-2z"/>
 </svg>

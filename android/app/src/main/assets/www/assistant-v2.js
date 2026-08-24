@@ -783,8 +783,8 @@ function execute(a){
   if(!a||!a.type)throw Error('Пустое действие');
   var s=clone(),t=a.type,amt=n(a.amount),d,idx,r,o,cat=classify(a.name,a.category||'Прочее');
   s.expenses=s.expenses||[];s.income=s.income||[];s.debts=s.debts||[];s.reserves=s.reserves||[];s.reserveOps=s.reserveOps||[];s.obligations=s.obligations||[];s.obligationPays=s.obligationPays||[];
-  if(t==='add_expense'){if(amt<=0)throw Error('Сумма расхода > 0');var _nid=id();s.expenses.push({id:_nid,amount:amt,category:cat,note:canonicalName(a.name||cat),date:dateOf(a)});s.lastOp={kind:'expense',id:_nid};}
-  else if(t==='add_income'){if(amt<=0)throw Error('Сумма дохода > 0');var _iid=id();s.income.push({id:_iid,amount:amt,note:String(a.name||'Доход'),date:dateOf(a)});s.lastOp={kind:'income',id:_iid};}
+  if(t==='add_expense'){if(amt<=0)throw Error('Сумма расхода > 0');var _nid=id();s.expenses.push({id:_nid,amount:amt,category:cat,note:canonicalName(a.name||cat),date:dateOf(a),createdAt:Date.now()});s.lastOp={kind:'expense',id:_nid};}
+  else if(t==='add_income'){if(amt<=0)throw Error('Сумма дохода > 0');var _iid=id();s.income.push({id:_iid,amount:amt,note:String(a.name||'Доход'),date:dateOf(a),createdAt:Date.now()});s.lastOp={kind:'income',id:_iid};}
   else if(t==='add_debt'){if(amt<=0)throw Error('Сумма долга > 0');var _did=id();s.debts.push({id:_did,name:String(a.name||'Долг'),total:amt,paid:0});s.lastOp={kind:'debt',id:_did};}
   else if(t==='pay_debt'||t==='increase_debt'){
     d=find(s.debts,a.name,0);if(!d)throw Error('Долг не найден: '+(a.name||''));if(amt<=0)throw Error('Сумма > 0');
