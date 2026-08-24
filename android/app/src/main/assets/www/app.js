@@ -50,7 +50,7 @@ function norm(raw){
   if(!o.settings.month)o.settings.month=today().slice(0,7);
   o.income=(o.income||[]).filter(function(x){return x&&x.id;}).map(function(x){return Object.assign({},x,{amount:sane(x.amount)});});
   o.expenses=(o.expenses||[]).filter(function(x){return x&&x.id;}).map(function(x){return Object.assign({},x,{amount:sane(x.amount)});});
-  o.reserves=(o.reserves||[]).filter(function(x){return x&&x.id;}).map(function(x){return Object.assign({},x,{name:String(x.name||'Резерв'),category:String(x.category||x.name||'Свой вариант'),saved:sane(x.saved),target:sane(x.target)});});
+  o.reserves=(o.reserves||[]).filter(function(x){return x&&x.id;}).map(function(x){var u=!!x.urgent;var ud=x.urgentDate&&/^\d{4}-\d{2}-\d{2}$/.test(String(x.urgentDate))?String(x.urgentDate):'';return Object.assign({},x,{name:String(x.name||'Резерв'),category:String(x.category||x.name||'Свой вариант'),saved:sane(x.saved),target:sane(x.target),urgent:u,urgentDate:ud});});
   o.debts=(o.debts||[]).filter(function(x){return x&&x.id;}).map(function(x){return Object.assign({},x,{name:String(x.name||'Долг'),total:sane(x.total),paid:sane(x.paid)});});
   o.reserveOps=(o.reserveOps||[]).filter(function(x){return x&&x.id;}).map(function(x){return Object.assign({},x,{amount:sane(x.amount),type:x.type==='withdraw'?'withdraw':'deposit'});});
   o.obligations=(o.obligations||[]).filter(function(x){return x&&x.id;}).map(function(x){var day=num(x.day);if(day<1)day=1;if(day>31)day=31;return Object.assign({},x,{name:String(x.name||'Платёж'),amount:sane(x.amount),day:day,active:x.active!==false});});
@@ -212,20 +212,20 @@ function setUserName(name){
 window.getUserName=getUserName;window.setUserName=setUserName;
 function showNameIntro(force){
   try{
+    var DISMISS='finna_name_intro_dismissed';
     if(!force&&getUserName())return;
-    var KEY='finna_name_intro_shown_v399';
-    // После обновления 3.9.9 — один обязательный показ, если имени ещё нет
-    if(!force&&!getUserName()){
-      /* всегда показываем пока имени нет */
+    if(!force){
+      try{if(localStorage.getItem(DISMISS)==='1')return;}catch(e){}
     }
     if(document.getElementById('nameIntroDlg'))return;
     var html='<div class="modal-card name-intro" id="nameIntroDlg">'+
       '<div class="ni-face">'+(window.FinnChar?window.FinnChar.svgMarkup('niFinn','C'):'💬')+'</div>'+
       '<div class="modal-title">Давай знакомиться</div>'+
-      '<p class="ni-text">Я Финна. Как тебя зовут? Запомню имя и буду обращаться по нему.</p>'+
+      '<p class="ni-text">Я Финна. Как тебя зовут? Запомню имя и буду обращаться по нему. Можно пропустить.</p>'+
       '<input type="text" id="niName" class="ni-input" placeholder="Твоё имя" maxlength="40" autocomplete="name" />'+
+      '<label class="ni-check"><input type="checkbox" id="niDismiss" /> Больше не показывать</label>'+
       '<button type="button" class="btn-primary" id="niSave">Запомнить</button>'+
-      '<button type="button" class="btn-ghost" id="niSkip">Позже</button>'+
+      '<button type="button" class="btn-ghost" id="niSkip">Пропустить</button>'+
       '</div>';
     openModal(html,function(){
       var bg=document.getElementById('modalBg');
@@ -233,17 +233,28 @@ function showNameIntro(force){
       var inp=document.getElementById('niName');
       var saveBtn=document.getElementById('niSave');
       var skipBtn=document.getElementById('niSkip');
+      var chk=document.getElementById('niDismiss');
       if(inp){try{inp.focus();}catch(e){}}
+      function applyDismiss(){
+        try{
+          if(chk&&chk.checked)localStorage.setItem(DISMISS,'1');
+        }catch(e){}
+      }
       function done(name){
-        if(name){setUserName(name);toast('Приятно познакомиться, '+name+'!');}
-        try{localStorage.setItem(KEY,'1');}catch(e){}
+        if(name){
+          setUserName(name);
+          try{localStorage.removeItem(DISMISS);}catch(e){}
+          toast('Приятно познакомиться, '+name+'!');
+        }else{
+          applyDismiss();
+        }
         if(bg)bg.classList.remove('full');
         closeModal();
         try{render();}catch(e){}
       }
       if(saveBtn)saveBtn.onclick=function(){
         var v=inp?String(inp.value||'').trim():'';
-        if(!v){toast('Напиши имя');if(inp)inp.focus();return;}
+        if(!v){toast('Напиши имя или нажми «Пропустить»');if(inp)inp.focus();return;}
         done(v);
       };
       if(skipBtn)skipBtn.onclick=function(){done('');};
@@ -282,7 +293,8 @@ function appConfirm(message, title){
 function appPrompt(message, defVal, title, opts){
   return new Promise(function(resolve){
     opts=opts||{};
-    var im=opts.inputmode!=null?opts.inputmode:(opts.text?'text':'numeric');
+    // Единая стандартная клавиатура (буквы+цифры). inputmode только если явно передан.
+    var im=opts.inputmode!=null?opts.inputmode:'';
     var imAttr=im?(' inputmode="'+im+'"'):'';
     var html='<div class="modal-card"><div class="modal-title">'+(title||'Ввод')+'</div><div class="dlg-msg">'+esc(String(message||''))+'</div><div class="dlg-field"><input id="dlgInput" type="text" value="'+esc(String(defVal==null?'':defVal))+'" autocomplete="off"'+imAttr+'></div><div class="dlg-actions"><button type="button" class="btn" id="dlgCancel">Отмена</button><button type="button" class="btn primary" id="dlgOk">ОК</button></div></div>';
     openDialog(html,function(){
@@ -418,9 +430,9 @@ function appForm(title, fields, okLabel){
         }).join('');
         return '<div class="dlg-field" data-fi="'+i+'"><label>'+esc(f.label||'')+'</label><div class="chip-row" id="dlgChips'+i+'">'+chips+'</div><input type="hidden" id="dlgF'+i+'" value="'+esc(f.value||'')+'"></div>';
       }
-      var inputMode=f.inputmode?' inputmode="'+f.inputmode+'"':'';
-      var typ=f.type||'text';
-      return '<div class="dlg-field" data-fi="'+i+'"><label>'+esc(f.label||'')+'</label><input id="dlgF'+i+'" type="'+typ+'" value="'+esc(f.value==null?'':String(f.value))+'" placeholder="'+esc(f.placeholder||'')+'" autocomplete="off"'+inputMode+'></div>';
+      // без inputmode — одна стандартная клавиатура (и буквы, и цифры)
+      var typ=(f.type&&f.type!=='number'&&f.type!=='tel')?f.type:'text';
+      return '<div class="dlg-field" data-fi="'+i+'"><label>'+esc(f.label||'')+'</label><input id="dlgF'+i+'" type="'+typ+'" value="'+esc(f.value==null?'':String(f.value))+'" placeholder="'+esc(f.placeholder||'')+'" autocomplete="off"></div>';
     }).join('');
     var html='<div class="modal-card"><div class="modal-title">'+esc(title||'')+'</div>'+fieldsHtml+'<div class="dlg-actions"><button type="button" class="btn" id="dlgCancel">Отмена</button><button type="button" class="btn primary" id="dlgOk">'+(okLabel||'ОК')+'</button></div></div>';
     openDialog(html,function(){
@@ -1040,7 +1052,7 @@ function showSettings(){
 
 function render(){if(_renderQueued)return;_renderQueued=true;_rafRender=requestAnimationFrame(function(){_renderQueued=false;try{_renderNow();}catch(err){console.error(err);var a=document.getElementById("app");if(a)a.innerHTML="<div class=\"card\"><div class=\"hint\">Не удалось отрисовать экран. Потяни вниз для обновления.</div></div>";}});}
 function _renderNow(){try{updateNotifBadge();}catch(e){}ensureMonth();var t=today(),month=getViewMonth(),isCurrent=(month===t.slice(0,7)),c=compute(),sh=shift(t,STATE.shiftsOverride),sl=SHIFT_LABEL[sh]||'День',app=document.getElementById('app');if(!app)return;var ym=month.split('-').map(Number),first=new Date(ym[0],ym[1]-1,1),sw=(first.getDay()+6)%7,dim=new Date(ym[0],ym[1],0).getDate();var cal='<div class="cal">';['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].forEach(function(d){cal+='<div class="cal-h">'+d+'</div>';});for(var i=0;i<sw;i++)cal+='<div class="cal-d other"></div>';var nextShiftDs=null;for(var nd=0;nd<21;nd++){var ndt=new Date(ym[0],ym[1]-1,Number(t.slice(8))+nd),nds=ndt.getFullYear()+'-'+String(ndt.getMonth()+1).padStart(2,'0')+'-'+String(ndt.getDate()).padStart(2,'0'),ns=shift(nds,STATE.shiftsOverride);if(ns==='day'||ns==='night'){nextShiftDs=nds;break;}}for(var d=1;d<=dim;d++){var ds=month+'-'+String(d).padStart(2,'0'),s=shift(ds,STATE.shiftsOverride),hasObl=STATE.obligations.some(function(ob){return ob.active!==false&&num(ob.day)===d;}),isNext=(ds===nextShiftDs);cal+='<div class="cal-d '+s+(ds===t&&isCurrent?' today':'')+(hasObl?' has-obl':'')+(isNext?' next-shift':'')+'" data-date="'+ds+'">'+(isNext?'<span class="star">✨</span>':'')+d+'<span class="dot"></span></div>';}cal+='</div>';
-var resH=STATE.reserves.length?STATE.reserves.map(function(r){var pct=r.target>0?Math.min(100,Math.round(num(r.saved)/num(r.target)*100)):0;return '<div class="item" data-id="'+r.id+'" data-k="res"><div class="left"><b>'+esc(r.name)+'</b><span class="muted">'+fmt(r.saved)+(r.target?' / '+fmt(r.target)+' · '+pct+'%':'')+'</span></div></div>';}).join(''):'<div class="empty tight">Резервов нет</div>';
+var resH=STATE.reserves.length?STATE.reserves.map(function(r){var pct=r.target>0?Math.min(100,Math.round(num(r.saved)/num(r.target)*100)):0;var urg=(r.urgent&&r.urgentDate)?('<span class="res-urgent">срочный · '+r.urgentDate.slice(8,10)+'.'+r.urgentDate.slice(5,7)+'</span> '):'';return '<div class="item" data-id="'+r.id+'" data-k="res"><div class="left"><b>'+esc(r.name)+'</b> '+urg+'<span class="muted">'+fmt(r.saved)+(r.target?' / '+fmt(r.target)+' · '+pct+'%':'')+'</span></div></div>';}).join(''):'<div class="empty tight">Резервов нет</div>';
 var debH=STATE.debts.length?STATE.debts.map(function(d){var left=Math.max(0,num(d.total)-num(d.paid)),pd=num(d.paid);var sub=pd<=0?(fmt(d.total)+' · не погашено'):('осталось '+fmt(left)+' · погашено '+fmt(pd)+' из '+fmt(d.total));return '<div class="item" data-id="'+d.id+'" data-k="debt"><div class="left"><b>'+esc(d.name)+'</b><span class="muted">'+sub+'</span></div><div class="amt minus">'+fmt(left)+'</div></div>';}).join(''):'<div class="empty tight">Долгов нет</div>';
 var oblH=STATE.obligations.length?STATE.obligations.map(function(ob){var paid=0;STATE.obligationPays.forEach(function(p){if(p.obligId===ob.id&&p.month===month)paid+=num(p.amount);});var left=Math.max(0,num(ob.amount)-paid),isPaid=left<=0;return '<div class="item" data-id="'+ob.id+'" data-k="obl" data-paid="'+(isPaid?'1':'0')+'"><div class="left"><b>'+esc(ob.name)+'</b><span class="muted">'+fmt(ob.amount)+' / мес · '+(isPaid?'✓ оплачено':'до '+ob.day+'-го · '+fmt(left))+'</span></div>'+(isPaid?'<div class="amt plus check-paid">✓</div>':'<div class="amt minus">−'+fmt(left)+'</div>')+'</div>';}).join(''):'<div class="empty tight">Нет платежей</div>';
 var ops=[];STATE.income.forEach(function(i){if(inMonth(i.date,month))ops.push({t:i.date,type:'in',a:i.amount,n:i.note||'Доход',id:i.id,deleted:!!i.deleted,edited:!!i.editedAt});});STATE.expenses.forEach(function(e){if(!inMonth(e.date,month))return;var label=e.category||'Расход';if(e.category==='Долг')label='Долг'+(e.note?(' · '+e.note):'');else if(e.category==='Обязательные'&&e.note)label=e.note;else if(e.note&&e.note!==label)label=label+' · '+e.note;ops.push({t:e.date,type:'ex',a:e.amount,n:label,id:e.id,deleted:!!e.deleted,edited:!!e.editedAt});});(STATE.reserveOps||[]).forEach(function(o){if(!inMonth(o.date,month))return;var rr=(STATE.reserves||[]).find(function(x){return x.id===o.reserveId;});var nm=rr?rr.name:'Резерв';ops.push({t:o.date,type:o.type==='deposit'?'res-':'res+',a:o.amount,n:(o.type==='deposit'?'В резерв «':'Из резерва «')+nm+'»',id:o.id});});ops.sort(function(a,b){return(b.t||'').localeCompare(a.t||'')||String(b.id||'').localeCompare(String(a.id||''));});var opsH=ops.map(function(o){var mark=o.deleted?'<span class="op-mark del">удалено</span>':(o.edited?'<span class="op-mark edit">изменено</span>':'');return '<div class="item'+(o.deleted?' op-deleted':'')+'" data-id="'+o.id+'" data-k="'+o.type+'"><div class="left"><b>'+esc(o.n)+'</b>'+mark+'<span class="muted">'+(o.t||'')+'</span></div><div class="amt '+(o.type==='in'?'plus':'minus')+'">'+(o.type==='in'?'+':'−')+fmt(o.a)+'</div></div>';}).join('')||'<div class="empty tight">Нет операций</div>';
@@ -1204,6 +1216,14 @@ if(c.available <= 0){
 
 // Блок «Обрати внимание»
 var attention = [];
+// срочные резервы (не авто-списание — только напоминание)
+(STATE.reserves||[]).forEach(function(r){
+  if(!r.urgent||!r.urgentDate||r.deleted)return;
+  var left=Math.round((new Date(r.urgentDate+'T12:00:00')-new Date(t+'T12:00:00'))/86400000);
+  var need=Math.max(0,num(r.target)-num(r.saved));
+  if(left<0)attention.push('Срочный резерв «'+r.name+'» просрочен'+(need?(' · ещё '+fmt(need)):'')+'. Пополни из кассы, когда будешь готов.');
+  else if(left<=7)attention.push((left===0?'Сегодня':'Через '+left+' дн.')+' срок резерва «'+r.name+'»'+(need?(' · осталось накопить '+fmt(need)):'')+'. С кассы спишется только при пополнении.');
+});
 if(nearestObl.length && nearestObl[0].overdue){
   attention.push('Платёж «'+nearestObl[0].name+'» просрочен на '+Math.abs(nearestObl[0].daysUntil)+' дн. Осталось '+fmt(nearestObl[0].amount)+'.');
 }else if(nearestObl.length && nearestObl[0].daysUntil <= 3){
@@ -1342,7 +1362,8 @@ homeHtml += '<div class="limit-bar"><div class="limit-fill" style="width:'+resPc
 var topRes = (STATE.reserves||[]).slice().sort(function(a,b){return num(b.saved)-num(a.saved);}).slice(0,2);
 topRes.forEach(function(r){
   var pct=r.target>0?Math.min(100,Math.round(num(r.saved)/num(r.target)*100)):0;
-  homeHtml += '<div class="item" data-id="'+r.id+'" data-k="res"><div class="left"><b>'+esc(r.name)+'</b><span class="muted">'+fmt(r.saved)+(r.target?' / '+fmt(r.target):'')+'</span></div><div class="amt">'+pct+'%</div></div>';
+  var urg=(r.urgent&&r.urgentDate)?('<span class="res-urgent">срочный · '+r.urgentDate.slice(8,10)+'.'+r.urgentDate.slice(5,7)+'</span> '):'';
+  homeHtml += '<div class="item" data-id="'+r.id+'" data-k="res"><div class="left"><b>'+esc(r.name)+'</b> '+urg+'<span class="muted">'+fmt(r.saved)+(r.target?' / '+fmt(r.target):'')+'</span></div><div class="amt">'+pct+'%</div></div>';
 });
 homeHtml += '<button type="button" class="link-more" data-view="res">Все резервы →</button>';
 homeHtml += '</div>';
@@ -1599,7 +1620,41 @@ appForm('Расход',[
   {name:'category',label:'Категория',type:'chips',options:cats.slice(0,12),value:pre},
   {name:'note',label:'Комментарий',value:'',placeholder:'Необязательно'}
 ],'Добавить расход').then(function(v){if(!v)return;var a=num(v.amount);if(a<=0)return toast('Укажи сумму');var cat=v.category||pre||'Прочее';pushUndo();var _id=uid();STATE.expenses.push({id:_id,amount:a,category:cat,note:v.note||'',date:today()});trackLastOp('expense',_id);save(true);render();toast('Расход добавлен');});}
-function addReserve(){appChoice('Категория резерва',RES_PRESETS,'Новый резерв').then(function(idx){if(idx===null)return;var name=RES_PRESETS[idx];function cont(nm){if(!nm)return;appPrompt('Цель (0 если без цели)','0','Цель').then(function(tv){var t=num(tv);appPrompt('Уже накоплено','0','Накоплено').then(function(sv){var s=num(sv);var id=uid();pushUndo();STATE.reserves.push({id:id,name:nm,category:nm,target:t,saved:s});if(s>0)STATE.reserveOps.push({id:uid(),reserveId:id,type:'deposit',amount:s,date:today()});save(true);render();toast('Резерв «'+nm+'» создан — переносится на все месяцы');});});}if(name==='Свой вариант'){appPrompt('Название','','Название резерва').then(cont);}else cont(name);});}
+function addReserve(){
+  appChoice('Категория резерва',RES_PRESETS,'Новый резерв').then(function(idx){
+    if(idx===null)return;
+    var name=RES_PRESETS[idx];
+    function cont(nm){
+      if(!nm)return;
+      appPrompt('Цель (0 если без цели)','0','Цель').then(function(tv){
+        var t=num(tv);
+        appPrompt('Уже накоплено','0','Накоплено').then(function(sv){
+          var s=num(sv);
+          appChoice('Это срочный резерв? (деньги списываются только когда пополняешь из кассы)',['Обычный','Срочный — указать дату'],'Тип резерва').then(function(ti){
+            function finish(urgent, urgentDate){
+              var id=uid();
+              pushUndo();
+              STATE.reserves.push({id:id,name:nm,category:nm,target:t,saved:s,urgent:!!urgent,urgentDate:urgentDate||''});
+              if(s>0)STATE.reserveOps.push({id:uid(),reserveId:id,type:'deposit',amount:s,date:today()});
+              save(true);render();
+              toast(urgent?('Срочный резерв «'+nm+'» до '+urgentDate):('Резерв «'+nm+'» создан — переносится на все месяцы'));
+            }
+            if(ti===1){
+              appDatePicker('К какой дате нужен резерв', today()).then(function(iso){
+                if(!iso)return;
+                finish(true, iso);
+              });
+            }else{
+              finish(false,'');
+            }
+          });
+        });
+      });
+    }
+    if(name==='Свой вариант'){appPrompt('Название','','Название резерва').then(cont);}
+    else cont(name);
+  });
+}
 function addDebt(){
   appForm('Новый долг',[
     {name:'name',label:'Кому / название',value:'',placeholder:'Папа, банк…'},
