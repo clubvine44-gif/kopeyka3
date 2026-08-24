@@ -86,7 +86,40 @@ function hasKey(){return !!getKey();}
 function norm(s){return String(s||'').toLowerCase().replace(/ё/g,'е').replace(/[^a-zа-я0-9\s]+/gi,' ').replace(/\s+/g,' ').trim();}
 function n(v){var x=Number(v);return isFinite(x)?Math.round(x):0;}
 function fmt(v){return n(v).toLocaleString('ru-RU')+' ₽';}
-function getContext(){try{return window.kopeykaEngine&&typeof window.kopeykaEngine.context==='function'?window.kopeykaEngine.context():JSON.stringify(window.STATE||{});}catch(e){return '{}';}}
+function getContext(){
+  try{
+    var obj={};
+    try{
+      if(window.kopeykaEngine&&typeof window.kopeykaEngine.snapshot==='function')obj=window.kopeykaEngine.snapshot()||{};
+      else obj={state:window.STATE||{}};
+    }catch(e){obj={};}
+    try{
+      if(typeof window.compute==='function'){
+        var c=window.compute();
+        obj.ui={
+          available:c.available,
+          dailyLimit:c.daily,
+          daysLeft:c.daysLeft,
+          horizon:c.horizon,
+          horizonLabel:c.horizonLabel,
+          cash:c.cash,
+          debtLeft:c.debtLeft,
+          obligDue:c.obligDue,
+          hasPayday:!!c.hasPayday
+        };
+      }
+    }catch(e){}
+    try{
+      var st=(window.STATE&&window.STATE.settings)||{};
+      obj.ui=obj.ui||{};
+      obj.ui.limitHorizon=st.limitHorizon||obj.ui.horizon;
+      obj.ui.paydayDay=st.paydayDay;
+      obj.ui.shiftNotifEnabled=st.shiftNotifEnabled!==false;
+      obj.ui.manualDailyLimit=st.manualDailyLimit;
+    }catch(e){}
+    return JSON.stringify(obj);
+  }catch(e){return '{}';}
+}
 function parseResponse(raw){
   var text=String(raw||'').trim();
   if(!text) throw new Error('Пустой ответ ИИ');
@@ -210,6 +243,12 @@ function localIntent(text){
     if(dInc&&amount>0)return{mode:'action',text:null,summary:'Увеличить долг «'+dInc.name+'» на '+fmt(amount),actions:[{type:'increase_debt',name:dInc.name,amount:amount}]};
   }
 
+  if(/(выключи|отключи).{0,16}уведомл/.test(t))return{mode:'action',text:null,summary:'Выключить напоминания о сменах',actions:[{type:'set_shift_notif',enabled:false}]};
+  if(/(включи).{0,16}уведомл/.test(t))return{mode:'action',text:null,summary:'Включить напоминания о сменах',actions:[{type:'set_shift_notif',enabled:true}]};
+  if(/(лимит|трат).{0,30}до\s+зарплат/.test(t))return{mode:'action',text:null,summary:'Лимит до зарплаты',actions:[{type:'set_limit_horizon',horizon:'payday'}]};
+  if(/(лимит|трат).{0,30}до\s+конца\s+месяц/.test(t))return{mode:'action',text:null,summary:'Лимит до конца месяца',actions:[{type:'set_limit_horizon',horizon:'month'}]};
+
+
   m=t.match(/(удали|удалить|убери)\s+(обязательный\s+)?(платеж|платёж)\s*(на|в размере)?\s*(\d[\d\s]*)/);
   if(m){
     amount=n(m[5].replace(/\s/g,''));
@@ -274,7 +313,7 @@ function askConversation(history,userText){
       '«Добавь долг X на N» → add_debt с name и amount. Не путай с pay_debt.',
       'Бери точные имена из списка долгов/резервов. Никогда не удаляй доход вместо долга.',
       'Если вопрос не требует изменения данных — можно ответить обычным текстом. Если меняешь данные Финны — JSON. Формат JSON: {"mode":"answer","text":"...","summary":null,"actions":[]} или {"mode":"action","text":null,"summary":"...","actions":[{"type":"..."}]}.',
-      'type: add_expense, add_income, add_debt, pay_debt, increase_debt, reserve_deposit, reserve_withdraw, add_obligation, delete_debt, delete_income, delete_expense, delete_reserve, delete_obligation, delete_last, change_last, set_opening_balance, set_day_rate, set_night_rate, change_shift (можно несколько actions сразу для разных дат). Для смен: date YYYY-MM-DD, shift day|night|off. Если просят календарь — ответь текстом кратко и скажи «открой календарь» или перечисли смены.',
+      'type: add_expense, add_income, add_debt, pay_debt, increase_debt, reserve_deposit, reserve_withdraw, add_obligation, delete_debt, delete_income, delete_expense, delete_reserve, delete_obligation, delete_last, change_last, set_opening_balance, set_day_rate, set_night_rate, set_limit_horizon (horizon: payday|month), set_shift_notif (enabled: true|false), set_daily_limit (amount или null для авто), set_payday_day (day 1-31 или null), change_shift. Для смен: date YYYY-MM-DD, shift day|night|off. Учитывай ui.horizonLabel и ui.dailyLimit из КОНТЕКСТА — лимит и «дней осталось» зависят от выбора пользователя (до зарплаты / до конца месяца). Если просят календарь — ответь текстом кратко.',
       'На вопрос «как тебя зовут» отвечай: «Меня зовут Финна».'
     ].join('\n');
     var messages=[{role:'system',content:system+'\n\nКОНТЕКСТ:\n'+getContext()}];

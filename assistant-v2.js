@@ -299,45 +299,48 @@ function kaEmo(emotion,duration){
   else if(emotion==='alert'||emotion==='angry')b.classList.add(emotion);
 }
 
+var _clearReplyTimer=null,_showReplyTimer=null,_pinReply=false;
 function showReply(text,actions){
   var el=document.getElementById('kaReply');
   if(!el)return;
-  el.classList.remove('show');
-  el.classList.add('hide');
-  setTimeout(function(){
-    el.classList.remove('hide');
-    el.innerHTML='';
-    var p=document.createElement('div');
-    p.className='ka-reply-text';
-    p.textContent=cleanReplyText(text||'');
-    el.appendChild(p);
-    el.scrollTop=0;
-    if(actions&&actions.length){
-      var row=document.createElement('div');
-      row.className='ka-act-row';
-      var ok=document.createElement('button');
-      ok.className='ka-act ok';
-      ok.type='button';
-      ok.textContent=actions.some(function(a){return /^delete_/.test(a.type);})?'Удалить':'Подтвердить';
-      ok.onclick=function(e){e.preventDefault();confirmPending();};
-      var no=document.createElement('button');
-      no.className='ka-act';
-      no.type='button';
-      no.textContent='Отмена';
-      no.onclick=function(e){e.preventDefault();cancelPending();};
-      row.appendChild(ok);row.appendChild(no);
-      el.appendChild(row);
-    }
-    requestAnimationFrame(function(){el.classList.add('show');});
-  },220);
+  // отменить отложенную очистку — иначе ответ стирается через 240мс
+  if(_clearReplyTimer){clearTimeout(_clearReplyTimer);_clearReplyTimer=null;}
+  if(_showReplyTimer){clearTimeout(_showReplyTimer);_showReplyTimer=null;}
+  _pinReply=false;
+  el.classList.remove('hide','ka-cal-mode');
+  el.innerHTML='';
+  var p=document.createElement('div');
+  p.className='ka-reply-text';
+  p.textContent=cleanReplyText(text||'');
+  el.appendChild(p);
+  el.scrollTop=0;
+  if(actions&&actions.length){
+    var row=document.createElement('div');
+    row.className='ka-act-row';
+    var ok=document.createElement('button');
+    ok.className='ka-act ok';
+    ok.type='button';
+    ok.textContent=actions.some(function(a){return /^delete_/.test(a.type);})?'Удалить':'Подтвердить';
+    ok.onclick=function(e){e.preventDefault();confirmPending();};
+    var no=document.createElement('button');
+    no.className='ka-act';
+    no.type='button';
+    no.textContent='Отмена';
+    no.onclick=function(e){e.preventDefault();cancelPending();};
+    row.appendChild(ok);row.appendChild(no);
+    el.appendChild(row);
+  }
+  // force reflow then show
+  void el.offsetWidth;
+  el.classList.add('show');
 }
 
-var _clearReplyTimer=null,_pinReply=false;
 function clearReply(){
   var el=document.getElementById('kaReply');
   if(!el)return;
   if(_pinReply)return;
   if(_clearReplyTimer){clearTimeout(_clearReplyTimer);_clearReplyTimer=null;}
+  if(_showReplyTimer){clearTimeout(_showReplyTimer);_showReplyTimer=null;}
   el.classList.remove('show');
   el.classList.add('hide');
   _clearReplyTimer=setTimeout(function(){
@@ -345,7 +348,7 @@ function clearReply(){
     if(_pinReply)return;
     el.innerHTML='';
     el.classList.remove('hide','ka-cal-mode');
-  },240);
+  },280);
 }
 
 function status(t){
@@ -353,8 +356,8 @@ function status(t){
   if(e)e.textContent=t||'';
 }
 
-var _speechBuf='',_silenceTimer=null,_speechRestarts=0,_lastResultAt=0,_finalizing=false,_listenGen=0,_seenFinals={};
-var SILENCE_MS=1800,MAX_SPEECH_RESTARTS=2;
+var _speechBuf='',_silenceTimer=null,_finalizing=false,_listenGen=0,_seenFinals={};
+var SILENCE_MS=900;
 
 function clearSilenceTimer(){
   if(_silenceTimer){clearTimeout(_silenceTimer);_silenceTimer=null;}
@@ -380,12 +383,11 @@ function finalizeSpeech(){
   var gen=_listenGen;
   wantListen=false;
   _micStarting=false;
-  _speechRestarts=0;
   stopListen();
   _finalizing=false;
   if(gen!==_listenGen)return;
   if(!text){status('Нажми на меня, чтобы говорить');kaEmo('idle');return;}
-  if(isOnlyWake(text)){status('Да, слушаю…');setTimeout(function(){startListen();},280);return;}
+  if(isOnlyWake(text)){status('Да, слушаю…');setTimeout(function(){startListen();},300);return;}
   status('Думаю…');
   kaEmo('thinking');
   handle(text);
@@ -400,8 +402,6 @@ function startListen(){
   restarts=0;
   _speechBuf='';
   _seenFinals={};
-  _speechRestarts=0;
-  _lastResultAt=0;
   _finalizing=false;
   clearSilenceTimer();
   status('Слушаю…');
@@ -415,9 +415,8 @@ function createRecognition(){
   try{if(rec){try{rec.onend=null;rec.onerror=null;rec.onresult=null;rec.abort();}catch(x){}rec=null;}}catch(x){}
   rec=new SR();
   rec.lang='ru-RU';
-  // Без interim — не транслируем слова на экран, меньше дублей
-  rec.interimResults=false;
-  rec.continuous=false;
+  rec.interimResults=true;   // для статуса «слышу…», не клеим в ответ
+  rec.continuous=false;      // один заход — без циклов вкл/выкл
   rec.maxAlternatives=1;
   var myGen=_listenGen;
   rec.onstart=function(){
@@ -429,27 +428,27 @@ function createRecognition(){
   };
   rec.onresult=function(e){
     if(!wantListen||myGen!==_listenGen||_finalizing)return;
-    var chunk='';
+    var interim='',chunk='';
     for(var i=e.resultIndex;i<e.results.length;i++){
-      if(!e.results[i].isFinal)continue;
       var piece=String(e.results[i][0].transcript||'').trim();
       if(!piece)continue;
-      // анти-дубль: одна и та же финальная фраза не клеится повторно
-      var key=piece.toLowerCase();
-      if(_seenFinals[key])continue;
-      _seenFinals[key]=1;
-      chunk+=(chunk?' ':'')+piece;
+      if(e.results[i].isFinal){
+        var key=piece.toLowerCase();
+        if(!_seenFinals[key]){_seenFinals[key]=1;chunk+=(chunk?' ':'')+piece;}
+      }else interim+=(interim?' ':'')+piece;
     }
-    if(!chunk)return;
-    _speechBuf=(_speechBuf?(_speechBuf+' '):'')+chunk;
-    _speechBuf=_speechBuf.replace(/\s+/g,' ').trim();
-    _lastResultAt=Date.now();
-    _speechRestarts=0;
-    // статус без транскрипта
-    status('Слушаю…');
-    clearSilenceTimer();
-    // one-shot: после финала сразу думаем (continuous=false)
-    _silenceTimer=setTimeout(function(){if(myGen===_listenGen)finalizeSpeech();},400);
+    if(chunk){
+      _speechBuf=(_speechBuf?(_speechBuf+' '):'')+chunk;
+      _speechBuf=_speechBuf.replace(/\s+/g,' ').trim();
+    }
+    // краткая диктовка только в статус-строке (не в ответе)
+    if(interim)status('… '+(interim.length>48?interim.slice(0,48)+'…':interim));
+    else if(_speechBuf)status('… '+(_speechBuf.length>48?_speechBuf.slice(0,48)+'…':_speechBuf));
+    if(_speechBuf){
+      clearSilenceTimer();
+      // после финала быстро отдаём в обработку — без рестартов
+      _silenceTimer=setTimeout(function(){if(myGen===_listenGen)finalizeSpeech();},SILENCE_MS);
+    }
   };
   rec.onerror=function(e){
     if(myGen!==_listenGen)return;
@@ -463,22 +462,14 @@ function createRecognition(){
       status('Нет доступа к микрофону');kaEmo('alert',1800);setListeningUI(false);return;
     }
     if(code==='aborted')return;
-    if(code==='no-speech'){
-      if(_speechBuf){
-        clearSilenceTimer();
-        _silenceTimer=setTimeout(function(){if(myGen===_listenGen)finalizeSpeech();},300);
-        return;
-      }
-      // тишина — один мягкий retry, без мигания UI
-      if(wantListen&&_speechRestarts<MAX_SPEECH_RESTARTS){
-        _speechRestarts++;
-        setTimeout(function(){if(wantListen&&myGen===_listenGen&&!listening&&!_finalizing)createRecognition();},500);
-        return;
-      }
-      wantListen=false;setListeningUI(false);
-      status('Нажми на меня, чтобы говорить');kaEmo('idle');
+    if(_speechBuf){
+      clearSilenceTimer();
+      _silenceTimer=setTimeout(function(){if(myGen===_listenGen)finalizeSpeech();},200);
       return;
     }
+    // без рестартов — ждём повторного нажатия
+    wantListen=false;setListeningUI(false);
+    status('Нажми на меня, чтобы говорить');kaEmo('idle');
   };
   rec.onend=function(){
     if(myGen!==_listenGen)return;
@@ -487,23 +478,18 @@ function createRecognition(){
     rec=null;
     if(!wantListen||_finalizing){setListeningUI(false);return;}
     if(_speechBuf){
-      if(!_silenceTimer)_silenceTimer=setTimeout(function(){if(myGen===_listenGen)finalizeSpeech();},300);
+      if(!_silenceTimer)_silenceTimer=setTimeout(function(){if(myGen===_listenGen)finalizeSpeech();},200);
       return;
     }
-    // пусто и сессия кончилась — один retry максимум
-    if(wantListen&&_speechRestarts<MAX_SPEECH_RESTARTS){
-      _speechRestarts++;
-      setTimeout(function(){if(wantListen&&myGen===_listenGen&&!listening&&!_finalizing)createRecognition();},450);
-      return;
-    }
+    // тишина / пусто — стоп, без автоперезапуска
     wantListen=false;
     setListeningUI(false);
     status('Нажми на меня, чтобы говорить');
     kaEmo('idle');
   };
   try{rec.start();}catch(e){
-    rec=null;listening=false;_micStarting=false;
-    wantListen=false;setListeningUI(false);
+    rec=null;listening=false;_micStarting=false;wantListen=false;
+    setListeningUI(false);
     status('Микрофон не запустился');kaEmo('alert',1600);
   }
 }
@@ -631,6 +617,43 @@ function parseShiftVoice(cmd){
   return{actions:actions,summary:'Смены: '+days.join(', ')+' → '+(shiftType==='day'?'день':shiftType==='night'?'ночь':'выходной')};
 }
 
+function parseSettingsVoice(cmd){
+  var t=norm(cmd);
+  // уведомления смен
+  if(/(выключи|отключи|выруб).{0,20}уведомл/.test(t)||/уведомл.{0,12}(выкл|откл)/.test(t)){
+    return{actions:[{type:'set_shift_notif',enabled:false}],summary:'Выключить напоминания о сменах'};
+  }
+  if(/(включи|вруби).{0,20}уведомл/.test(t)||/уведомл.{0,12}вкл/.test(t)){
+    return{actions:[{type:'set_shift_notif',enabled:true}],summary:'Включить напоминания о сменах'};
+  }
+  // горизонт лимита
+  if(/(лимит|трат).{0,40}(до\s+зарплат|к\s+зарплат)/.test(t)||/считай.{0,20}до\s+зарплат/.test(t)){
+    return{actions:[{type:'set_limit_horizon',horizon:'payday'}],summary:'Лимит считать до зарплаты'};
+  }
+  if(/(лимит|трат).{0,40}(до\s+конца\s+месяц|до\s+конца\s+месяца)/.test(t)||/считай.{0,20}до\s+конца\s+месяц/.test(t)){
+    return{actions:[{type:'set_limit_horizon',horizon:'month'}],summary:'Лимит считать до конца месяца'};
+  }
+  // ручной / авто лимит
+  var ml=t.match(/(ручной\s+)?лимит\s+(на\s+день\s+)?(\d[\d\s]*)/);
+  if(ml&&/(поставь|установи|сделай|измени)/.test(t)){
+    var a=n(ml[3].replace(/\s/g,''));
+    if(a>0)return{actions:[{type:'set_daily_limit',amount:a}],summary:'Ручной лимит на день: '+fmt(a)};
+  }
+  if(/авто(матический)?\s+лимит/.test(t)||/лимит\s+авто/.test(t)){
+    return{actions:[{type:'set_daily_limit',amount:null}],summary:'Вернуть автоматический лимит'};
+  }
+  // день зарплаты
+  var pd=t.match(/день\s+зарплат[ыа]?\s*(\d{1,2})/);
+  if(pd){
+    var day=parseInt(pd[1],10);
+    if(day>=1&&day<=31)return{actions:[{type:'set_payday_day',day:day}],summary:'День зарплаты: '+day};
+  }
+  if(/убери\s+день\s+зарплат|без\s+дня\s+зарплат|зарплат[аы]\s+не\s+зада/.test(t)){
+    return{actions:[{type:'set_payday_day',day:null}],summary:'Убрать день зарплаты (считать до конца месяца)'};
+  }
+  return null;
+}
+
 function handle(text){
   var raw=String(text||'').trim();
   var cmd=stripWake(raw);
@@ -638,10 +661,18 @@ function handle(text){
     if(isOnlyWake(raw)){status('Скажи запрос');setTimeout(startListen,250);return;}
     cmd=raw;
   }
-  // не показываем речь пользователя — только растворяем старый ответ
   _pinReply=false;
   clearReply();
   history.push({role:'user',content:cmd});saveHistory();
+  // локальные настройки — без ИИ
+  var localSet=parseSettingsVoice(cmd);
+  if(localSet&&localSet.actions&&localSet.actions.length){
+    pending=localSet.actions;
+    showReply(localSet.summary,pending);
+    status('Скажи «да» или «нет»');
+    setTimeout(function(){if(pending)startListen();},400);
+    return;
+  }
   var localShift=parseShiftVoice(cmd);
   if(localShift&&localShift.showCal){
     var calMonth=localShift.month||null;
@@ -703,6 +734,10 @@ function describe(a){
   if(t==='add_debt')return'Новый долг «'+(a.name||'')+'»: '+fmt(a.amount);
   if(t==='pay_debt')return'Платёж по долгу «'+(a.name||'')+'»: '+fmt(a.amount);
   if(t==='increase_debt')return'Увеличить долг «'+(a.name||'')+'» на '+fmt(a.amount);
+  if(t==='set_limit_horizon')return'Лимит: '+(a.horizon==='month'?'до конца месяца':'до зарплаты');
+  if(t==='set_shift_notif')return(a.enabled===false?'Выключить':'Включить')+' напоминания о сменах';
+  if(t==='set_daily_limit')return a.amount==null?'Авто-лимит':'Ручной лимит '+fmt(a.amount);
+  if(t==='set_payday_day')return a.day==null?'Убрать день зарплаты':'День зарплаты '+a.day;
   if(t==='add_obligation')return'Обязательный «'+(a.name||'')+'»: '+fmt(a.amount);
   if(t==='delete_obligation')return'Удалить обязательный «'+(a.name||'')+'»';
   if(t==='reserve_deposit')return'В резерв «'+(a.reserve||a.name||'')+'»: '+fmt(a.amount);
@@ -791,6 +826,27 @@ function execute(a){
   else if(t==='set_opening_balance'){s.settings=s.settings||{};s.settings.openingBalance=amt;}
   else if(t==='set_day_rate'){s.settings=s.settings||{};s.settings.dayRate=amt;}
   else if(t==='set_night_rate'){s.settings=s.settings||{};s.settings.nightRate=amt;}
+  else if(t==='set_limit_horizon'){
+    s.settings=s.settings||{};
+    var hz=a.horizon==='month'?'month':'payday';
+    s.settings.limitHorizon=hz;
+  }
+  else if(t==='set_shift_notif'){
+    s.settings=s.settings||{};
+    s.settings.shiftNotifEnabled=a.enabled!==false;
+  }
+  else if(t==='set_daily_limit'){
+    s.settings=s.settings||{};
+    if(a.amount==null||a.amount===''||!(amt>0))s.settings.manualDailyLimit=null;
+    else s.settings.manualDailyLimit=amt;
+  }
+  else if(t==='set_payday_day'){
+    s.settings=s.settings||{};
+    var day=a.day==null?null:n(a.day);
+    if(day!=null&&(day<1||day>31))throw Error('День зарплаты 1–31');
+    s.settings.paydayDay=day;
+    if(day==null&&s.settings.limitHorizon==='payday')s.settings.limitHorizon='month';
+  }
   else if(t==='change_shift'){if(!/^\d{4}-\d{2}-\d{2}$/.test(a.date||''))throw Error('Нужна дата');if(['day','night','off'].indexOf(a.shift)<0)throw Error('Смена day/night/off');s.shiftsOverride=s.shiftsOverride||{};s.shiftsOverride[a.date]=a.shift;}
   else throw Error('Неподдерживаемое действие: '+t);
   save(s);
@@ -802,6 +858,8 @@ function confirmPending(){
   if(!list.length){showReply('Нечего выполнять.');maybeResumeListen(400);return;}
   try{
     list.forEach(execute);
+    try{if(typeof window.syncReminders==='function')window.syncReminders();}catch(x){}
+    try{if(typeof window.render==='function')window.render();}catch(x){}
     var t='Готово. Изменения внесены.';
     history.push({role:'assistant',content:t});saveHistory();
     showReply(t);kaEmo('happy',1400);maybeResumeListen(500);

@@ -1438,14 +1438,32 @@ if(k==='res'){var r=STATE.reserves.find(function(i){return i.id===id;});if(!r)re
     });
   }
 });return;}
-if(k==='debt'){var d=STATE.debts.find(function(i){return i.id===id;});if(!d)return;appChoice('Долг «'+d.name+'»',['Платёж','Изменить','Удалить'],'Долг').then(function(act){
+if(k==='debt'){var d=STATE.debts.find(function(i){return i.id===id;});if(!d)return;appChoice('Долг «'+d.name+'»',['Платёж','Увеличить','Изменить','Удалить'],'Долг').then(function(act){
   if(act===null)return;
-  if(act===2){
+  // 0 платёж, 1 увеличить, 2 изменить, 3 удалить
+  if(act===3){
     appConfirm('Удалить долг? Погашения в операциях останутся.','Удалить').then(function(ok){
-      if(!ok)return;pushUndo();STATE.debts=STATE.debts.filter(function(i){return i.id!==id;});
-      if(STATE.lastOp&&STATE.lastOp.id===id)STATE.lastOp=null;save(true);render();toast('Удалено');
+      if(!ok)return;pushUndo();
+      STATE.debts=STATE.debts.filter(function(i){return i.id!==id;});
+      if(STATE.lastOp&&STATE.lastOp.id===id)STATE.lastOp=null;
+      save(true);render();toast('Удалено');
     });
-  } else if(act===1){
+    return;
+  }
+  if(act===1){
+    appPrompt('На сколько увеличить долг','0','Увеличить долг').then(function(av){
+      if(av===null)return;
+      var a=num(av);
+      if(a<=0)return toast('Укажи сумму больше 0');
+      pushUndo();
+      d.total=num(d.total)+a;
+      if(num(d.paid)>num(d.total))d.paid=num(d.total);
+      save(true);render();
+      toast('Долг «'+d.name+'» +'+fmt(a)+' · всего '+fmt(d.total));
+    });
+    return;
+  }
+  if(act===2){
     appForm('Изменить долг',[
       {name:'name',label:'Название',value:d.name||'',placeholder:'Папа…'},
       {name:'total',label:'Полная сумма долга',value:String(num(d.total)),inputmode:'decimal'},
@@ -1458,26 +1476,36 @@ if(k==='debt'){var d=STATE.debts.find(function(i){return i.id===id;});if(!d)retu
       if(pd<0)pd=0;if(pd>tot)pd=tot;
       pushUndo();
       var oldName=d.name;
-      // Сначала синхронизируем погашение со СТАРЫМ именем (чтобы найти расходы)
-      d.total=tot;
-      syncDebtPaid(d,pd,oldName);
+      var oldTotal=num(d.total);
+      var oldPaid=num(d.paid);
+      // Явно пишем в объект долга
       d.name=name;
-      // Обновим подписи связанных расходов
+      d.total=tot;
+      // синхронизация кассы только если изменилось погашение
+      if(pd!==oldPaid){
+        syncDebtPaid(d,pd,oldName);
+      }else{
+        d.paid=pd;
+      }
       (STATE.expenses||[]).forEach(function(e){
-        if(e&&e.debtId===d.id)e.note=name;
-        else if(e&&e.category==='Долг'&&String(e.note||'')===String(oldName))e.note=name;
+        if(!e)return;
+        if(e.debtId===d.id)e.note=name;
+        else if(e.category==='Долг'&&String(e.note||'')===String(oldName))e.note=name;
       });
-      save(true);render();toast('Долг обновлён');
+      save(true);render();
+      toast('Долг обновлён: '+fmt(tot)+(tot!==oldTotal?(' (было '+fmt(oldTotal)+')'):''));
     });
-  } else {
-    appPrompt('Сумма платежа','0','Платёж по долгу').then(function(av){
-      var a=num(av);if(a<=0)return;
-      var left=Math.max(0,num(d.total)-num(d.paid));
-      if(a>left)a=left;
-      if(a<=0)return toast('Долг уже закрыт');
-      pushUndo();syncDebtPaid(d,num(d.paid)+a);save(true);render();toast('Платёж: '+d.name+' · '+fmt(a));
-    });
+    return;
   }
+  // платёж
+  appPrompt('Сумма платежа','0','Платёж по долгу').then(function(av){
+    if(av===null)return;
+    var a=num(av);if(a<=0)return toast('Укажи сумму');
+    var left=Math.max(0,num(d.total)-num(d.paid));
+    if(a>left)a=left;
+    if(a<=0)return toast('Долг уже закрыт');
+    pushUndo();syncDebtPaid(d,num(d.paid)+a);save(true);render();toast('Платёж: '+d.name+' · '+fmt(a));
+  });
 });return;}
 if(k==='obl'){var ob=STATE.obligations.find(function(i){return i.id===id;});if(!ob)return;
 if(t.dataset.paid==='1'){appConfirm('Сбросить оплату «'+ob.name+'» за этот месяц?','Сброс оплаты').then(function(ok){if(!ok)return;pushUndo();STATE.obligationPays=STATE.obligationPays.filter(function(p){return !(p.obligId===id&&p.month===month);});STATE.expenses=STATE.expenses.filter(function(e){return !(e.obligId===id&&inMonth(e.date,month));});save(true);render();toast('Оплата сброшена');});return;}
@@ -1608,6 +1636,6 @@ function setup(){
 
 function boot(){if(!window.__scrollSaveBound){window.__scrollSaveBound=true;var st=null;window.addEventListener('scroll',function(){if((window.__finView||currentView||'home')!=='home')return;if(st)return;st=setTimeout(function(){st=null;window.__homeScroll=window.scrollY||document.documentElement.scrollTop||0;},120);},{passive:true});}try{STATE=norm(STATE);ensureMonth();var c=compute();if(STATE.income.length===0&&STATE.expenses.length===0&&c.cash<0&&!STATE.obligations.length&&!STATE.reserves.length){STATE=def();save(true);}}catch(e){STATE=def();}setup();render();syncReminders();setTimeout(bindFabHold,300);setTimeout(bindFabHold,1200);}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
-window.goView=goView;window.goHome=goHome;window.render=render;
+window.goView=goView;window.goHome=goHome;window.render=render;window.compute=compute;window.syncReminders=typeof syncReminders==="function"?syncReminders:function(){};
 Object.defineProperty(window,'currentView',{get:function(){return currentView;},set:function(v){currentView=v||'home';window.__finView=currentView;}});
 })();
