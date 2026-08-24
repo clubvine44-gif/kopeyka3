@@ -224,7 +224,7 @@ function appConfirm(message, title){
 function appPrompt(message, defVal, title, opts){
   return new Promise(function(resolve){
     opts=opts||{};
-    var im=opts.inputmode!=null?opts.inputmode:(opts.text?'text':'decimal');
+    var im=opts.inputmode!=null?opts.inputmode:(opts.text?'text':'numeric');
     var imAttr=im?(' inputmode="'+im+'"'):'';
     var html='<div class="modal-card"><div class="modal-title">'+(title||'Ввод')+'</div><div class="dlg-msg">'+esc(String(message||''))+'</div><div class="dlg-field"><input id="dlgInput" type="text" value="'+esc(String(defVal==null?'':defVal))+'" autocomplete="off"'+imAttr+'></div><div class="dlg-actions"><button type="button" class="btn" id="dlgCancel">Отмена</button><button type="button" class="btn primary" id="dlgOk">ОК</button></div></div>';
     openDialog(html,function(){
@@ -252,7 +252,102 @@ function appChoice(message, options, title){
     });
   });
 }
+
+/** Сегментный ввод времени ЧЧ:ММ — только цифры, автопереход */
+function appTimePicker(title, hour, minute){
+  return new Promise(function(resolve){
+    hour=Math.min(23,Math.max(0,num(hour)));
+    minute=Math.min(59,Math.max(0,num(minute)));
+    var html='<div class="modal-card"><div class="modal-title">'+(title||'Время')+'</div>'+
+      '<div class="seg-time" id="segTime">'+
+      '<div class="seg-box"><label>Часы</label><input id="segHH" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" value="'+String(hour).padStart(2,'0')+'" autocomplete="off"></div>'+
+      '<div class="seg-colon">:</div>'+
+      '<div class="seg-box"><label>Минуты</label><input id="segMM" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" value="'+String(minute).padStart(2,'0')+'" autocomplete="off"></div>'+
+      '</div>'+
+      '<div class="dlg-actions">'+
+      '<button type="button" class="btn" id="dlgOff">Выкл</button>'+
+      '<button type="button" class="btn" id="dlgCancel">Отмена</button>'+
+      '<button type="button" class="btn primary" id="dlgOk">ОК</button>'+
+      '</div></div>';
+    openDialog(html,function(){
+      var hh=document.getElementById('segHH'), mm=document.getElementById('segMM');
+      function onlyDigits(el,max){
+        el.addEventListener('input',function(){
+          var v=el.value.replace(/\D/g,'').slice(0,2);
+          el.value=v;
+          if(v.length>=2){
+            var n=parseInt(v,10);
+            if(el===hh){if(n>23)el.value='23';mm.focus();mm.select&&mm.select();}
+            else{if(n>59)el.value='59';}
+          }
+        });
+        el.addEventListener('keydown',function(e){
+          if(e.key==='Enter'){e.preventDefault();ok();}
+          if(e.key==='Backspace'&&!el.value&&el===mm){hh.focus();}
+        });
+      }
+      onlyDigits(hh,23);onlyDigits(mm,59);
+      setTimeout(function(){hh.focus();hh.select&&hh.select();},80);
+      function ok(){
+        var h=num(hh.value), m=num(mm.value);
+        if(h<0||h>23){toast('Час 0–23');return;}
+        if(m<0||m>59){toast('Минуты 0–59');return;}
+        closeDialog();resolve({hour:h,minute:m,enabled:true});
+      }
+      document.getElementById('dlgOk').onclick=ok;
+      document.getElementById('dlgCancel').onclick=function(){closeDialog();resolve(null);};
+      document.getElementById('dlgOff').onclick=function(){closeDialog();resolve({enabled:false});};
+    });
+  });
+}
+
+/** Сегментный ввод даты ДД.ММ.ГГГГ */
+function appDatePicker(title, isoDate){
+  return new Promise(function(resolve){
+    var d=isoDate&&/^\d{4}-\d{2}-\d{2}$/.test(isoDate)?isoDate:today();
+    var parts=d.split('-');
+    var yy=parts[0], mo=parts[1], dd=parts[2];
+    var html='<div class="modal-card"><div class="modal-title">'+(title||'Дата')+'</div>'+
+      '<div class="seg-date" id="segDate">'+
+      '<div class="seg-box"><label>День</label><input id="segDD" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" value="'+dd+'" autocomplete="off"></div>'+
+      '<div class="seg-colon">.</div>'+
+      '<div class="seg-box"><label>Месяц</label><input id="segMO" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" value="'+mo+'" autocomplete="off"></div>'+
+      '<div class="seg-colon">.</div>'+
+      '<div class="seg-box grow"><label>Год</label><input id="segYY" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" value="'+yy+'" autocomplete="off"></div>'+
+      '</div>'+
+      '<div class="dlg-actions">'+
+      '<button type="button" class="btn" id="dlgCancel">Отмена</button>'+
+      '<button type="button" class="btn primary" id="dlgOk">ОК</button>'+
+      '</div></div>';
+    openDialog(html,function(){
+      var ddEl=document.getElementById('segDD'), moEl=document.getElementById('segMO'), yyEl=document.getElementById('segYY');
+      function bind(el,len,next){
+        el.addEventListener('input',function(){
+          el.value=el.value.replace(/\D/g,'').slice(0,len);
+          if(el.value.length>=len&&next){next.focus();next.select&&next.select();}
+        });
+        el.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();ok();}});
+      }
+      bind(ddEl,2,moEl);bind(moEl,2,yyEl);bind(yyEl,4,null);
+      setTimeout(function(){ddEl.focus();ddEl.select&&ddEl.select();},80);
+      function ok(){
+        var day=num(ddEl.value), month=num(moEl.value), year=num(yyEl.value);
+        if(year<2000||year>2100){toast('Год 2000–2100');return;}
+        if(month<1||month>12){toast('Месяц 1–12');return;}
+        var dim=new Date(year,month,0).getDate();
+        if(day<1||day>dim){toast('День 1–'+dim);return;}
+        var iso=year+'-'+String(month).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+        closeDialog();resolve(iso);
+      }
+      document.getElementById('dlgOk').onclick=ok;
+      document.getElementById('dlgCancel').onclick=function(){closeDialog();resolve(null);};
+    });
+  });
+}
+
 window.appAlert=appAlert;window.appConfirm=appConfirm;window.appPrompt=appPrompt;window.appChoice=appChoice;
+window.appTimePicker=appTimePicker;window.appDatePicker=appDatePicker;
+
 
 
 function appForm(title, fields, okLabel){
@@ -771,18 +866,14 @@ function showSettings(){
     if(setShiftNotifEl)setShiftNotifEl.onclick=function(){
       var curH=STATE.settings.shiftNotifHour!=null?STATE.settings.shiftNotifHour:20;
       var curM=STATE.settings.shiftNotifMinute!=null?STATE.settings.shiftNotifMinute:0;
-      var cur=STATE.settings.shiftNotifEnabled===false?'выкл':(String(curH).padStart(2,'0')+':'+String(curM).padStart(2,'0'));
-      appPrompt('Время (ЧЧ:ММ), час 0–23 или «выкл»',cur,'Напоминание о смене').then(function(o){
+      appTimePicker('Напоминание о смене', curH, curM).then(function(o){
         if(o===null)return;pushUndo();
-        var v=String(o).trim().toLowerCase();
-        if(v==='выкл'||v==='off'||v==='нет'){STATE.settings.shiftNotifEnabled=false;save(true);syncReminders();showSettings();toast('Напоминания о сменах выкл');return;}
-        var mm=v.match(/^(\d{1,2})(?::(\d{1,2}))?$/);
-        if(!mm)return toast('Формат ЧЧ:ММ или час 0–23');
-        var h=num(mm[1]), mi=mm[2]!=null?num(mm[2]):0;
-        if(h<0||h>23)return toast('Час 0–23');
-        if(mi<0||mi>59)return toast('Минуты 0–59');
-        STATE.settings.shiftNotifEnabled=true;STATE.settings.shiftNotifHour=h;STATE.settings.shiftNotifMinute=mi;
-        save(true);syncReminders();showSettings();toast('Напоминание в '+String(h).padStart(2,'0')+':'+String(mi).padStart(2,'0'));
+        if(o.enabled===false){STATE.settings.shiftNotifEnabled=false;save(true);syncReminders();showSettings();toast('Напоминания о сменах выкл');return;}
+        STATE.settings.shiftNotifEnabled=true;
+        STATE.settings.shiftNotifHour=o.hour;
+        STATE.settings.shiftNotifMinute=o.minute;
+        save(true);syncReminders();showSettings();
+        toast('Напоминание в '+String(o.hour).padStart(2,'0')+':'+String(o.minute).padStart(2,'0'));
       });
     };
     (function(){
@@ -809,23 +900,20 @@ function showSettings(){
       var el=document.getElementById(btnId);if(!el)return;
       el.onclick=function(){
         var st=STATE.settings||{};
-        appForm(title,[
-          {name:'start',label:'Начало (ЧЧ:ММ)',value:st[startKey]||'',placeholder:'08:00'},
-          {name:'end',label:'Конец (ЧЧ:ММ)',value:st[endKey]||'',placeholder:'20:00'}
-        ],'Сохранить').then(function(v){
-          if(!v)return;
-          function normTime(s, fb){
-            s=String(s||'').trim();
-            var m=s.match(/^(\d{1,2}):(\d{2})$/);
-            if(!m)return fb;
-            var h=Math.min(23,Math.max(0,parseInt(m[1],10))), mi=Math.min(59,Math.max(0,parseInt(m[2],10)));
-            return String(h).padStart(2,'0')+':'+String(mi).padStart(2,'0');
-          }
-          pushUndo();
-          if(!STATE.settings)STATE.settings={};
-          STATE.settings[startKey]=normTime(v.start, STATE.settings[startKey]||'08:00');
-          STATE.settings[endKey]=normTime(v.end, STATE.settings[endKey]||'20:00');
-          save(true);render();toast('Время смены сохранено');
+        var s0=String(st[startKey]||'08:00').split(':');
+        var e0=String(st[endKey]||'20:00').split(':');
+        appTimePicker(title+' · начало', num(s0[0]), num(s0[1]||0)).then(function(a){
+          if(a===null)return;
+          if(a.enabled===false)return;
+          appTimePicker(title+' · конец', num(e0[0]), num(e0[1]||0)).then(function(b){
+            if(b===null)return;
+            if(b.enabled===false)return;
+            pushUndo();
+            if(!STATE.settings)STATE.settings={};
+            STATE.settings[startKey]=String(a.hour).padStart(2,'0')+':'+String(a.minute).padStart(2,'0');
+            STATE.settings[endKey]=String(b.hour).padStart(2,'0')+':'+String(b.minute).padStart(2,'0');
+            save(true);render();showSettings();toast('Время смены сохранено');
+          });
         });
       };
     }

@@ -667,6 +667,21 @@ html, body { overscroll-behavior-y: none; overscroll-behavior: none; }
 body.fin-settings-open{overflow:hidden!important;position:fixed;width:100%;height:100%;}
 body.fin-settings-open #app{pointer-events:none;}
 
+.seg-time,.seg-date{display:flex;align-items:flex-end;justify-content:center;gap:8px;padding:12px 8px 18px}
+.seg-box{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:64px}
+.seg-box.grow{min-width:88px}
+.seg-box label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.seg-box input{
+  width:64px;text-align:center;font-size:22px;font-weight:800;padding:12px 8px;
+  border-radius:14px;border:1px solid rgba(255,255,255,.12);background:rgba(20,28,44,.9);color:#F2F3F7;
+}
+.seg-box.grow input{width:88px}
+.seg-colon{font-size:24px;font-weight:800;padding-bottom:14px;color:rgba(180,190,210,.7)}
+/* анти-мигание при возврате из фона */
+body{background:#0A101C}
+#app{min-height:40vh}
+
+
 .mm-item .mm-status{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:10.5px;font-weight:600;color:var(--muted)}
 .mm-item .mm-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;background:#6B7280;display:inline-block}
 .mm-item .mm-dot.excellent{background:#4ADE80;box-shadow:0 0 6px rgba(74,222,128,.55)}
@@ -782,7 +797,7 @@ html.fin-tour-scroll .card{content-visibility:visible!important;contain:none!imp
     <span>Платежи</span>
   </button>
 </nav>
-<div class="fab-wrap"><div class="radial" id="radial"><button data-act="income"><span class="ic">➕</span> Доход</button><button data-act="expense"><span class="ic">➖</span> Расход</button><button data-act="reserve"><span class="ic">🏦</span> Резерв</button><button data-act="debt"><span class="ic">📉</span> Долг</button><button data-act="oblig"><span class="ic">📅</span> Обязательный</button></div><button class="fab" id="fab" aria-label="Добавить"><span aria-hidden="true">+</span></button></div><div class="modal-bg" id="modalBg"></div><div class="modal-bg" id="dlgLayer"></div><div class="toast" id="toast"></div><script src="finn-char.js?v=2026082403"></script><script src="app.js?v=2026082403"></script><script src="profile.js?v=2026082403"></script><script src="onboard.js?v=2026082403"></script><script src="cloud.js?v=2026082403"></script><script src="products.js?v=2026082403"></script><script src="engine.js?v=2026082403"></script><script src="ai.js?v=2026082403"></script><script src="assistant-v2.js?v=2026082403"></script><script src="voice.js?v=2026082403"></script><script src="finn3d.js?v=2026082403"></script><script src="finn-wake.js?v=2026082403"></script><script>window.__kopeykaBuild='2026082403';window.__FIN_NATIVE=true;</script><script>
+<div class="fab-wrap"><div class="radial" id="radial"><button data-act="income"><span class="ic">➕</span> Доход</button><button data-act="expense"><span class="ic">➖</span> Расход</button><button data-act="reserve"><span class="ic">🏦</span> Резерв</button><button data-act="debt"><span class="ic">📉</span> Долг</button><button data-act="oblig"><span class="ic">📅</span> Обязательный</button></div><button class="fab" id="fab" aria-label="Добавить"><span aria-hidden="true">+</span></button></div><div class="modal-bg" id="modalBg"></div><div class="modal-bg" id="dlgLayer"></div><div class="toast" id="toast"></div><script src="finn-char.js?v=2026082404"></script><script src="app.js?v=2026082404"></script><script src="profile.js?v=2026082404"></script><script src="onboard.js?v=2026082404"></script><script src="cloud.js?v=2026082404"></script><script src="products.js?v=2026082404"></script><script src="engine.js?v=2026082404"></script><script src="ai.js?v=2026082404"></script><script src="assistant-v2.js?v=2026082404"></script><script src="voice.js?v=2026082404"></script><script src="finn3d.js?v=2026082404"></script><script src="finn-wake.js?v=2026082404"></script><script>window.__kopeykaBuild='2026082404';window.__FIN_NATIVE=true;</script><script>
 (function(){
   function tryTestPush(){
     try{

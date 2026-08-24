@@ -258,22 +258,22 @@ function style(){
   '.ka-reply .ka-act{padding:10px 18px;border-radius:14px;border:1px solid rgba(255,255,255,.12);'+
   'background:rgba(20,28,44,.88);color:#fff;font-weight:700;font-size:14px;backdrop-filter:blur(8px)}'+
   '.ka-reply .ka-act.ok{background:linear-gradient(135deg,#5EC8FF,#3A8FE8);color:#0A101C;border:0}'+
-  '.ka-cal-wrap{width:min(92vw,340px);margin:0 auto;padding:4px 0 8px}'+
+  '.ka-cal-wrap{width:100%;max-width:min(92vw,340px);margin:0 auto;padding:2px 0 6px;box-sizing:border-box}'+
   '.ka-cal-title{font-size:14px;font-weight:700;margin-bottom:8px;opacity:.95}'+
   '.ka-cal-leg{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:0 0 10px;font-size:11px;color:rgba(180,190,210,.9)}'+
   '.ka-cal-leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}'+
   '.ka-cal-leg .l-day{background:rgba(94,200,255,.55)}'+
   '.ka-cal-leg .l-night{background:rgba(167,139,250,.6)}'+
   '.ka-cal-leg .l-off{background:rgba(255,255,255,.18)}'+
-  '.ka-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;width:100%}'+
+  '.ka-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;width:100%}'+
   '.ka-cal .ch{font-size:10px;color:rgba(180,190,210,.75);text-align:center;padding:2px 0;font-weight:600}'+
-  '.ka-cal .cd{aspect-ratio:1;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:rgba(20,28,44,.82);border:1px solid rgba(255,255,255,.1);color:#E8ECF4;line-height:1.15;min-height:36px}'+
+  '.ka-cal .cd{aspect-ratio:1;border-radius:9px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:rgba(20,28,44,.82);border:1px solid rgba(255,255,255,.1);color:#E8ECF4;line-height:1.1;min-height:0;padding:2px}'+
   '.ka-cal .cd.day{background:rgba(94,200,255,.22);border-color:rgba(94,200,255,.4)}'+
   '.ka-cal .cd.night{background:rgba(167,139,250,.24);border-color:rgba(167,139,250,.45)}'+
   '.ka-cal .cd.off{background:rgba(255,255,255,.05);color:rgba(180,190,210,.75)}'+
   '.ka-cal .cd.today{box-shadow:0 0 0 2px rgba(251,191,36,.85)}'+
-  '.ka-cal .cd .dt{font-size:9px;opacity:.85;margin-top:2px;font-weight:600}'+
-  '.ka-reply.ka-cal-mode{max-height:min(52vh,420px);bottom:calc(18% + 160px);text-align:center}'+
+  '.ka-cal .cd .dt{font-size:8px;opacity:.85;margin-top:1px;font-weight:600}'+
+  '.ka-reply.ka-cal-mode{max-height:min(48vh,380px);bottom:calc(20% + 150px);text-align:center;width:min(94vw,360px)}'+
 '.ka-hint{position:absolute;left:50%;top:150px;transform:translateX(-50%);z-index:3;font-size:12.5px;color:rgba(180,190,210,.9);text-align:center;'+
   'text-shadow:0 1px 8px rgba(0,0,0,.55);pointer-events:none;'+
   'white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis;'+
@@ -353,6 +353,13 @@ function status(t){
   if(e)e.textContent=t||'';
 }
 
+var _speechBuf='',_silenceTimer=null,_speechRestarts=0,_lastResultAt=0,_finalizing=false,_listenGen=0;
+var SILENCE_MS=2000,MAX_SPEECH_RESTARTS=3;
+
+function clearSilenceTimer(){
+  if(_silenceTimer){clearTimeout(_silenceTimer);_silenceTimer=null;}
+}
+
 function setListeningUI(on){
   var b=document.getElementById('kaBubble');
   if(on){
@@ -363,21 +370,19 @@ function setListeningUI(on){
   }
 }
 
-var _speechBuf='',_silenceTimer=null,_speechRestarts=0;
-var SILENCE_MS=1700,MAX_SPEECH_RESTARTS=8;
-
-function clearSilenceTimer(){
-  if(_silenceTimer){clearTimeout(_silenceTimer);_silenceTimer=null;}
-}
-
 function finalizeSpeech(){
+  if(_finalizing)return;
+  _finalizing=true;
   clearSilenceTimer();
   var text=String(_speechBuf||'').replace(/\s+/g,' ').trim();
   _speechBuf='';
+  var gen=_listenGen;
   wantListen=false;
   _micStarting=false;
   _speechRestarts=0;
   stopListen();
+  _finalizing=false;
+  if(gen!==_listenGen)return;
   if(!text){status('Нажми на меня, чтобы говорить');kaEmo('idle');return;}
   if(isOnlyWake(text)){status('Да, слушаю…');setTimeout(function(){startListen();},280);return;}
   handle(text);
@@ -385,12 +390,15 @@ function finalizeSpeech(){
 
 function startListen(){
   if(!SR){status('Нет распознавания речи');return;}
-  if(listening||_micStarting)return;
+  if(listening||_micStarting||_finalizing)return;
+  _listenGen++;
   wantListen=true;
   _micStarting=true;
   restarts=0;
   _speechBuf='';
   _speechRestarts=0;
+  _lastResultAt=0;
+  _finalizing=false;
   clearSilenceTimer();
   status('Слушаю… говори');
   setListeningUI(true);
@@ -398,24 +406,25 @@ function startListen(){
 }
 
 function createRecognition(){
-  if(!wantListen){_micStarting=false;return;}
+  if(!wantListen||_finalizing){_micStarting=false;return;}
   if(listening){_micStarting=false;return;}
-  try{if(rec){try{rec.onend=null;rec.onerror=null;rec.abort();}catch(x){}rec=null;}}catch(x){}
+  try{if(rec){try{rec.onend=null;rec.onerror=null;rec.onresult=null;rec.abort();}catch(x){}rec=null;}}catch(x){}
   rec=new SR();
   rec.lang='ru-RU';
   rec.interimResults=true;
-  // continuous: длинные фразы; на Android сессия всё равно может оборваться — тогда мягкий restart
+  // Android WebView: continuous=true часто рвёт сессию → без автоперезапусков-мигалок
   rec.continuous=true;
-  rec.maxAlternatives=2;
+  rec.maxAlternatives=1;
+  var myGen=_listenGen;
   rec.onstart=function(){
+    if(myGen!==_listenGen)return;
     listening=true;
     _micStarting=false;
-    restarts=0;
     setListeningUI(true);
     status(_speechBuf?('… '+_speechBuf):'Слушаю…');
   };
   rec.onresult=function(e){
-    if(!wantListen)return;
+    if(!wantListen||myGen!==_listenGen||_finalizing)return;
     var interim='',chunk='';
     for(var i=e.resultIndex;i<e.results.length;i++){
       var piece=e.results[i][0].transcript;
@@ -426,75 +435,72 @@ function createRecognition(){
     if(chunk){
       _speechBuf=(_speechBuf?(_speechBuf+' '):'')+chunk;
       _speechBuf=_speechBuf.replace(/\s+/g,' ').trim();
+      _lastResultAt=Date.now();
+      _speechRestarts=0;
     }
     if(interim)status('… '+(_speechBuf?(_speechBuf+' '):'')+interim.trim());
     else if(_speechBuf)status('… '+_speechBuf);
-    // ждём паузу после речи — не обрываем длинную фразу
     if(_speechBuf){
       clearSilenceTimer();
-      _silenceTimer=setTimeout(function(){finalizeSpeech();},SILENCE_MS);
+      _silenceTimer=setTimeout(function(){if(myGen===_listenGen)finalizeSpeech();},SILENCE_MS);
     }
   };
   rec.onerror=function(e){
+    if(myGen!==_listenGen)return;
     var code=e&&e.error||'';
     listening=false;
     _micStarting=false;
-    try{if(rec){rec.onend=null;rec.abort();}}catch(x){}
+    try{if(rec){rec.onend=null;rec.onresult=null;rec.abort();}}catch(x){}
     rec=null;
     if(code==='not-allowed'){
       clearSilenceTimer();wantListen=false;_speechBuf='';
       status('Нет доступа к микрофону');kaEmo('alert',1800);setListeningUI(false);return;
     }
-    // no-speech / aborted mid-phrase: если уже есть текст — дождёмся silence; иначе можно продолжить
-    if(wantListen&&_speechBuf&&(code==='no-speech'||code==='aborted')){
-      clearSilenceTimer();
-      _silenceTimer=setTimeout(function(){finalizeSpeech();},900);
+    // Игнор aborted/no-speech без перезапуска — иначе мигание
+    if(code==='aborted')return;
+    if(code==='no-speech'){
+      if(_speechBuf){
+        clearSilenceTimer();
+        _silenceTimer=setTimeout(function(){if(myGen===_listenGen)finalizeSpeech();},600);
+      }
       return;
     }
-    if(wantListen&&!_speechBuf&&(code==='no-speech'||code==='aborted')){
-      if(_speechRestarts<MAX_SPEECH_RESTARTS){
-        _speechRestarts++;
-        setTimeout(function(){if(wantListen)createRecognition();},250);
-        return;
-      }
-      wantListen=false;status('Нажми на меня, чтобы говорить');kaEmo('idle');setListeningUI(false);return;
+    // прочие ошибки — один мягкий retry только если уже есть текст
+    if(wantListen&&_speechBuf&&_speechRestarts<MAX_SPEECH_RESTARTS){
+      _speechRestarts++;
+      setTimeout(function(){if(wantListen&&myGen===_listenGen&&!listening)createRecognition();},400);
+      return;
     }
-    if(!wantListen)return;
-    clearSilenceTimer();wantListen=false;_speechBuf='';
-    status('Нажми на меня, чтобы говорить');kaEmo('idle');setListeningUI(false);
+    if(wantListen&&!_speechBuf){
+      // тихо ждём — пользователь может ещё начать; не дёргаем UI
+      return;
+    }
   };
   rec.onend=function(){
+    if(myGen!==_listenGen)return;
     listening=false;
     _micStarting=false;
     rec=null;
-    if(!wantListen){setListeningUI(false);return;}
-    // сессия оборвалась, но пользователь ещё говорит / мы копим фразу
+    if(!wantListen||_finalizing){setListeningUI(false);return;}
+    // Есть накопленная речь — ждём silence, без немедленного restart
     if(_speechBuf){
-      // даём silence-таймеру доработать; если его нет — поставим
-      if(!_silenceTimer)_silenceTimer=setTimeout(function(){finalizeSpeech();},SILENCE_MS);
-      // параллельно можно перезапустить распознавание, чтобы поймать продолжение
-      if(_speechRestarts<MAX_SPEECH_RESTARTS){
+      if(!_silenceTimer)_silenceTimer=setTimeout(function(){if(myGen===_listenGen)finalizeSpeech();},SILENCE_MS);
+      // Один осторожный restart только если пауза свежая (<1.2с) — продолжение фразы
+      var ago=Date.now()-(_lastResultAt||0);
+      if(ago<1200&&_speechRestarts<MAX_SPEECH_RESTARTS){
         _speechRestarts++;
-        setTimeout(function(){if(wantListen&&!listening)createRecognition();},220);
+        setTimeout(function(){if(wantListen&&myGen===_listenGen&&!listening&&!_finalizing)createRecognition();},350);
       }
       return;
     }
-    // пустой буфер — мягкий restart пока wantListen
-    if(_speechRestarts<MAX_SPEECH_RESTARTS){
-      _speechRestarts++;
-      setTimeout(function(){if(wantListen&&!listening)createRecognition();},220);
-      return;
-    }
-    wantListen=false;setListeningUI(false);
-    status('Нажми на меня, чтобы говорить');kaEmo('idle');
+    // Пусто — НЕ крутим рестарты (это и есть мигание). Ждём тапа.
+    wantListen=false;
+    setListeningUI(false);
+    status('Нажми на меня, чтобы говорить');
+    kaEmo('idle');
   };
   try{rec.start();}catch(e){
     rec=null;listening=false;_micStarting=false;
-    if(wantListen&&_speechRestarts<MAX_SPEECH_RESTARTS){
-      _speechRestarts++;
-      setTimeout(function(){if(wantListen)createRecognition();},300);
-      return;
-    }
     wantListen=false;setListeningUI(false);
     status('Микрофон не запустился');kaEmo('alert',1600);
   }
@@ -504,7 +510,7 @@ function stopListen(){
   wantListen=false;
   _micStarting=false;
   clearSilenceTimer();
-  if(rec){try{rec.onend=null;rec.onerror=null;rec.stop();}catch(e){try{rec.abort();}catch(x){}}rec=null;}
+  if(rec){try{rec.onend=null;rec.onerror=null;rec.onresult=null;rec.stop();}catch(e){try{rec.abort();}catch(x){}}rec=null;}
   listening=false;
   setListeningUI(false);
 }

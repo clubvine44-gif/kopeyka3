@@ -1,6 +1,6 @@
 {
-  "versionCode": 59,
-  "versionName": "3.9.1",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v3.9.1/Fin.apk",
-  "notes": "3.9.1 — обновление Финна (versionCode 59)"
+  "versionCode": 60,
+  "versionName": "3.9.2",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v3.9.2/Fin.apk",
+  "notes": "3.9.2 — стабильный микрофон, ввод времени/даты сегментами, календарь влезает, без мигания при возврате"
 }

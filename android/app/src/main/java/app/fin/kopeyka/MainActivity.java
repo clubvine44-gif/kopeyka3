@@ -186,10 +186,15 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
         if (webView != null) {
             webView.onResume();
-            lastResumeAt = System.currentTimeMillis();
+            long now = System.currentTimeMillis();
+            // не дёргаем проверку обновлений при каждом мгновенном resume (мигание UI)
+            boolean cool = (now - lastResumeAt) > 60_000L;
+            lastResumeAt = now;
+            if (cool) {
+                checkForUpdate();
+                try { UpdateCheckReceiver.scheduleSoon(this); } catch (Exception ignored) {}
+            }
         }
-        checkForUpdate();
-        try { UpdateCheckReceiver.scheduleSoon(this); } catch (Exception ignored) {}
     }
 
     @Override protected void onPause() {
