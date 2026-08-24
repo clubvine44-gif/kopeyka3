@@ -10,8 +10,8 @@ android {
         applicationId "app.fin.kopeyka"
         minSdk 26
         targetSdk 34
-        versionCode 77
-        versionName "4.1.6-matter-beta"
+        versionCode 78
+        versionName "4.1.7-matter-beta"
     }
 
     signingConfigs {
