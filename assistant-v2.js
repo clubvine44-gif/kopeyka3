@@ -77,6 +77,7 @@ function open(opts){
       return;
     }
     loadHistory();
+    var _nm='';try{if(typeof window.getUserName==='function')_nm=window.getUserName()||'';}catch(x){}
     var origin=originRect(opts);
     var target=targetPos();
     var wrap=document.createElement('div');
@@ -97,7 +98,7 @@ function open(opts){
             '<div class="ka-ring ka-ring2"></div>'+
           '</div>'+
         '</div>'+
-        '<div class="ka-hint" id="kaStatus">Нажми на меня, чтобы говорить</div>'+
+        '<div class="ka-hint" id="kaStatus">'+(_nm?('Привет, '+_nm+'! '):'')+'Нажми на меня, чтобы говорить</div>'+
       '</div>';
     document.body.appendChild(wrap);
 
@@ -633,6 +634,12 @@ function parseSettingsVoice(cmd){
   if(/(лимит|трат).{0,40}(до\s+конца\s+месяц|до\s+конца\s+месяца)/.test(t)||/считай.{0,20}до\s+конца\s+месяц/.test(t)){
     return{actions:[{type:'set_limit_horizon',horizon:'month'}],summary:'Лимит считать до конца месяца'};
   }
+  // имя
+  var nm=t.match(/(?:зови\s+меня|меня\s+зовут|мо[её]\s+имя|запомни\s+имя)\s+([a-zA-Zа-яА-ЯёЁ][a-zA-Zа-яА-ЯёЁ\-]{1,30})/);
+  if(nm){
+    return{actions:[{type:'set_user_name',name:nm[1]}],summary:'Запомнить имя «'+nm[1]+'»'};
+  }
+
   // ручной / авто лимит
   var ml=t.match(/(ручной\s+)?лимит\s+(на\s+день\s+)?(\d[\d\s]*)/);
   if(ml&&/(поставь|установи|сделай|измени)/.test(t)){
@@ -736,6 +743,7 @@ function describe(a){
   if(t==='increase_debt')return'Увеличить долг «'+(a.name||'')+'» на '+fmt(a.amount);
   if(t==='set_limit_horizon')return'Лимит: '+(a.horizon==='month'?'до конца месяца':'до зарплаты');
   if(t==='set_shift_notif')return(a.enabled===false?'Выключить':'Включить')+' напоминания о сменах';
+  if(t==='set_user_name')return'Имя: '+(a.name||'');
   if(t==='set_daily_limit')return a.amount==null?'Авто-лимит':'Ручной лимит '+fmt(a.amount);
   if(t==='set_payday_day')return a.day==null?'Убрать день зарплаты':'День зарплаты '+a.day;
   if(t==='add_obligation')return'Обязательный «'+(a.name||'')+'»: '+fmt(a.amount);
@@ -834,6 +842,13 @@ function execute(a){
   else if(t==='set_shift_notif'){
     s.settings=s.settings||{};
     s.settings.shiftNotifEnabled=a.enabled!==false;
+  }
+  else if(t==='set_user_name'){
+    var nm=String(a.name||'').trim().slice(0,40);
+    if(!nm)throw Error('Укажи имя');
+    s.settings=s.settings||{};
+    s.settings.userName=nm;
+    try{if(typeof window.setUserName==='function')window.setUserName(nm);else localStorage.setItem('finna_user_name',nm);}catch(e){}
   }
   else if(t==='set_daily_limit'){
     s.settings=s.settings||{};

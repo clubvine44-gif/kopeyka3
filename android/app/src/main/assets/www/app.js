@@ -29,7 +29,7 @@ function days(a,b){return Math.round((pd(b)-pd(a))/864e5);}
 function shift(ds,ov){var v=ov&&ov[ds];if(typeof v==='string'&&SHIFT_LABEL[v])return v;return CYCLE[((days(ANCHOR,ds)%6)+6)%6];}window.shift=shift;window.SHIFT_LABEL=SHIFT_LABEL;
 function cleanShifts(ov){var out={};if(!ov||typeof ov!=='object')return out;Object.keys(ov).forEach(function(k){var v=ov[k];if(typeof v==='string'&&SHIFT_LABEL[v])out[k]=v;});return out;}
 function inMonth(dateStr,month){return String(dateStr||'').slice(0,7)===month;}
-function def(){return{version:6,settings:{openingBalance:0,month:today().slice(0,7),dayRate:0,nightRate:0,paydayDay:null,limitHorizon:'payday',shiftNotifHour:20,shiftNotifMinute:0,shiftNotifEnabled:true},income:[],expenses:[],reserves:[],debts:[],reserveOps:[],obligations:[],obligationPays:[],voiceMap:{},shiftsOverride:{},dayPlans:{},updatedAt:new Date().toISOString()};}
+function def(){return{version:6,settings:{openingBalance:0,month:today().slice(0,7),dayRate:0,nightRate:0,paydayDay:null,limitHorizon:'payday',shiftNotifHour:20,shiftNotifMinute:0,shiftNotifEnabled:true,userName:''},income:[],expenses:[],reserves:[],debts:[],reserveOps:[],obligations:[],obligationPays:[],voiceMap:{},shiftsOverride:{},dayPlans:{},updatedAt:new Date().toISOString()};}
 function norm(raw){
   var b=def();if(!raw||typeof raw!=='object')return b;
   var o=Object.assign({},b,raw);o.settings=Object.assign({},b.settings,raw.settings||{});
@@ -45,6 +45,8 @@ function norm(raw){
   if(o.settings.shiftNotifHour==null||o.settings.shiftNotifHour==='')o.settings.shiftNotifHour=20;else o.settings.shiftNotifHour=Math.min(23,Math.max(0,num(o.settings.shiftNotifHour)));
   if(o.settings.shiftNotifMinute==null||o.settings.shiftNotifMinute==='')o.settings.shiftNotifMinute=0;else o.settings.shiftNotifMinute=Math.min(59,Math.max(0,num(o.settings.shiftNotifMinute)));
   if(o.settings.shiftNotifEnabled==null)o.settings.shiftNotifEnabled=true;
+  if(o.settings.userName==null)o.settings.userName='';
+  else o.settings.userName=String(o.settings.userName||'').trim().slice(0,40);
   if(!o.settings.month)o.settings.month=today().slice(0,7);
   o.income=(o.income||[]).filter(function(x){return x&&x.id;}).map(function(x){return Object.assign({},x,{amount:sane(x.amount)});});
   o.expenses=(o.expenses||[]).filter(function(x){return x&&x.id;}).map(function(x){return Object.assign({},x,{amount:sane(x.amount)});});
@@ -194,6 +196,62 @@ return{open:open,cash:cash,available:avail,incomeSum:ops.inc,expenseSum:ops.exp,
 function compute(){return computeForMonth(getViewMonth());}
 function ensureMonth(){var cur=today().slice(0,7);var st=(STATE.settings&&STATE.settings.month)||cur;if(!STATE.settings)STATE.settings={};if(st===cur)return;var guard=0,m=st,open=num(STATE.settings.openingBalance);while(m!==cur&&guard++<240){open=open+monthOps(m).delta;m=nextMonth(m);}STATE.settings.openingBalance=open;STATE.settings.month=cur;viewMonth=cur;save(true);toast('Новый месяц: остаток '+fmt(STATE.settings.openingBalance)+' перенесён');}
 function toast(m){var el=document.getElementById('toast');if(!el)return;el.textContent=m;el.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(function(){el.classList.remove('show');},2800);}window.toast=toast;
+function getUserName(){
+  try{var n=(STATE&&STATE.settings&&STATE.settings.userName)||'';n=String(n||'').trim();if(n)return n;}catch(e){}
+  try{var ls=(localStorage.getItem('finna_user_name')||'').trim();if(ls)return ls;}catch(e){}
+  return '';
+}
+function setUserName(name){
+  name=String(name||'').trim().replace(/\s+/g,' ').slice(0,40);
+  if(!STATE.settings)STATE.settings={};
+  STATE.settings.userName=name;
+  try{if(name)localStorage.setItem('finna_user_name',name);else localStorage.removeItem('finna_user_name');}catch(e){}
+  try{save(true);}catch(e){}
+  return name;
+}
+window.getUserName=getUserName;window.setUserName=setUserName;
+function showNameIntro(force){
+  try{
+    if(!force&&getUserName())return;
+    var KEY='finna_name_intro_shown_v399';
+    // После обновления 3.9.9 — один обязательный показ, если имени ещё нет
+    if(!force&&!getUserName()){
+      /* всегда показываем пока имени нет */
+    }
+    if(document.getElementById('nameIntroDlg'))return;
+    var html='<div class="modal-card name-intro" id="nameIntroDlg">'+
+      '<div class="ni-face">'+(window.FinnChar?window.FinnChar.svgMarkup('niFinn','C'):'💬')+'</div>'+
+      '<div class="modal-title">Давай знакомиться</div>'+
+      '<p class="ni-text">Я Финна. Как тебя зовут? Запомню имя и буду обращаться по нему.</p>'+
+      '<input type="text" id="niName" class="ni-input" placeholder="Твоё имя" maxlength="40" autocomplete="name" />'+
+      '<button type="button" class="btn-primary" id="niSave">Запомнить</button>'+
+      '<button type="button" class="btn-ghost" id="niSkip">Позже</button>'+
+      '</div>';
+    openModal(html,function(){
+      var bg=document.getElementById('modalBg');
+      if(bg){bg.classList.add('full');bg.onclick=null;}
+      var inp=document.getElementById('niName');
+      var saveBtn=document.getElementById('niSave');
+      var skipBtn=document.getElementById('niSkip');
+      if(inp){try{inp.focus();}catch(e){}}
+      function done(name){
+        if(name){setUserName(name);toast('Приятно познакомиться, '+name+'!');}
+        try{localStorage.setItem(KEY,'1');}catch(e){}
+        if(bg)bg.classList.remove('full');
+        closeModal();
+        try{render();}catch(e){}
+      }
+      if(saveBtn)saveBtn.onclick=function(){
+        var v=inp?String(inp.value||'').trim():'';
+        if(!v){toast('Напиши имя');if(inp)inp.focus();return;}
+        done(v);
+      };
+      if(skipBtn)skipBtn.onclick=function(){done('');};
+      if(inp)inp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();if(saveBtn)saveBtn.click();}});
+    });
+  }catch(e){}
+}
+window.showNameIntro=showNameIntro;
 function countShifts(month){var p=month.split('-').map(Number),dim=new Date(p[0],p[1],0).getDate();var day=0,night=0,off=0,leftDay=0,leftNight=0,leftOff=0;var t=today(),curM=t.slice(0,7),curD=Number(t.slice(8));for(var d=1;d<=dim;d++){var ds=month+'-'+String(d).padStart(2,'0');var s=shift(ds,STATE.shiftsOverride);if(s==='day')day++;else if(s==='night')night++;else off++;if(month>curM||(month===curM&&d>=curD)){if(s==='day')leftDay++;else if(s==='night')leftNight++;else leftOff++;}}return{day:day,night:night,off:off,total:dim,leftDay:leftDay,leftNight:leftNight,leftOff:leftOff,leftWork:leftDay+leftNight};}
 function showShiftPay(){var month=getViewMonth(),sc=countShifts(month),dr=num(STATE.settings.dayRate),nr=num(STATE.settings.nightRate),pay=sc.day*dr+sc.night*nr,leftPay=sc.leftDay*dr+sc.leftNight*nr;var isCur=month===today().slice(0,7);var html='<div class="modal-card"><div class="modal-title">Смены · '+monthLabel(month)+'</div><div class="sp-grid"><div class="sp-item"><b>'+sc.day+'</b><span>День</span></div><div class="sp-item"><b>'+sc.night+'</b><span>Ночь</span></div><div class="sp-item"><b>'+sc.off+'</b><span>Выходной</span></div></div>'+(isCur?'<div class="sp-pay" style="margin-bottom:8px"><div class="muted">Осталось смен</div><div class="big" style="font-size:20px">'+sc.leftWork+' <span style="font-size:13px;font-weight:500;color:var(--muted)">('+sc.leftDay+'д + '+sc.leftNight+'н)</span></div></div>':'')+'<div class="sp-pay"><div class="muted">'+(isCur?'Осталось получить':'Ожидаемая зарплата')+'</div><div class="big" style="font-size:22px">'+fmt(isCur?leftPay:pay)+'</div>'+(dr||nr?'<div class="muted" style="margin-top:6px">день '+fmt(dr)+' · ночь '+fmt(nr)+(isCur?' · всего в месяце '+fmt(pay):'')+'</div>':'<div class="muted" style="margin-top:6px">Задай ставки в настройках ⚙</div>')+'</div><button type="button" class="btn-primary" id="spClose">Закрыть</button></div>';openModal(html,function(){var c=document.getElementById('spClose');if(c)c.onclick=closeModal;});}
 function openModal(html,bind){var bg=document.getElementById('modalBg');if(!bg)return;bg.innerHTML=html;bg.classList.add('show');bg.onclick=function(e){if(e.target!==bg)return;var dlg=document.getElementById('dlgLayer');if(dlg&&dlg.classList.contains('show'))return;closeModal();};try{if(window.FinBridge&&window.FinBridge.setPullRefresh)window.FinBridge.setPullRefresh(false);}catch(e){}if(bind)bind();}
@@ -789,6 +847,9 @@ function showSettings(){
   var html='<div class="modal-card full-screen">'+
     '<div class="modal-title">Настройки</div>'+
     '<div class="modal-scroll">'+
+    '<div class="set-group"><div class="set-group-title">Профиль</div>'+
+      '<button type="button" class="set-row" id="setUserName"><div class="set-main"><b>Как тебя зовут</b><span>Имя для обращений Финны</span></div><span class="set-val">'+esc(getUserName()||'—')+'</span></button>'+
+    '</div>'+
     '<div class="set-group"><div class="set-group-title">Деньги</div>'+
       '<button type="button" class="set-row" id="setOpen"><div class="set-main"><b>Начальный остаток</b><span>Сумма, с которой ведётся касса</span></div><span class="set-val">'+fmt(STATE.settings.openingBalance)+'</span></button>'+
       '<button type="button" class="set-row" id="setCashNow"><div class="set-main"><b>Подстроить кассу</b><span>Если фактическая сумма другая</span></div><span class="set-val">'+fmt(cash)+'</span></button>'+
@@ -797,7 +858,7 @@ function showSettings(){
         return '<button type="button" class="set-row" id="setDay"><div class="set-main"><b>Оплата за день</b><span>Ставка дневной смены</span></div><span class="set-val">'+fmt(st.dayRate)+'</span></button>'+
       '<button type="button" class="set-row" id="setNight"><div class="set-main"><b>Оплата за ночь</b><span>Ставка ночной смены</span></div><span class="set-val">'+fmt(st.nightRate)+'</span></button>'+
       '<button type="button" class="set-row" id="setPayday"><div class="set-main"><b>День зарплаты</b><span>Бюджет до этой даты (1–31, пусто = до конца месяца)</span></div><span class="set-val">'+(st.paydayDay?('«'+st.paydayDay+'»'):'—')+'</span></button>'+
-      '<button type="button" class="set-row" id="setShiftNotif"><div class="set-main"><b>Напоминание о смене</b><span>Во сколько предупреждать о завтрашней смене</span></div><span class="set-val">'+(st.shiftNotifEnabled===false?'Выкл':((st.shiftNotifHour!=null?st.shiftNotifHour:20)+':00'))+'</span></button>'+
+      '<button type="button" class="set-row" id="setShiftNotif"><div class="set-main"><b>Напоминание о смене</b><span>Во сколько предупреждать о завтрашней смене</span></div><span class="set-val">'+(st.shiftNotifEnabled===false?'Выкл':(String(st.shiftNotifHour!=null?st.shiftNotifHour:20).padStart(2,'0')+':'+String(st.shiftNotifMinute!=null?st.shiftNotifMinute:0).padStart(2,'0')))+'</span></button>'+
       '<button type="button" class="set-row" id="setDayTime"><div class="set-main"><b>Время дневной смены</b><span>Начало и конец</span></div><span class="set-val">'+(st.dayStart||'08:00')+'–'+(st.dayEnd||'20:00')+'</span></button>'+
       '<button type="button" class="set-row" id="setNightTime"><div class="set-main"><b>Время ночной смены</b><span>Начало и конец</span></div><span class="set-val">'+(st.nightStart||'20:00')+'–'+(st.nightEnd||'08:00')+'</span></button>';})()+
     '</div>'+
@@ -850,6 +911,15 @@ function showSettings(){
     if(setNightEl)setNightEl.onclick=function(){
       appPrompt('Оплата за ночную смену',String(num(STATE.settings.nightRate)),'Ночная ставка').then(function(o){
         if(o===null)return;pushUndo();STATE.settings.nightRate=num(o);save(true);render();toast('Ночь: '+fmt(num(o)));
+      });
+    };
+    var setUserNameEl=document.getElementById('setUserName');
+    if(setUserNameEl)setUserNameEl.onclick=function(){
+      appPrompt('Как тебя зовут?', getUserName()||'', 'Имя', {text:true}).then(function(o){
+        if(o===null)return;
+        var n=setUserName(o);
+        showSettings();
+        toast(n?('Буду звать тебя '+n):'Имя очищено');
       });
     };
     var setPaydayEl=document.getElementById('setPayday');
@@ -1099,10 +1169,12 @@ if(sh==='off'){
 
 // Финн tip — актуальные цифры без лишних запросов к ИИ
 var finnTip = '';
+var _uname=getUserName();
+var _hello=_uname?(_uname+', '):'';
 var leftDaysTip = c.daysLeft||1;
 var horizonWord = (c.horizonLabel)||((STATE.settings&&STATE.settings.paydayDay)?'до зарплаты':'до конца месяца');
 if(c.available <= 0){
-  finnTip = 'Свободных денег нет: касса '+fmt(c.cash)+', долги '+fmt(c.debtLeft)+', обязательные '+fmt(c.obligDue)+'. Сегодня лучше без необязательных трат.';
+  finnTip = _hello+'свободных денег нет: касса '+fmt(c.cash)+', долги '+fmt(c.debtLeft)+', обязательные '+fmt(c.obligDue)+'. Сегодня лучше без необязательных трат.';
 }else if(nearestObl.length && nearestObl[0].daysUntil <= 14){
   var daysU = Math.max(0, nearestObl[0].daysUntil);
   var needKeep = num(nearestObl[0].amount);
@@ -1124,7 +1196,7 @@ if(c.available <= 0){
   if(spentToday > c.daily){
     finnTip = 'Лимит сегодня '+fmt(c.daily)+', уже '+fmt(spentToday)+' (перерасход '+fmt(spentToday-c.daily)+'). Свободно '+fmt(c.available)+', '+horizonWord+' '+leftDaysTip+' дн.';
   } else {
-    finnTip = 'Сегодня ещё можно '+fmt(leftLimit)+' из '+fmt(c.daily)+'. Свободно '+fmt(c.available)+', '+horizonWord+' '+leftDaysTip+' дн.';
+    finnTip = _hello+'сегодня ещё можно '+fmt(leftLimit)+' из '+fmt(c.daily)+'. Свободно '+fmt(c.available)+', '+horizonWord+' '+leftDaysTip+' дн.';
   }
 }else{
   finnTip = 'Свободно '+fmt(c.available)+' на '+leftDaysTip+' дн. '+horizonWord+'. Задай лимит на карточке «Лимит на сегодня» — станет проще держать темп.';
@@ -1634,7 +1706,7 @@ function setup(){
   try{updateNotifBadge();}catch(e){}
 }
 
-function boot(){if(!window.__scrollSaveBound){window.__scrollSaveBound=true;var st=null;window.addEventListener('scroll',function(){if((window.__finView||currentView||'home')!=='home')return;if(st)return;st=setTimeout(function(){st=null;window.__homeScroll=window.scrollY||document.documentElement.scrollTop||0;},120);},{passive:true});}try{STATE=norm(STATE);ensureMonth();var c=compute();if(STATE.income.length===0&&STATE.expenses.length===0&&c.cash<0&&!STATE.obligations.length&&!STATE.reserves.length){STATE=def();save(true);}}catch(e){STATE=def();}setup();render();syncReminders();setTimeout(bindFabHold,300);setTimeout(bindFabHold,1200);}
+function boot(){if(!window.__scrollSaveBound){window.__scrollSaveBound=true;var st=null;window.addEventListener('scroll',function(){if((window.__finView||currentView||'home')!=='home')return;if(st)return;st=setTimeout(function(){st=null;window.__homeScroll=window.scrollY||document.documentElement.scrollTop||0;},120);},{passive:true});}try{STATE=norm(STATE);ensureMonth();var c=compute();if(STATE.income.length===0&&STATE.expenses.length===0&&c.cash<0&&!STATE.obligations.length&&!STATE.reserves.length){STATE=def();save(true);}}catch(e){STATE=def();}setup();render();syncReminders();setTimeout(bindFabHold,300);setTimeout(bindFabHold,1200);setTimeout(function(){try{if(!getUserName())showNameIntro(false);}catch(e){}},700);}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
 window.goView=goView;window.goHome=goHome;window.render=render;window.compute=compute;window.syncReminders=typeof syncReminders==="function"?syncReminders:function(){};
 Object.defineProperty(window,'currentView',{get:function(){return currentView;},set:function(v){currentView=v||'home';window.__finView=currentView;}});

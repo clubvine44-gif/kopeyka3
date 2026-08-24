@@ -208,6 +208,11 @@ function getContext(){
       obj.ui.paydayDay=st.paydayDay;
       obj.ui.shiftNotifEnabled=st.shiftNotifEnabled!==false;
       obj.ui.manualDailyLimit=st.manualDailyLimit;
+      var un='';
+      try{if(typeof window.getUserName==='function')un=window.getUserName()||'';}catch(e){}
+      if(!un)un=st.userName||'';
+      obj.userName=un||'';
+      obj.ui.userName=un||'';
     }catch(e){}
     return JSON.stringify(obj);
   }catch(e){return '{}';}
@@ -396,6 +401,9 @@ function askConversation(history,userText){
       'Контекст сценария пользователя: '+profileCtx,
       'Тебя зовут Финна (не Финн и не Фина). Ты дружелюбный ассистент приложения Финна.',
       'Отвечай только по-русски, коротко и по делу.',
+      'Если в КОНТЕКСТЕ есть userName — иногда обращайся к человеку по имени (не в каждом предложении, естественно, по-дружески).',
+      'Можешь менять имя: пользователь сказал «зови меня X» → action {"type":"set_user_name","name":"X"}.',
+
       'Ты можешь отвечать на ЛЮБЫЕ вопросы пользователя: финансы, общие знания, быт, шутки — без отказов «я только про деньги».',
       'Если вопрос не про финансы — просто ответь как умный помощник в mode answer.',
       'Долги сейчас: '+debtNames+'.',
@@ -405,7 +413,7 @@ function askConversation(history,userText){
       '«Добавь долг X на N» → add_debt с name и amount. Не путай с pay_debt.',
       'Бери точные имена из списка долгов/резервов. Никогда не удаляй доход вместо долга.',
       'Если вопрос не требует изменения данных — можно ответить обычным текстом. Если меняешь данные Финны — JSON. Формат JSON: {"mode":"answer","text":"...","summary":null,"actions":[]} или {"mode":"action","text":null,"summary":"...","actions":[{"type":"..."}]}.',
-      'type: add_expense, add_income, add_debt, pay_debt, increase_debt, reserve_deposit, reserve_withdraw, add_obligation, delete_debt, delete_income, delete_expense, delete_reserve, delete_obligation, delete_last, change_last, set_opening_balance, set_day_rate, set_night_rate, set_limit_horizon (horizon: payday|month), set_shift_notif (enabled: true|false), set_daily_limit (amount или null для авто), set_payday_day (day 1-31 или null), change_shift. Для смен: date YYYY-MM-DD, shift day|night|off. Учитывай ui.horizonLabel и ui.dailyLimit из КОНТЕКСТА — лимит и «дней осталось» зависят от выбора пользователя (до зарплаты / до конца месяца). Если просят календарь — ответь текстом кратко.',
+      'type: add_expense, add_income, add_debt, pay_debt, increase_debt, reserve_deposit, reserve_withdraw, add_obligation, delete_debt, delete_income, delete_expense, delete_reserve, delete_obligation, delete_last, change_last, set_opening_balance, set_day_rate, set_night_rate, set_limit_horizon (horizon: payday|month), set_shift_notif (enabled: true|false), set_daily_limit (amount или null для авто), set_payday_day (day 1-31 или null), set_user_name (name), change_shift. Для смен: date YYYY-MM-DD, shift day|night|off. Учитывай ui.horizonLabel и ui.dailyLimit из КОНТЕКСТА — лимит и «дней осталось» зависят от выбора пользователя (до зарплаты / до конца месяца). Если просят календарь — ответь текстом кратко.',
       'На вопрос «как тебя зовут» отвечай: «Меня зовут Финна».'
     ].join('\n');
     var messages=[{role:'system',content:system+'\n\nКОНТЕКСТ:\n'+getContext()}];
