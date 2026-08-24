@@ -1029,9 +1029,17 @@ var nearestObl = [];
   var day=Math.min(Math.max(1,num(ob.day)||1), new Date(ym[0],ym[1],0).getDate());
   var dueDate = month+'-'+String(day).padStart(2,'0');
   var daysUntil = days(t, dueDate);
-  if(daysUntil < 0 && isCurrent){ /* overdue this month */ daysUntil = daysUntil; }
-  else if(daysUntil < 0){ /* next month approx */ daysUntil = daysUntil + 30; }
-  nearestObl.push({name:ob.name, amount:left, day:day, daysUntil:daysUntil, overdue:daysUntil<0, id:ob.id});
+  // если день платежа в этом месяце уже прошёл — считаем до того же дня следующего месяца
+  if(daysUntil < 0 && isCurrent){
+    var nm=nextMonth(month), np=nm.split('-').map(Number);
+    var dimN=new Date(np[0],np[1],0).getDate();
+    var dN=Math.min(day, dimN);
+    dueDate=nm+'-'+String(dN).padStart(2,'0');
+    daysUntil=days(t, dueDate);
+  }else if(daysUntil < 0){
+    daysUntil=0;
+  }
+  nearestObl.push({name:ob.name, amount:left, day:day, daysUntil:daysUntil, overdue:false, id:ob.id, dueDate:dueDate});
 });
 nearestObl.sort(function(a,b){return a.daysUntil-b.daysUntil;});
 nearestObl = nearestObl.slice(0,3);
@@ -1095,14 +1103,22 @@ var leftDaysTip = c.daysLeft||1;
 var horizonWord = (c.horizonLabel)||((STATE.settings&&STATE.settings.paydayDay)?'до зарплаты':'до конца месяца');
 if(c.available <= 0){
   finnTip = 'Свободных денег нет: касса '+fmt(c.cash)+', долги '+fmt(c.debtLeft)+', обязательные '+fmt(c.obligDue)+'. Сегодня лучше без необязательных трат.';
-}else if(nearestObl.length && nearestObl[0].daysUntil <= 3){
-  var daysU = Math.max(0,nearestObl[0].daysUntil);
+}else if(nearestObl.length && nearestObl[0].daysUntil <= 14){
+  var daysU = Math.max(0, nearestObl[0].daysUntil);
   var needKeep = num(nearestObl[0].amount);
-  var safeAfter = Math.max(0, c.available - needKeep);
-  var perDayObl = Math.floor(safeAfter/Math.max(1,leftDaysTip));
-  if(daysU===0) finnTip = 'Сегодня платёж «'+nearestObl[0].name+'» — '+fmt(needKeep)+'. После оплаты свободно останется около '+fmt(safeAfter)+'.';
-  else if(daysU===1) finnTip = 'Завтра «'+nearestObl[0].name+'» — '+fmt(needKeep)+'. Оставь эту сумму, остальное: ~'+fmt(perDayObl)+' в день.';
-  else finnTip = 'Через '+daysU+' дн. «'+nearestObl[0].name+'» — '+fmt(needKeep)+'. Чтобы не сорвать платёж, ориентир ~'+fmt(perDayObl)+' в день.';
+  var have = Math.max(0, c.available);
+  if(daysU===0){
+    if(have>=needKeep) finnTip = 'Сегодня «'+nearestObl[0].name+'» — '+fmt(needKeep)+'. В кассе хватает; после оплаты останется ~'+fmt(have-needKeep)+'.';
+    else finnTip = 'Сегодня «'+nearestObl[0].name+'» — '+fmt(needKeep)+', свободно только '+fmt(have)+'. Не хватает '+fmt(needKeep-have)+'.';
+  }else if(have>=needKeep){
+    var after=have-needKeep;
+    var perRest=Math.floor(after/Math.max(1,leftDaysTip));
+    finnTip = (daysU===1?'Завтра':'Через '+daysU+' дн.')+' «'+nearestObl[0].name+'» — '+fmt(needKeep)+'. Свободных хватает. После резерва на платёж останется ~'+fmt(after)+' (~'+fmt(perRest)+'/день).';
+  }else{
+    var gap=needKeep-have;
+    var perSave=Math.ceil(gap/Math.max(1,daysU));
+    finnTip = (daysU===1?'Завтра':'Через '+daysU+' дн.')+' «'+nearestObl[0].name+'» — '+fmt(needKeep)+'. Не хватает '+fmt(gap)+' — откладывай минимум '+fmt(perSave)+' ₽/день ('+daysU+' дн.).';
+  }
 }else if(c.daily > 0){
   var leftLimit = Math.max(0, c.daily - spentToday);
   if(spentToday > c.daily){

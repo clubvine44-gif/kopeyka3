@@ -1,6 +1,6 @@
 {
-  "versionCode": 60,
-  "versionName": "3.9.2",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v3.9.2/Fin.apk",
-  "notes": "3.9.2 — стабильный микрофон, ввод времени/даты сегментами, календарь влезает, без мигания при возврате"
+  "versionCode": 61,
+  "versionName": "3.9.3",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v3.9.3/Fin.apk",
+  "notes": "3.9.3 — стабильный микрофон без транскрипта, совет по платежу, календарь по месяцу, окна обновления, пульсации"
 }

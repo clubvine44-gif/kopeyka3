@@ -199,7 +199,7 @@ function style(){
   'display:flex;align-items:center;justify-content:center;'+
   'animation:kaBob 3.2s ease-in-out infinite;transform-origin:center center}'+
   '.ka-bubble.thinking{animation:kaThink 1.4s ease-in-out infinite}'+
-  '.ka-bubble.listening{animation:kaListen 2s ease-in-out infinite;'+
+  '.ka-bubble.listening{animation:kaListen 1.6s ease-in-out infinite;'+
   'box-shadow:0 16px 48px rgba(0,0,0,.5),0 0 0 8px rgba(94,200,255,.16),0 0 40px rgba(94,200,255,.4)}'+
   '.ka-bubble.happy{animation:kaHappy 0.7s ease}'+
   '.ka-bubble.alert,.ka-bubble.angry{animation:kaShake 0.5s ease}'+
@@ -216,9 +216,9 @@ function style(){
   'animation:kaRing 2.4s ease-out infinite;pointer-events:none}'+
   '.ka-ring2{inset:-22px;animation-delay:.7s;opacity:.5}'+
   '@keyframes kaRing{0%{transform:scale(.85);opacity:.65}100%{transform:scale(1.28);opacity:0}}'+
-  '@keyframes kaBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}'+
-  '@keyframes kaThink{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-4px) scale(1.04)}}'+
-  '@keyframes kaListen{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-3px) scale(1.03)}}'+
+  '@keyframes kaBob{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-7px) scale(1.04)}}'+
+  '@keyframes kaThink{0%,100%{transform:translateY(0) scale(1);filter:brightness(1)}50%{transform:translateY(-5px) scale(1.06);filter:brightness(1.1)}}'+
+  '@keyframes kaListen{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-4px) scale(1.07)}}'+
   '@keyframes kaHappy{0%{transform:scale(1)}40%{transform:scale(1.08)}70%{transform:scale(.97)}100%{transform:scale(1)}}'+
   '@keyframes kaShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}'+
   '@keyframes kaTilt{0%,100%{transform:rotate(-6deg)}50%{transform:rotate(7deg)}}'+
@@ -353,8 +353,8 @@ function status(t){
   if(e)e.textContent=t||'';
 }
 
-var _speechBuf='',_silenceTimer=null,_speechRestarts=0,_lastResultAt=0,_finalizing=false,_listenGen=0;
-var SILENCE_MS=2000,MAX_SPEECH_RESTARTS=3;
+var _speechBuf='',_silenceTimer=null,_speechRestarts=0,_lastResultAt=0,_finalizing=false,_listenGen=0,_seenFinals={};
+var SILENCE_MS=1800,MAX_SPEECH_RESTARTS=2;
 
 function clearSilenceTimer(){
   if(_silenceTimer){clearTimeout(_silenceTimer);_silenceTimer=null;}
@@ -376,6 +376,7 @@ function finalizeSpeech(){
   clearSilenceTimer();
   var text=String(_speechBuf||'').replace(/\s+/g,' ').trim();
   _speechBuf='';
+  _seenFinals={};
   var gen=_listenGen;
   wantListen=false;
   _micStarting=false;
@@ -385,6 +386,8 @@ function finalizeSpeech(){
   if(gen!==_listenGen)return;
   if(!text){status('Нажми на меня, чтобы говорить');kaEmo('idle');return;}
   if(isOnlyWake(text)){status('Да, слушаю…');setTimeout(function(){startListen();},280);return;}
+  status('Думаю…');
+  kaEmo('thinking');
   handle(text);
 }
 
@@ -396,11 +399,12 @@ function startListen(){
   _micStarting=true;
   restarts=0;
   _speechBuf='';
+  _seenFinals={};
   _speechRestarts=0;
   _lastResultAt=0;
   _finalizing=false;
   clearSilenceTimer();
-  status('Слушаю… говори');
+  status('Слушаю…');
   setListeningUI(true);
   createRecognition();
 }
@@ -411,9 +415,9 @@ function createRecognition(){
   try{if(rec){try{rec.onend=null;rec.onerror=null;rec.onresult=null;rec.abort();}catch(x){}rec=null;}}catch(x){}
   rec=new SR();
   rec.lang='ru-RU';
-  rec.interimResults=true;
-  // Android WebView: continuous=true часто рвёт сессию → без автоперезапусков-мигалок
-  rec.continuous=true;
+  // Без interim — не транслируем слова на экран, меньше дублей
+  rec.interimResults=false;
+  rec.continuous=false;
   rec.maxAlternatives=1;
   var myGen=_listenGen;
   rec.onstart=function(){
@@ -421,29 +425,31 @@ function createRecognition(){
     listening=true;
     _micStarting=false;
     setListeningUI(true);
-    status(_speechBuf?('… '+_speechBuf):'Слушаю…');
+    status('Слушаю…');
   };
   rec.onresult=function(e){
     if(!wantListen||myGen!==_listenGen||_finalizing)return;
-    var interim='',chunk='';
+    var chunk='';
     for(var i=e.resultIndex;i<e.results.length;i++){
-      var piece=e.results[i][0].transcript;
-      if(e.results[i].isFinal)chunk+=piece+' ';
-      else interim+=piece+' ';
+      if(!e.results[i].isFinal)continue;
+      var piece=String(e.results[i][0].transcript||'').trim();
+      if(!piece)continue;
+      // анти-дубль: одна и та же финальная фраза не клеится повторно
+      var key=piece.toLowerCase();
+      if(_seenFinals[key])continue;
+      _seenFinals[key]=1;
+      chunk+=(chunk?' ':'')+piece;
     }
-    chunk=chunk.trim();
-    if(chunk){
-      _speechBuf=(_speechBuf?(_speechBuf+' '):'')+chunk;
-      _speechBuf=_speechBuf.replace(/\s+/g,' ').trim();
-      _lastResultAt=Date.now();
-      _speechRestarts=0;
-    }
-    if(interim)status('… '+(_speechBuf?(_speechBuf+' '):'')+interim.trim());
-    else if(_speechBuf)status('… '+_speechBuf);
-    if(_speechBuf){
-      clearSilenceTimer();
-      _silenceTimer=setTimeout(function(){if(myGen===_listenGen)finalizeSpeech();},SILENCE_MS);
-    }
+    if(!chunk)return;
+    _speechBuf=(_speechBuf?(_speechBuf+' '):'')+chunk;
+    _speechBuf=_speechBuf.replace(/\s+/g,' ').trim();
+    _lastResultAt=Date.now();
+    _speechRestarts=0;
+    // статус без транскрипта
+    status('Слушаю…');
+    clearSilenceTimer();
+    // one-shot: после финала сразу думаем (continuous=false)
+    _silenceTimer=setTimeout(function(){if(myGen===_listenGen)finalizeSpeech();},400);
   };
   rec.onerror=function(e){
     if(myGen!==_listenGen)return;
@@ -453,26 +459,24 @@ function createRecognition(){
     try{if(rec){rec.onend=null;rec.onresult=null;rec.abort();}}catch(x){}
     rec=null;
     if(code==='not-allowed'){
-      clearSilenceTimer();wantListen=false;_speechBuf='';
+      clearSilenceTimer();wantListen=false;_speechBuf='';_seenFinals={};
       status('Нет доступа к микрофону');kaEmo('alert',1800);setListeningUI(false);return;
     }
-    // Игнор aborted/no-speech без перезапуска — иначе мигание
     if(code==='aborted')return;
     if(code==='no-speech'){
       if(_speechBuf){
         clearSilenceTimer();
-        _silenceTimer=setTimeout(function(){if(myGen===_listenGen)finalizeSpeech();},600);
+        _silenceTimer=setTimeout(function(){if(myGen===_listenGen)finalizeSpeech();},300);
+        return;
       }
-      return;
-    }
-    // прочие ошибки — один мягкий retry только если уже есть текст
-    if(wantListen&&_speechBuf&&_speechRestarts<MAX_SPEECH_RESTARTS){
-      _speechRestarts++;
-      setTimeout(function(){if(wantListen&&myGen===_listenGen&&!listening)createRecognition();},400);
-      return;
-    }
-    if(wantListen&&!_speechBuf){
-      // тихо ждём — пользователь может ещё начать; не дёргаем UI
+      // тишина — один мягкий retry, без мигания UI
+      if(wantListen&&_speechRestarts<MAX_SPEECH_RESTARTS){
+        _speechRestarts++;
+        setTimeout(function(){if(wantListen&&myGen===_listenGen&&!listening&&!_finalizing)createRecognition();},500);
+        return;
+      }
+      wantListen=false;setListeningUI(false);
+      status('Нажми на меня, чтобы говорить');kaEmo('idle');
       return;
     }
   };
@@ -482,18 +486,16 @@ function createRecognition(){
     _micStarting=false;
     rec=null;
     if(!wantListen||_finalizing){setListeningUI(false);return;}
-    // Есть накопленная речь — ждём silence, без немедленного restart
     if(_speechBuf){
-      if(!_silenceTimer)_silenceTimer=setTimeout(function(){if(myGen===_listenGen)finalizeSpeech();},SILENCE_MS);
-      // Один осторожный restart только если пауза свежая (<1.2с) — продолжение фразы
-      var ago=Date.now()-(_lastResultAt||0);
-      if(ago<1200&&_speechRestarts<MAX_SPEECH_RESTARTS){
-        _speechRestarts++;
-        setTimeout(function(){if(wantListen&&myGen===_listenGen&&!listening&&!_finalizing)createRecognition();},350);
-      }
+      if(!_silenceTimer)_silenceTimer=setTimeout(function(){if(myGen===_listenGen)finalizeSpeech();},300);
       return;
     }
-    // Пусто — НЕ крутим рестарты (это и есть мигание). Ждём тапа.
+    // пусто и сессия кончилась — один retry максимум
+    if(wantListen&&_speechRestarts<MAX_SPEECH_RESTARTS){
+      _speechRestarts++;
+      setTimeout(function(){if(wantListen&&myGen===_listenGen&&!listening&&!_finalizing)createRecognition();},450);
+      return;
+    }
     wantListen=false;
     setListeningUI(false);
     status('Нажми на меня, чтобы говорить');
@@ -571,9 +573,44 @@ function showAssistantCalendar(month){
   setTimeout(function(){_pinReply=false;},50);
 }
 
+function parseMonthToken(t){
+  var map={
+    'январ':1,'январь':1,'января':1,
+    'феврал':2,'февраль':2,'февраля':2,
+    'март':3,'марта':3,
+    'апрел':4,'апрель':4,'апреля':4,
+    'май':5,'мая':5,
+    'июн':6,'июнь':6,'июня':6,
+    'июл':7,'июль':7,'июля':7,
+    'август':8,'августа':8,
+    'сентябр':9,'сентябрь':9,'сентября':9,
+    'октябр':10,'октябрь':10,'октября':10,
+    'ноябр':11,'ноябрь':11,'ноября':11,
+    'декабр':12,'декабрь':12,'декабря':12
+  };
+  var now=new Date();
+  var y=now.getFullYear(), m=null;
+  var keys=Object.keys(map);
+  for(var i=0;i<keys.length;i++){
+    if(t.indexOf(keys[i])>=0){m=map[keys[i]];break;}
+  }
+  // «за 9», «на 09 месяц»
+  if(m==null){
+    var mm=t.match(/(?:за|на|про)\s*(\d{1,2})(?:\s*месяц)?/);
+    if(mm){var n=parseInt(mm[1],10);if(n>=1&&n<=12)m=n;}
+  }
+  if(m==null)return null;
+  // если месяц уже прошёл в этом году и просят «за сентябрь» в октябре — текущий год ок;
+  // если просят будущий относительно января после декабря — оставим текущий год
+  return y+'-'+String(m).padStart(2,'0');
+}
+
 function parseShiftVoice(cmd){
   var t=norm(cmd);
-  if(/календар/.test(t)||/покажи\s*смен/.test(t)||/какие\s*смен/.test(t))return{showCal:true};
+  if(/календар/.test(t)||/покажи\s*смен/.test(t)||/какие\s*смен/.test(t)){
+    var mon=parseMonthToken(t);
+    return{showCal:true,month:mon||null};
+  }
   if(!/(смен|выходн|дневн|ночн)/.test(t))return null;
   var shiftType=null;
   if(/выходн/.test(t))shiftType='off';
@@ -607,8 +644,8 @@ function handle(text){
   history.push({role:'user',content:cmd});saveHistory();
   var localShift=parseShiftVoice(cmd);
   if(localShift&&localShift.showCal){
-    // чуть подождать, чтобы clearReply не стёр календарь
-    setTimeout(function(){showAssistantCalendar();},260);
+    var calMonth=localShift.month||null;
+    setTimeout(function(){showAssistantCalendar(calMonth);},260);
     maybeResumeListen(200);
     return;
   }

@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="22dp"
+    android:background="@drawable/bg_dialog_card">
+
+    <TextView
+        android:id="@+id/updBadge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="ОБНОВЛЕНИЕ"
+        android:textColor="#5EC8FF"
+        android:textSize="11sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.08"
+        android:paddingBottom="6dp" />
+
+    <TextView
+        android:id="@+id/updTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Доступна новая версия"
+        android:textColor="#F2F3F7"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:paddingBottom="8dp" />
+
+    <TextView
+        android:id="@+id/updVersion"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="#E5A75E"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        android:paddingBottom="12dp" />
+
+    <TextView
+        android:id="@+id/updNotes"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="#B8C0D0"
+        android:textSize="14sp"
+        android:lineSpacingExtra="3dp"
+        android:paddingBottom="8dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Установится поверх текущей версии. Данные сохранятся."
+        android:textColor="#8B90A0"
+        android:textSize="12sp"
+        android:paddingBottom="18dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="end">
+
+        <TextView
+            android:id="@+id/updLater"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Позже"
+            android:textColor="#9AA3B5"
+            android:textSize="15sp"
+            android:padding="12dp"
+            android:background="?attr/selectableItemBackgroundBorderless" />
+
+        <TextView
+            android:id="@+id/updInstall"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Установить"
+            android:textColor="#1A1208"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:paddingLeft="18dp"
+            android:paddingRight="18dp"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/bg_btn_primary" />
+    </LinearLayout>
+</LinearLayout>

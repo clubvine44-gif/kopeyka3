@@ -11,7 +11,10 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.view.LayoutInflater;
 import android.view.View;
+import android.widget.ProgressBar;
+import android.widget.TextView;
 import android.view.ViewGroup;
 import android.webkit.PermissionRequest;
 import android.webkit.ValueCallback;
@@ -64,7 +67,7 @@ public class MainActivity extends AppCompatActivity {
     private final AtomicBoolean updateDialogShowing = new AtomicBoolean(false);
     private final AtomicBoolean updateCheckRunning = new AtomicBoolean(false);
     private final AtomicBoolean downloading = new AtomicBoolean(false);
-    private android.app.ProgressDialog progressDlg;
+    private AlertDialog progressDlg;
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -269,35 +272,38 @@ public class MainActivity extends AppCompatActivity {
         if (isFinishing() || (Build.VERSION.SDK_INT >= 17 && isDestroyed())) return;
         if (!updateDialogShowing.compareAndSet(false, true)) return;
 
-        String message = "Доступна новая версия Финна"
-                + (name.isEmpty() ? "" : " " + name)
-                + "\n\n"
-                + (notes.isEmpty() ? "Обновление приложения." : notes)
-                + "\n\nУстановится поверх текущей версии без удаления данных.";
+        View root = LayoutInflater.from(this).inflate(R.layout.dialog_update, null, false);
+        TextView title = root.findViewById(R.id.updTitle);
+        TextView ver = root.findViewById(R.id.updVersion);
+        TextView notesV = root.findViewById(R.id.updNotes);
+        TextView later = root.findViewById(R.id.updLater);
+        TextView install = root.findViewById(R.id.updInstall);
+        if (title != null) title.setText("Доступна новая версия");
+        if (ver != null) ver.setText(name == null || name.isEmpty() ? "Финна" : ("Финна " + name));
+        if (notesV != null) notesV.setText(notes == null || notes.isEmpty() ? "Улучшения стабильности и интерфейса." : notes);
 
-        new AlertDialog.Builder(this)
-                .setTitle("Доступно обновление")
-                .setMessage(message)
-                .setNegativeButton("Позже", (d, w) -> {
-                    getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-                            .putInt(KEY_SKIP_CODE, code)
-                            .putLong(KEY_SKIP_UNTIL, System.currentTimeMillis() + SKIP_MS)
-                            .apply();
-                    updateDialogShowing.set(false);
-                })
-                .setPositiveButton("Установить", (d, w) -> {
-                    updateDialogShowing.set(false);
-                    downloadAndInstall(apkUrl, name);
-                })
-                .setOnCancelListener(d -> {
-                    getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-                            .putInt(KEY_SKIP_CODE, code)
-                            .putLong(KEY_SKIP_UNTIL, System.currentTimeMillis() + SKIP_MS)
-                            .apply();
-                    updateDialogShowing.set(false);
-                })
+        AlertDialog dlg = new AlertDialog.Builder(this)
+                .setView(root)
                 .setCancelable(true)
-                .show();
+                .create();
+        if (dlg.getWindow() != null) {
+            dlg.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        }
+        Runnable skip = () -> {
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                    .putInt(KEY_SKIP_CODE, code)
+                    .putLong(KEY_SKIP_UNTIL, System.currentTimeMillis() + SKIP_MS)
+                    .apply();
+            updateDialogShowing.set(false);
+        };
+        if (later != null) later.setOnClickListener(v -> { dlg.dismiss(); skip.run(); });
+        if (install != null) install.setOnClickListener(v -> {
+            dlg.dismiss();
+            updateDialogShowing.set(false);
+            downloadAndInstall(apkUrl, name);
+        });
+        dlg.setOnCancelListener(d -> skip.run());
+        dlg.show();
     }
 
     /** Прямое скачивание APK с проверкой ZIP-сигнатуры — без битых файлов DownloadManager. */
@@ -306,13 +312,15 @@ public class MainActivity extends AppCompatActivity {
         runOnUiThread(() -> {
             try {
                 if (progressDlg != null && progressDlg.isShowing()) progressDlg.dismiss();
-                progressDlg = new android.app.ProgressDialog(this);
-                progressDlg.setTitle("Обновление Финна " + (versionName != null ? versionName : ""));
-                progressDlg.setMessage("Загрузка…");
-                progressDlg.setProgressStyle(android.app.ProgressDialog.STYLE_HORIZONTAL);
-                progressDlg.setIndeterminate(true);
-                progressDlg.setCancelable(false);
-                progressDlg.setMax(100);
+                View root = LayoutInflater.from(this).inflate(R.layout.dialog_progress, null, false);
+                TextView pt = root.findViewById(R.id.progTitle);
+                TextView pm = root.findViewById(R.id.progMsg);
+                if (pt != null) pt.setText("Обновление Финны" + (versionName != null && !versionName.isEmpty() ? (" " + versionName) : ""));
+                if (pm != null) pm.setText("Загрузка…");
+                progressDlg = new AlertDialog.Builder(this).setView(root).setCancelable(false).create();
+                if (progressDlg.getWindow() != null) {
+                    progressDlg.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+                }
                 progressDlg.show();
             } catch (Exception ignored) {}
         });
@@ -343,13 +351,13 @@ public class MainActivity extends AppCompatActivity {
                     try {
                         if (progressDlg != null) {
                             if (finalLen > 0) {
-                                progressDlg.setIndeterminate(false);
-                                progressDlg.setMax(100);
-                                progressDlg.setProgress(0);
-                                progressDlg.setMessage("Загрузка… 0%");
+                                { ProgressBar pb = progressDlg.findViewById(R.id.progBar); if (pb != null) pb.setIndeterminate(false); }
+                                { ProgressBar pb = progressDlg.findViewById(R.id.progBar); if (pb != null) pb.setMax(100); }
+                                { ProgressBar pb = progressDlg.findViewById(R.id.progBar); if (pb != null) { pb.setIndeterminate(false); pb.setProgress(0); } TextView pct = progressDlg.findViewById(R.id.progPct); if (pct != null) pct.setText(0 + "%"); }
+                                { TextView pm = progressDlg.findViewById(R.id.progMsg); if (pm != null) pm.setText("Загрузка… 0%"); }
                             } else {
-                                progressDlg.setIndeterminate(true);
-                                progressDlg.setMessage("Загрузка…");
+                                { ProgressBar pb = progressDlg.findViewById(R.id.progBar); if (pb != null) pb.setIndeterminate(true); }
+                                { TextView pm = progressDlg.findViewById(R.id.progMsg); if (pm != null) pm.setText("Загрузка…"); }
                             }
                         }
                     } catch (Exception ignored) {}
@@ -371,8 +379,8 @@ public class MainActivity extends AppCompatActivity {
                             runOnUiThread(() -> {
                                 try {
                                     if (progressDlg != null && progressDlg.isShowing()) {
-                                        progressDlg.setProgress(p);
-                                        progressDlg.setMessage("Загрузка… " + p + "%");
+                                        { ProgressBar pb = progressDlg.findViewById(R.id.progBar); if (pb != null) { pb.setIndeterminate(false); pb.setProgress(p); } TextView pct = progressDlg.findViewById(R.id.progPct); if (pct != null) pct.setText(p + "%"); }
+                                        { TextView pm = progressDlg.findViewById(R.id.progMsg); if (pm != null) pm.setText("Загрузка… " + p + "%"); }
                                     }
                                 } catch (Exception ignored) {}
                             });
