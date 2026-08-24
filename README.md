@@ -13,3 +13,6 @@
 
 ## Pages
 https://clubvine44-gif.github.io/kopeyka3/
+
+## Release trigger
+Актуальная сборка Финна 3.9.1.
