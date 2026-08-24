@@ -9,6 +9,7 @@ var W=0,H=0,dpr=1, lastT=0, ambient=null, roomOpen=false;
 var MS=loadState();
 var finn=null; // canvas Finn state
 var roomAudio=null;
+var unlockedRoomAudio=null;
 var listenOnce=false;
 var rec=null;
 
@@ -83,8 +84,19 @@ function playCreak(){
 }
 function startAmbient(){
   stopAmbient();
-  // Prefer room MP3
+  // Используем заранее «разблокированный» на клике элемент, если он есть —
+  // иначе .play() после setTimeout будет заблокирован политикой автозапуска.
   try{
+    if(unlockedRoomAudio){
+      roomAudio=unlockedRoomAudio;
+      roomAudio.loop=true;
+      roomAudio.volume=0.28;
+      roomAudio.currentTime=0;
+      var p2=roomAudio.play();
+      if(p2&&p2.catch)p2.catch(function(){ startSynthAmbient(); });
+      ambient={type:'mp3'};
+      return;
+    }
     roomAudio=new Audio('matter-room.mp3');
     roomAudio.loop=true;
     roomAudio.volume=0.28;
@@ -1083,6 +1095,19 @@ function drawRoomFinn(){
 /* ---------- public API ---------- */
 function enterMatter(){
   ensureRoot();
+  // разблокировка аудио — обязательно синхронно в обработчике клика,
+  // иначе .play() внутри setTimeout при входе в комнату будет заблокирован
+  try{
+    if(!unlockedRoomAudio){
+      unlockedRoomAudio=new Audio('matter-room.mp3');
+      unlockedRoomAudio.loop=true;
+      unlockedRoomAudio.volume=0;
+      var up=unlockedRoomAudio.play();
+      if(up&&up.then)up.then(function(){
+        try{unlockedRoomAudio.pause();unlockedRoomAudio.currentTime=0;unlockedRoomAudio.volume=0.28;}catch(e){}
+      }).catch(function(){ unlockedRoomAudio=null; });
+    }
+  }catch(e){unlockedRoomAudio=null;}
   root.classList.add('on');
   root.setAttribute('aria-hidden','false');
   document.body.classList.add('matter-lock');
