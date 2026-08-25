@@ -189,7 +189,7 @@ function ensureRoot(){
       '<div class="m-room-scene" id="matterRoomScene">'+
         '<div class="m-room-bg"></div>'+
         /* Hotspots: размер зоны ≈ размер объекта; дневник точно на книге-дневнике */
-        '<button type="button" class="m-hot m-hot-sm" data-obj="diary"  style="left:20%;top:91%" title="Дневник"></button>'+
+        '<button type="button" class="m-hot m-hot-sm" data-obj="diary"  style="left:16%;top:88%" title="Дневник"></button>'+
         '<button type="button" class="m-hot m-hot-md" data-obj="book"   style="left:50%;top:71%" title="Книга"></button>'+
         '<button type="button" class="m-hot m-hot-md" data-obj="plant"  style="left:73%;top:55%" title="Растение"></button>'+
         '<button type="button" class="m-hot m-hot-sm" data-obj="piggy"  style="left:77%;top:40%" title="Копилка"></button>'+
@@ -386,24 +386,22 @@ function buildStars(){
       bg:true
     });
   }
-  // Дверь-созвездие: справа внизу, асимметричная, не пересекает Медведиц
-  var dx=W*0.88, dy=H*0.78;
-  var tilt=-0.38;
-  // несимметричный силуэт «портала»
-  var pts=[
-    [-10,-40],[18,-36],[26,-14],[22,18],[8,38],[-16,34],[-28,12],[-24,-18],[-4,-28]
-  ];
-  var doorStars=[];
-  pts.forEach(function(p,i){
-    var cos=Math.cos(tilt),sin=Math.sin(tilt);
-    var x=dx+p[0]*cos-p[1]*sin;
-    var y=dy+p[0]*sin+p[1]*cos;
-    doorStars.push({x:x,y:y,r:1.8+(i%3)*0.6,pulse:i*0.55});
-  });
+  // Дверь = мини чёрная дыра справа снизу (не на Медведицах)
+  var dx=W*0.86, dy=H*0.76;
+  var vortex=[];
+  for(var vi=0;vi<36;vi++){
+    vortex.push({
+      a:Math.random()*Math.PI*2,
+      r:18+Math.random()*34,
+      sp:1.2+Math.random()*2.4,
+      s:0.8+Math.random()*1.6
+    });
+  }
   door={
-    x:dx,y:dy,r:42,tilt:tilt,
-    stars:doorStars,
-    open:0,opening:false,entered:false
+    x:dx,y:dy,r:48,
+    vortex:vortex,
+    open:0,opening:false,entered:false,
+    swirl:0
   };
 }
 
@@ -425,92 +423,108 @@ function resetFinn(){
 }
 
 function drawFinnFace(c, cx, cy, size, t){
-  // Горящая звезда/солнце вблизи: плазма, корона, лицо читается
   var s=size;
+  var emo=(finn&&finn.emotion)||'idle';
   c.save();
   c.translate(cx,cy);
-  var pulse=0.92+0.08*Math.sin(t*3.1);
+  var pulse=0.94+0.06*Math.sin(t*2.8);
 
-  // дальняя корона
-  var g0=c.createRadialGradient(0,0,s*0.15,0,0,s*2.1);
-  g0.addColorStop(0,'rgba(255,255,240,0.85)');
-  g0.addColorStop(0.2,'rgba(255,210,120,0.55)');
-  g0.addColorStop(0.45,'rgba(255,120,60,0.28)');
-  g0.addColorStop(0.75,'rgba(255,60,100,0.1)');
-  g0.addColorStop(1,'rgba(80,20,40,0)');
+  // корона
+  var g0=c.createRadialGradient(0,0,s*0.2,0,0,s*1.85);
+  g0.addColorStop(0,'rgba(255,255,245,0.9)');
+  g0.addColorStop(0.25,'rgba(255,200,100,0.5)');
+  g0.addColorStop(0.55,'rgba(255,100,60,0.22)');
+  g0.addColorStop(1,'rgba(120,20,40,0)');
   c.fillStyle=g0;
-  c.beginPath();c.arc(0,0,s*2.1*pulse,0,Math.PI*2);c.fill();
+  c.beginPath();c.arc(0,0,s*1.85*pulse,0,Math.PI*2);c.fill();
 
-  // языки пламени (статичные по углу, пульс по длине — не «планеты»)
-  for(var i=0;i<12;i++){
-    var ang=(i/12)*Math.PI*2+t*0.15;
-    var len=s*(1.15+0.35*Math.sin(t*4+i)+0.15*pulse);
-    c.save();
-    c.rotate(ang);
+  // мягкие лучи (мало, без «точек»)
+  for(var i=0;i<8;i++){
+    var ang=(i/8)*Math.PI*2+t*0.2;
+    var len=s*(1.25+0.2*Math.sin(t*3+i));
+    c.save();c.rotate(ang);
     var fl=c.createLinearGradient(0,0,0,-len);
-    fl.addColorStop(0,'rgba(255,255,220,0.95)');
-    fl.addColorStop(0.35,'rgba(255,180,60,0.65)');
-    fl.addColorStop(0.7,'rgba(255,80,40,0.25)');
-    fl.addColorStop(1,'rgba(255,40,80,0)');
+    fl.addColorStop(0,'rgba(255,255,230,0.75)');
+    fl.addColorStop(0.5,'rgba(255,160,50,0.28)');
+    fl.addColorStop(1,'rgba(255,80,40,0)');
     c.fillStyle=fl;
     c.beginPath();
-    c.moveTo(-s*0.12,0);
-    c.quadraticCurveTo(-s*0.04,-len*0.55,0,-len);
-    c.quadraticCurveTo(s*0.04,-len*0.55,s*0.12,0);
-    c.closePath();
-    c.fill();
+    c.moveTo(-s*0.08,0);
+    c.lineTo(0,-len);
+    c.lineTo(s*0.08,0);
+    c.closePath();c.fill();
     c.restore();
   }
 
-  // тело — раскалённое ядро
-  var body=c.createRadialGradient(-s*0.15,-s*0.2,0,0,0,s*0.95);
-  body.addColorStop(0,'#FFFFFF');
-  body.addColorStop(0.25,'#FFF3C4');
-  body.addColorStop(0.55,'#FFB020');
-  body.addColorStop(0.82,'#FF6A20');
-  body.addColorStop(1,'#E04060');
+  // диск тела
+  var body=c.createRadialGradient(-s*0.18,-s*0.22,0,0,0,s*0.9);
+  body.addColorStop(0,'#FFFDF5');
+  body.addColorStop(0.35,'#FFE29A');
+  body.addColorStop(0.7,'#FF9A3C');
+  body.addColorStop(1,'#E84860');
   c.fillStyle=body;
-  c.beginPath();c.arc(0,0,s*0.92,0,Math.PI*2);c.fill();
+  c.beginPath();c.arc(0,0,s*0.88,0,Math.PI*2);c.fill();
 
-  // лёгкий розовый ободок (узнаваемость Фины)
-  c.strokeStyle='rgba(255,140,200,0.45)';
-  c.lineWidth=Math.max(1.5,s*0.04);
-  c.beginPath();c.arc(0,0,s*0.94,0,Math.PI*2);c.stroke();
+  // румянец
+  c.fillStyle='rgba(255,90,110,0.28)';
+  c.beginPath();c.ellipse(-s*0.38,s*0.12,s*0.14,s*0.09,0,0,Math.PI*2);c.fill();
+  c.beginPath();c.ellipse(s*0.38,s*0.12,s*0.14,s*0.09,0,0,Math.PI*2);c.fill();
 
-  // эмоции
-  var emo=(finn&&finn.emotion)||'idle';
-  // глаза — яркие cyan на раскалённом фоне
-  var eyeOpen=finn&&finn.blink>0?0.12:(emo==='listening'?1.08:1);
-  [[-0.28,0.02],[0.28,0.02]].forEach(function(p){
-    var ex=p[0]*s, ey=p[1]*s;
-    c.fillStyle='rgba(20,10,30,0.35)';
-    c.beginPath();c.ellipse(ex,ey,s*0.16,s*0.19*eyeOpen,0,0,Math.PI*2);c.fill();
-    c.fillStyle='#67E8F9';
-    c.beginPath();c.ellipse(ex,ey,s*0.13,s*0.16*eyeOpen,0,0,Math.PI*2);c.fill();
-    if(eyeOpen>0.5){
+  // брови
+  c.strokeStyle=emo==='think'?'rgba(60,20,30,0.55)':'rgba(80,30,40,0.4)';
+  c.lineWidth=Math.max(1.4,s*0.045);
+  c.lineCap='round';
+  var browY=-s*0.22+(emo==='listening'?-s*0.04:0);
+  c.beginPath();
+  c.moveTo(-s*0.42,browY+(emo==='think'?s*0.04:0));
+  c.quadraticCurveTo(-s*0.28,browY-s*0.06,-s*0.12,browY);
+  c.stroke();
+  c.beginPath();
+  c.moveTo(s*0.12,browY);
+  c.quadraticCurveTo(s*0.28,browY-s*0.06,s*0.42,browY+(emo==='think'?s*0.04:0));
+  c.stroke();
+
+  // глаза
+  var eyeOpen=finn&&finn.blink>0?0.08:1;
+  var eyeH=s*0.16*eyeOpen*(emo==='listening'?1.1:1);
+  var eyeY=-s*0.02;
+  [[-0.28],[0.28]].forEach(function(p){
+    var ex=p[0]*s;
+    // белок
+    c.fillStyle='rgba(255,255,255,0.92)';
+    c.beginPath();c.ellipse(ex,eyeY,s*0.15,eyeH,0,0,Math.PI*2);c.fill();
+    if(eyeOpen>0.2){
+      // радужка cyan
+      c.fillStyle='#3DD6F5';
+      c.beginPath();c.ellipse(ex,eyeY+s*0.01,s*0.09,eyeH*0.75,0,0,Math.PI*2);c.fill();
+      c.fillStyle='#0B3A4A';
+      c.beginPath();c.arc(ex,eyeY+s*0.02,s*0.04,0,Math.PI*2);c.fill();
       c.fillStyle='#fff';
-      c.beginPath();c.arc(ex-s*0.04,ey-s*0.05,s*0.04,0,Math.PI*2);c.fill();
+      c.beginPath();c.arc(ex-s*0.03,eyeY-s*0.03,s*0.035,0,Math.PI*2);c.fill();
     }
   });
 
-  // рот по эмоции
-  c.strokeStyle='rgba(80,20,30,0.55)';
-  c.lineWidth=Math.max(1.6,s*0.055);
+  // рот
+  c.strokeStyle='rgba(90,25,40,0.65)';
+  c.lineWidth=Math.max(1.8,s*0.055);
   c.lineCap='round';
   c.beginPath();
   if(emo==='listening'){
-    c.ellipse(0,s*0.3,s*0.08,s*0.1,0,0,Math.PI*2);
+    c.ellipse(0,s*0.32,s*0.07,s*0.09,0,0,Math.PI*2);
   }else if(emo==='think'){
-    c.moveTo(-s*0.14,s*0.32);c.lineTo(s*0.14,s*0.32);
+    c.moveTo(-s*0.1,s*0.34);c.quadraticCurveTo(0,s*0.3,s*0.12,s*0.36);
+  }else if(emo==='happy'){
+    c.moveTo(-s*0.22,s*0.26);
+    c.quadraticCurveTo(0,s*0.48,s*0.22,s*0.26);
   }else{
-    c.moveTo(-s*0.2,s*0.28);
-    c.quadraticCurveTo(0,s*(emo==='happy'?0.45:0.4),s*0.2,s*0.28);
+    c.moveTo(-s*0.18,s*0.28);
+    c.quadraticCurveTo(0,s*0.4,s*0.18,s*0.28);
   }
   c.stroke();
 
   // блик
-  c.fillStyle='rgba(255,255,255,0.55)';
-  c.beginPath();c.ellipse(-s*0.22,-s*0.28,s*0.22,s*0.12,-0.35,0,Math.PI*2);c.fill();
+  c.fillStyle='rgba(255,255,255,0.5)';
+  c.beginPath();c.ellipse(-s*0.22,-s*0.32,s*0.2,s*0.1,-0.4,0,Math.PI*2);c.fill();
 
   c.restore();
 }
@@ -640,25 +654,21 @@ function onCanvasTap(e){
       startListen();
       return;
     }
-    // мимо — свернуть обратно в звезду
+    // мимо — свернуть в звезду и снести все частицы
     finn.state='star';
     finn.x=W*0.5;finn.y=H*0.16;finn.scale=1;finn.alpha=1;
     finn.emotion='idle';
+    finn.trail=[]; finn.sparks=[]; finn.flash=0; finn.fallV=0;
     var d=document.getElementById('matterDialog');
     if(d)d.classList.remove('show');
     try{if(rec){rec.abort();rec=null;}}catch(err){}
     return;
   }
 
-  // door constellation
+  // дверь-чёрная дыра
   if(door){
-    var hit=false;
-    door.stars.forEach(function(s){
-      var ddx=x-s.x, ddy=y-s.y;
-      if(ddx*ddx+ddy*ddy < 26*26) hit=true;
-    });
     var dx2=x-door.x, dy2=y-door.y;
-    if(hit || dx2*dx2+dy2*dy2 < (door.r+18)*(door.r+18)){
+    if(dx2*dx2+dy2*dy2 < (door.r+28)*(door.r+28)){
       if(finn && finn.state==='idle'){
         finn.state='toDoor';
         finn.tx=door.x; finn.ty=door.y;
@@ -750,68 +760,42 @@ function onObject(id){
     if(id==='book'){
     var books=MS.books||{};
     var keys=Object.keys(books);
-    var html='<div style="margin-bottom:10px;opacity:.85">Твоя полка. Загрузи FB2 — прогресс сохранится на устройстве.</div>';
+    var html='<p style="margin:0 0 12px;opacity:.85;line-height:1.4">Полка. Можно открыть сохранённую книгу или загрузить FB2.</p>';
     if(keys.length){
-      keys.forEach(function(k){
-        var b=books[k];
-        var pct=b.pages?Math.round(((MS.pageByBook[k]|0)+1)/b.pages*100):0;
-        html+='<button type="button" class="m-act" data-open-book="'+k+'" style="margin-top:8px;text-align:left">'+(b.title||'Книга')+' · '+pct+'%</button>';
+      keys.slice(0,8).forEach(function(k){
+        var b=books[k]||{};
+        html+='<button type="button" class="m-act" data-open-book="'+k+'" style="margin-top:8px">'+(b.title||'Книга')+'</button>';
       });
+    }else{
+      html+='<p style="opacity:.6;font-size:13px">Пока пусто.</p>';
     }
-    html+='<button type="button" class="m-act" id="mAddBook" style="margin-top:12px">+ Загрузить FB2</button>';
+    html+='<button type="button" class="m-act" id="mAddBook" style="margin-top:14px">+ Загрузить FB2</button>';
     showPanel('Книги', html);
     setTimeout(function(){
       var add=document.getElementById('mAddBook');
-      var file=document.getElementById('mBookFile');
-      if(!file){
-        file=document.createElement('input');
-        file.type='file';
-        file.id='mBookFile';
-        file.accept='.fb2,application/x-fictionbook+xml,text/xml';
-        file.style.cssText='position:fixed;left:-100px;top:-100px;width:1px;height:1px;opacity:0;';
-        document.body.appendChild(file);
-      }
-      if(add&&file){
+      if(add){
         add.onclick=function(ev){
           if(ev){ev.preventDefault();ev.stopPropagation();}
-          try{file.value='';}catch(e){}
-          setTimeout(function(){try{file.click();}catch(e){}},50);
-        };
-        file.onchange=function(){
-          var f=file.files&&file.files[0];
-          if(!f)return;
-          var fr=new FileReader();
-          fr.onload=function(){
-            var raw=String(fr.result||'');
-            var id='b_'+Date.now();
-            var title=(f.name||'Книга').replace(/\.fb2$/i,'');
-            var pages=paginate(/<FictionBook|<body/i.test(raw)?parseFb2(raw):raw);
-            MS.books=MS.books||{};
-            MS.books[id]={title:title,raw:raw.slice(0,2e6),pages:pages.length};
-            MS.pageByBook[id]=0;
-            saveState();
-            hidePanel();
-            window.__matterReaderBookId=id;
-            openReader(raw);
-            var rt=document.getElementById('mReaderTitle');
-            if(rt)rt.textContent=title;
-          };
-          fr.readAsText(f);
+          pickFb2File();
         };
       }
-      root.querySelectorAll('[data-open-book]').forEach(function(btn){
-        btn.onclick=function(){
-          var id=btn.getAttribute('data-open-book');
-          var b=(MS.books||{})[id];
-          if(!b)return;
-          reader.bookId=id;
-          hidePanel();
-          openReader(b.raw||'');
-          var rt=document.getElementById('mReaderTitle');
-          if(rt)rt.textContent=b.title||'Книга';
-        };
-      });
-    },40);
+      var panel=document.getElementById('mPanelBody');
+      if(panel){
+        panel.querySelectorAll('[data-open-book]').forEach(function(btn){
+          btn.onclick=function(ev){
+            if(ev){ev.preventDefault();ev.stopPropagation();}
+            var id=btn.getAttribute('data-open-book');
+            var b=(MS.books||{})[id];
+            if(!b||!b.raw){toast('Нет текста книги');return;}
+            reader.bookId=id;
+            hidePanel();
+            openReader(b.raw);
+            var rt=document.getElementById('mReaderTitle');
+            if(rt)rt.textContent=b.title||'Книга';
+          };
+        });
+      }
+    },30);
     return;
   }
   if(id==='diary'||id==='desk'){
@@ -907,6 +891,61 @@ function paginate(text){
   }
   document.body.removeChild(probe);
   return pages.length?pages:[''];
+}
+
+
+function pickFb2File(){
+  // отдельный input — не внутри панели, чтобы WebView не зависал
+  var old=document.getElementById('mBookFile');
+  if(old&&old.parentNode)old.parentNode.removeChild(old);
+  var file=document.createElement('input');
+  file.type='file';
+  file.id='mBookFile';
+  file.accept='.fb2,text/xml,application/xml,application/x-fictionbook+xml,*/*';
+  file.style.cssText='position:fixed;left:0;top:0;width:1px;height:1px;opacity:0.01;z-index:99999';
+  document.body.appendChild(file);
+  file.addEventListener('change',function(){
+    var f=file.files&&file.files[0];
+    try{if(file.parentNode)file.parentNode.removeChild(file);}catch(e){}
+    if(!f)return;
+    toast('Читаю файл…');
+    var fr=new FileReader();
+    fr.onerror=function(){toast('Не удалось прочитать файл');};
+    fr.onload=function(){
+      try{
+        var raw=String(fr.result||'');
+        if(raw.length>800000) raw=raw.slice(0,800000); // не вешаем UI
+        var id='b_'+Date.now();
+        var title=(f.name||'Книга').replace(/\.fb2$/i,'');
+        // лёгкая пагинация
+        var text=/<FictionBook|<body/i.test(raw)?parseFb2(raw):raw;
+        if(text.length>400000) text=text.slice(0,400000);
+        var pages=paginate(text);
+        MS.books=MS.books||{};
+        // в storage — урезанный raw
+        MS.books[id]={title:title,raw:text.slice(0,300000),pages:pages.length};
+        MS.pageByBook[id]=0;
+        try{saveState();}catch(e){}
+        hidePanel();
+        reader.bookId=id;
+        reader.pages=pages;
+        reader.idx=0;
+        var r=document.getElementById('matterReader');
+        if(r){r.hidden=false;r.style.display='';}
+        renderPage();
+        var rt=document.getElementById('mReaderTitle');
+        if(rt)rt.textContent=title;
+        toast('Книга открыта');
+      }catch(err){
+        toast('Ошибка книги');
+      }
+    };
+    fr.readAsText(f);
+  },{once:true});
+  // клик только после добавления в DOM
+  setTimeout(function(){
+    try{file.click();}catch(e){toast('Не удалось открыть выбор файла');}
+  },80);
 }
 
 function openReader(raw){
@@ -1186,52 +1225,59 @@ function drawSpace(dt,t){
     ctx.arc(s.x,s.y,r,0,Math.PI*2);ctx.fill();
   });
 
-  // diagonal constellation door
+  // дверь = чёрная дыра
   if(door){
     if(door.opening){
-      door.open=Math.min(1,door.open+dt*0.9);
+      door.open=Math.min(1,door.open+dt*0.85);
       if(door.open>=1 && !door.entered){
         door.entered=true;
-        setTimeout(function(){enterRoom();},200);
+        setTimeout(function(){enterRoom();},160);
       }
     }
-    // links between door stars
-    ctx.strokeStyle='rgba(160,200,255,'+(0.25+door.open*0.45)+')';
-    ctx.lineWidth=1.2;
-    var ds=door.stars;
-    for(var i=0;i<ds.length;i++){
-      var a=ds[i], b=ds[(i+1)%ds.length];
-      ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+    door.swirl=(door.swirl||0)+dt*(2.2+door.open*3);
+    var dx=door.x, dy=door.y;
+    var sc=1+door.open*0.55;
+    var R=door.r*sc;
+
+    // вихрь частиц
+    if(door.vortex){
+      door.vortex.forEach(function(p){
+        p.a+=dt*p.sp*(1+door.open);
+        var rr=p.r*(0.7+0.5*sc);
+        var px=dx+Math.cos(p.a+door.swirl)*rr;
+        var py=dy+Math.sin(p.a+door.swirl)*rr*0.55;
+        ctx.beginPath();
+        ctx.fillStyle='rgba(160,200,255,'+(0.25+0.35*door.open)+')';
+        ctx.arc(px,py,p.s,0,Math.PI*2);ctx.fill();
+      });
     }
-    // a couple diagonals
-    ctx.beginPath();ctx.moveTo(ds[0].x,ds[0].y);ctx.lineTo(ds[4].x,ds[4].y);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(ds[2].x,ds[2].y);ctx.lineTo(ds[6].x,ds[6].y);ctx.stroke();
-
-    ds.forEach(function(s){
-      var pulse=0.7+0.3*Math.sin(t*2+s.pulse);
-      var rg=ctx.createRadialGradient(s.x,s.y,0,s.x,s.y,s.r*5*pulse);
-      rg.addColorStop(0,'rgba(200,230,255,0.9)');
-      rg.addColorStop(0.4,'rgba(120,180,255,0.35)');
-      rg.addColorStop(1,'rgba(40,80,160,0)');
-      ctx.fillStyle=rg;
-      ctx.beginPath();ctx.arc(s.x,s.y,s.r*5*pulse,0,Math.PI*2);ctx.fill();
-      ctx.fillStyle='#E8F4FF';
-      ctx.beginPath();ctx.arc(s.x,s.y,s.r*pulse,0,Math.PI*2);ctx.fill();
-    });
-
-    // soft portal glow when opening
-    if(door.open>0){
-      var pg=ctx.createRadialGradient(door.x,door.y,0,door.x,door.y,door.r*(1.2+door.open));
-      pg.addColorStop(0,'rgba(100,160,255,'+(0.15+door.open*0.4)+')');
-      pg.addColorStop(1,'rgba(20,40,80,0)');
-      ctx.fillStyle=pg;
-      ctx.beginPath();ctx.arc(door.x,door.y,door.r*(1.2+door.open),0,Math.PI*2);ctx.fill();
+    // диск аккреции
+    for(var di=0;di<12;di++){
+      var rr=R*(0.35+di*0.07);
+      ctx.beginPath();
+      ctx.strokeStyle='rgba(120,170,255,'+(0.05+di*0.012+door.open*0.04)+')';
+      ctx.lineWidth=1.4;
+      ctx.ellipse(dx,dy,rr,rr*0.38,door.swirl*0.15,0,Math.PI*2);
+      ctx.stroke();
     }
+    // фотонное кольцо
+    ctx.beginPath();
+    ctx.strokeStyle='rgba(255,220,180,'+(0.35+0.3*Math.sin((t||0)*4))+')';
+    ctx.lineWidth=2;
+    ctx.ellipse(dx,dy,R*0.55,R*0.2,door.swirl*0.1,0,Math.PI*2);
+    ctx.stroke();
+    // горизонт
+    var hg=ctx.createRadialGradient(dx,dy,0,dx,dy,R*0.5);
+    hg.addColorStop(0,'#000');
+    hg.addColorStop(0.55,'#050510');
+    hg.addColorStop(0.85,'rgba(40,60,120,0.45)');
+    hg.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.beginPath();ctx.fillStyle=hg;ctx.arc(dx,dy,R*0.5,0,Math.PI*2);ctx.fill();
 
-    ctx.fillStyle='rgba(180,210,255,0.5)';
-    ctx.font='600 11px system-ui,sans-serif';
-    ctx.textAlign='center';
-    ctx.fillText(door.opening?'…':'ДВЕРЬ', door.x, door.y+door.r+18);
+    if(door.open>0.15){
+      ctx.fillStyle='rgba(0,0,0,'+Math.min(0.85,door.open)+')';
+      ctx.beginPath();ctx.arc(dx,dy,R*0.35+door.open*30,0,Math.PI*2);ctx.fill();
+    }
   }
 
   // Finn
@@ -1268,7 +1314,7 @@ function drawSpace(dt,t){
         ctx.beginPath();
         ctx.fillStyle='rgba(255,230,180,'+Math.max(0,sp.a)+')';
         ctx.arc(sp.x,sp.y,sp.r,0,Math.PI*2);ctx.fill();
-        sp.x+=(sp.vx||0)*0.016; sp.y+=(sp.vy||0)*0.016; sp.a-=0.03;
+        sp.x+=(sp.vx||0)*0.016; sp.y+=(sp.vy||0)*0.016; sp.a-=0.06;
       });
       finn.sparks=finn.sparks.filter(function(s){return s.a>0;});
       drawFinnFace(ctx, finn.x, finn.y, finn.size*finn.scale, t);
@@ -1344,11 +1390,13 @@ function updateFinn(dt,t){
       finn.scale=1; finn.alpha=1;
       finn.emotion='happy';
       finn.flash=1;
+      finn.trail=[]; // хвост падения убрать сразу
       finn.sparks=[];
-      for(var i=0;i<28;i++){
+      // короткая вспышка без долгоживущих точек
+      for(var i=0;i<12;i++){
         var a=Math.random()*Math.PI*2;
-        var sp=80+Math.random()*180;
-        finn.sparks.push({x:finn.x,y:finn.y,r:1.5+Math.random()*3,a:1,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp});
+        var sp=60+Math.random()*120;
+        finn.sparks.push({x:finn.x,y:finn.y,r:1.2+Math.random()*2,a:0.85,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp});
       }
       setTimeout(function(){finnSay('Эй! Я с тобой.');},220);
     }
