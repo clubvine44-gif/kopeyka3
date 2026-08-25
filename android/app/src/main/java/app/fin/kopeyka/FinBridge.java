@@ -156,6 +156,21 @@ public class FinBridge {
         if (a != null) a.runOnUiThread(a::forceCheckUpdate);
     }
     @JavascriptInterface public void checkForUpdate() { checkUpdate(); }
+    @JavascriptInterface public void requestMic() {
+        try {
+            MainActivity a = activityRef.get();
+            if (a == null) return;
+            a.runOnUiThread(() -> {
+                try {
+                    if (androidx.core.content.ContextCompat.checkSelfPermission(a, android.Manifest.permission.RECORD_AUDIO)
+                            != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                        androidx.core.app.ActivityCompat.requestPermissions(
+                                a, new String[]{android.Manifest.permission.RECORD_AUDIO}, 1001);
+                    }
+                } catch (Exception ignored) {}
+            });
+        } catch (Exception ignored) {}
+    }
     @JavascriptInterface public boolean isNative() { return true; }
 
     @JavascriptInterface
