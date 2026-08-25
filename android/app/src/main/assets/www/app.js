@@ -1879,7 +1879,15 @@ function setup(){
   try{updateNotifBadge();}catch(e){}
 }
 
-function boot(){if(!window.__scrollSaveBound){window.__scrollSaveBound=true;var st=null;window.addEventListener('scroll',function(){if((window.__finView||currentView||'home')!=='home')return;if(st)return;st=setTimeout(function(){st=null;window.__homeScroll=window.scrollY||document.documentElement.scrollTop||0;},120);},{passive:true});}try{STATE=norm(STATE);ensureMonth();var c=compute();if(STATE.income.length===0&&STATE.expenses.length===0&&c.cash<0&&!STATE.obligations.length&&!STATE.reserves.length){STATE=def();save(true);}}catch(e){STATE=def();}setup();render();syncReminders();setTimeout(bindFabHold,300);setTimeout(bindFabHold,1200);setTimeout(function(){try{if(!getUserName())showNameIntro(false);}catch(e){}},700);setTimeout(function(){try{if(sessionStorage.getItem('fin_matter_invite_session'))return;if(typeof getUserName==='function'&&!getUserName())return;if(!window.kopeykaAssistant||!window.kopeykaAssistant.open)return;sessionStorage.setItem('fin_matter_invite_session','1');window.kopeykaAssistant.open({matterInvite:true});}catch(e){}},1600);}
+function boot(){if(!window.__scrollSaveBound){window.__scrollSaveBound=true;var st=null;window.addEventListener('scroll',function(){if((window.__finView||currentView||'home')!=='home')return;if(st)return;st=setTimeout(function(){st=null;window.__homeScroll=window.scrollY||document.documentElement.scrollTop||0;},120);},{passive:true});}try{STATE=norm(STATE);ensureMonth();var c=compute();if(STATE.income.length===0&&STATE.expenses.length===0&&c.cash<0&&!STATE.obligations.length&&!STATE.reserves.length){STATE=def();save(true);}}catch(e){STATE=def();}setup();render();syncReminders();setTimeout(bindFabHold,300);setTimeout(bindFabHold,1200);setTimeout(function(){try{if(!getUserName())showNameIntro(false);}catch(e){}},700);setTimeout(function(){try{
+if(sessionStorage.getItem('fin_matter_invite_session'))return;
+if(typeof getUserName==='function'&&!getUserName())return;
+try{if(localStorage.getItem('kopeyka3_onboarded_v10')!=='1')return;}catch(e){return;}
+try{if(window.FinnaProfile&&typeof window.FinnaProfile.done==='function'&&!window.FinnaProfile.done())return;}catch(e){}
+if(!window.kopeykaAssistant||!window.kopeykaAssistant.open)return;
+sessionStorage.setItem('fin_matter_invite_session','1');
+window.kopeykaAssistant.open({matterInvite:true});
+}catch(e){}},2800);}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
 window.goView=goView;window.goHome=goHome;window.render=render;window.compute=compute;window.syncReminders=typeof syncReminders==="function"?syncReminders:function(){};
 Object.defineProperty(window,'currentView',{get:function(){return currentView;},set:function(v){currentView=v||'home';window.__finView=currentView;}});
