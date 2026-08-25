@@ -188,9 +188,10 @@ function toggleMatterMute(){
 }
 
 /* ---------- soft Finn speech (like main app) ---------- */
+var speechEmbers=[];
+
 function finnSay(text){
   if(!text)return;
-  // ответы солнца — сверху, без окна, строки сгорают сверху вниз
   var box=document.getElementById('matterSpeech');
   if(!box){
     box=document.createElement('div');
@@ -198,28 +199,42 @@ function finnSay(text){
     box.className='m-speech';
     if(root)root.appendChild(box);
   }
-  // очистить предыдущие таймеры/строки
   if(finnSay._timers){finnSay._timers.forEach(function(id){clearTimeout(id);});}
   finnSay._timers=[];
+  speechEmbers=[];
   box.innerHTML='';
   box.style.display='flex';
 
-  // разбить на строки по ширине / предложениям
-  var lines=splitSpeechLines(String(text).trim(), 34);
+  // позиция: над солнцем, ближе к центру, не на край экрана
+  var fy=(finn&&finn.y)?finn.y:(H*0.72);
+  var topPx=Math.max(H*0.28, Math.min(H*0.48, fy-(finn&&finn.size?finn.size:58)*2.1-24));
+  box.style.top=topPx+'px';
+  box.style.bottom='auto';
+
+  var lines=splitSpeechLines(String(text).trim(), 32);
   lines.forEach(function(line,i){
     var row=document.createElement('div');
     row.className='m-speech-line';
-    row.textContent=line;
+    // по буквам — для огня
+    var html='';
+    for(var ci=0;ci<line.length;ci++){
+      var ch=line.charAt(ci);
+      var delay=(ci*0.045).toFixed(3);
+      if(ch===' ')html+='<span class="m-ch" style="transition-delay:'+delay+'s">&nbsp;</span>';
+      else html+='<span class="m-ch" style="transition-delay:'+delay+'s">'+ch.replace(/</g,'&lt;')+'</span>';
+    }
+    row.innerHTML=html;
     box.appendChild(row);
-    // через 2с после появления ответа — первая строка начинает гореть; каждая следующая +2с
+
     var startBurn=2000+i*2000;
     var tid=setTimeout(function(){
       row.classList.add('burn');
-      // убрать из DOM после анимации
+      // искры/угли над строкой
+      spawnSpeechEmbers(box, row, 22);
       var tid2=setTimeout(function(){
         if(row.parentNode)row.parentNode.removeChild(row);
         if(box&&!box.children.length)box.style.display='none';
-      },2100);
+      },1600+line.length*45);
       finnSay._timers.push(tid2);
     },startBurn);
     finnSay._timers.push(tid);
@@ -235,8 +250,51 @@ function finnSay(text){
   }catch(e){}
 }
 
+function spawnSpeechEmbers(box, row, n){
+  if(!canvas||!box||!row)return;
+  var br=row.getBoundingClientRect();
+  var cr=canvas.getBoundingClientRect();
+  var scaleX=canvas.width/Math.max(1,cr.width)/ (window.devicePixelRatio||1);
+  // use CSS pixels relative to canvas
+  var dpr=window.devicePixelRatio||1;
+  for(var i=0;i<n;i++){
+    var px=(br.left-cr.left)+Math.random()*br.width;
+    var py=(br.top-cr.top)+Math.random()*br.height*0.6;
+    speechEmbers.push({
+      x:px, y:py,
+      vx:(Math.random()-0.5)*40,
+      vy:-(30+Math.random()*70),
+      r:1+Math.random()*2.5,
+      a:0.9+Math.random()*0.1,
+      life:0.8+Math.random()*0.9,
+      hue:20+Math.random()*30
+    });
+  }
+}
+
+function updateSpeechEmbers(dt){
+  if(!speechEmbers.length||!ctx)return;
+  for(var i=speechEmbers.length-1;i>=0;i--){
+    var p=speechEmbers[i];
+    p.life-=dt;
+    p.a=Math.max(0,p.life);
+    p.x+=p.vx*dt;
+    p.y+=p.vy*dt;
+    p.vy-=25*dt; // вверх
+    p.vx*=0.98;
+    if(p.life<=0){speechEmbers.splice(i,1);continue;}
+    var g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r*3);
+    g.addColorStop(0,'rgba(255,255,200,'+(p.a*0.95)+')');
+    g.addColorStop(0.4,'rgba(255,'+Math.floor(100+p.hue)+',20,'+(p.a*0.7)+')');
+    g.addColorStop(1,'rgba(180,30,0,0)');
+    ctx.beginPath();
+    ctx.fillStyle=g;
+    ctx.arc(p.x,p.y,p.r*3,0,Math.PI*2);ctx.fill();
+  }
+}
+
 function splitSpeechLines(text, maxChars){
-  maxChars=maxChars||34;
+  maxChars=maxChars||32;
   var words=String(text||'').replace(/\s+/g,' ').trim().split(' ');
   var lines=[], cur='';
   words.forEach(function(w){
@@ -245,7 +303,6 @@ function splitSpeechLines(text, maxChars){
     else{lines.push(cur);cur=w;}
   });
   if(cur)lines.push(cur);
-  // если одна очень длинная строка без пробелов
   if(!lines.length&&text)lines=[text.slice(0,maxChars)];
   return lines;
 }
@@ -392,14 +449,17 @@ function injectCSS(){
 '.m-reader-foot{position:absolute;left:0;right:0;bottom:0;text-align:center;padding:8px;padding-bottom:calc(8px + env(safe-area-inset-bottom,0px));font-size:11px;color:rgba(200,190,170,.55);transition:opacity .25s,transform .25s;background:linear-gradient(0deg,rgba(12,10,14,.92),rgba(12,10,14,0));pointer-events:none;height:36px;box-sizing:content-box}'+
 /* HTML hidden must beat display:flex — иначе при входе виден пустой «Книга» */
 '.m-reader[hidden],.m-panel[hidden],.m-hud[hidden],.m-room[hidden],.m-room-finn[hidden]{display:none!important}'+
-'.m-speech{position:absolute;left:0;right:0;top:0;z-index:18;pointer-events:none;'+
-'padding:calc(16px + env(safe-area-inset-top,0px)) 22px 8px;display:flex;flex-direction:column;align-items:center;gap:0;'+
-'background:transparent;max-height:42vh;overflow:visible}'+
-'.m-speech-line{font-family:Georgia,"Times New Roman",serif;font-size:17px;line-height:1.55;color:#FFE8C8;'+
-'text-align:center;max-width:min(92vw,380px);text-shadow:0 0 12px rgba(255,140,40,.35),0 1px 3px rgba(0,0,0,.7);'+
-'opacity:1;transform:none;filter:none;will-change:opacity,filter,transform;'+
-'transition:opacity 2s ease-in,filter 2s ease-in,transform 2s ease-in,color 2s ease-in}'+
-'.m-speech-line.burn{opacity:0;color:#3a1008;filter:blur(1.2px) brightness(1.8);transform:translateY(-6px) scaleY(0.85)}'+
+'.m-speech{position:absolute;left:50%;z-index:18;pointer-events:none;'+
+'transform:translateX(-50%);width:min(90vw,360px);display:flex;flex-direction:column;align-items:center;gap:2px;'+
+'background:transparent;overflow:visible}'+
+'.m-speech-line{font-family:Georgia,"Times New Roman",serif;font-size:16px;line-height:1.5;'+
+'text-align:center;white-space:pre-wrap;letter-spacing:0.02em}'+
+'.m-speech-line .m-ch{display:inline-block;color:#FFEFD0;'+
+'text-shadow:0 0 10px rgba(255,160,50,.4),0 1px 2px rgba(0,0,0,.65);'+
+'transition:color .55s ease,opacity .9s ease,transform .9s ease,text-shadow .55s ease,filter .7s ease}'+
+'.m-speech-line.burn .m-ch{color:#1a0600;opacity:0;'+
+'text-shadow:0 0 6px #ff6600,0 -6px 14px #ff3300,0 -12px 20px rgba(255,100,0,.5);'+
+'transform:translateY(-14px) scale(0.75);filter:blur(0.6px)}'+
 '.m-finn-close-space{position:absolute;z-index:16;width:36px;height:36px;border-radius:50%;'+'background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.22);color:#f5efe6;font-size:16px;'+'display:none;align-items:center;justify-content:center;padding:0}'+'.m-finn-close-space.show{display:flex}'+'body.matter-lock{overflow:hidden!important}';
   document.head.appendChild(s);
 }
@@ -1620,7 +1680,7 @@ function loop(t){
   var dt=Math.min(0.05,(t-lastT)/1000);lastT=t;
   resize();
   if(phase==='blackhole')drawBlackHole(dt);
-  else if(phase==='space')drawSpace(dt,t/1000);
+  else if(phase==='space'){drawSpace(dt,t/1000);updateSpeechEmbers(dt);}
   else if(phase==='room'){ /* room DOM only */ }
 }
 
