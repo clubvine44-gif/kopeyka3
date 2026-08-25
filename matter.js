@@ -232,8 +232,8 @@ function ensureRoot(){
         '<button type="button" class="m-hot m-hot-md" data-obj="plant"  style="left:73%;top:55%" title="Растение"></button>'+
         '<button type="button" class="m-hot m-hot-sm" data-obj="piggy"  style="left:77%;top:40%" title="Копилка"></button>'+
         '<button type="button" class="m-hot m-hot-md" data-obj="goals"  style="left:81%;top:26%" title="Цели"></button>'+
-        '<button type="button" class="m-hot m-hot-lg" data-obj="window" style="left:48%;top:28%" title="Окно"></button>'+
-        '<button type="button" class="m-hot m-hot-lg" data-obj="desk"   style="left:47%;top:49%" title="Стол"></button>'+
+        '<button type="button" class="m-hot m-hot-lg" data-obj="window" style="left:47%;top:39%;width:150px;height:100px" title="Окно"></button>'+
+        '<button type="button" class="m-hot m-hot-lg" data-obj="desk"   style="left:47%;top:56%" title="Стол"></button>'+
         '<button type="button" class="m-hot m-hot-lg" data-obj="bed"    style="left:15%;top:55%" title="Кровать"></button>'+
         '<button type="button" class="m-hot m-hot-sm" data-obj="lamp"   style="left:35%;top:44%" title="Лампа"></button>'+
         '<button type="button" class="m-hot m-hot-md" data-obj="focus"  style="left:10%;top:38%" title="Фокус"></button>'+
@@ -425,15 +425,23 @@ function buildStars(){
   window.__matterLinks=[];
   majLinks.forEach(function(lk){ window.__matterLinks.push([maj[lk[0]], maj[lk[1]]]); });
   minLinks.forEach(function(lk){ window.__matterLinks.push([min[lk[0]], min[lk[1]]]); });
-  // лишние цели — под Большой, не на Малую
-  goals.slice(14).forEach(function(g,i){
-    var x=majBox.ox+majBox.bw*(0.15+0.12*(i%5));
-    var y=majBox.oy+majBox.bh*0.92+((i*7)%20);
-    stars.push({
-      id:g.id,g:g,x:x,y:y,baseR:3.2+Math.min(3,(g.pct||0)/40),
-      hue:g.type==='debt'?8:(g.urgent?38:200),pulse:i,bright:0.5+(g.pct||0)/250
+  // лишние цели — аккуратная сетка под Большой Медведицей, без наложений
+  var extra=goals.slice(14);
+  if(extra.length){
+    var cols=Math.max(3,Math.floor(majBox.bw/54));
+    var cellW=majBox.bw/cols;
+    var rowH=26;
+    var baseY=Math.min(H-40, majBox.oy+majBox.bh+34);
+    extra.forEach(function(g,i){
+      var col=i%cols, row=Math.floor(i/cols);
+      var x=majBox.ox+cellW*(col+0.5);
+      var y=Math.min(H-24, baseY+row*rowH);
+      stars.push({
+        id:g.id,g:g,x:x,y:y,baseR:3.2+Math.min(3,(g.pct||0)/40),
+        hue:g.type==='debt'?8:(g.urgent?38:200),pulse:i*0.6,bright:0.5+(g.pct||0)/250
+      });
     });
-  });
+  }
   for(var i=0;i<90;i++){
     stars.push({
       id:'bg'+i,g:null,
@@ -721,10 +729,18 @@ function onCanvasTap(e){
   if(finn && finn.state==='star'){
     var dx=x-finn.x, dy=y-finn.y;
     if(dx*dx+dy*dy < 56*56){
+      var sx0=finn.x, sy0=finn.y;
+      var tx0=W*0.5, ty0=H*0.72;
       finn.state='fall';
-      finn.fallV=0;
-      finn.tx=W*0.5;
-      finn.ty=H*0.72;
+      finn.fallT=0;
+      finn.fallDur=1.15+Math.random()*0.25;
+      finn.sx=sx0; finn.sy=sy0;
+      finn.tx=tx0; finn.ty=ty0;
+      // дугообразный контрольная точка — настоящий пролёт метеора по небу,
+      // а не прямое падение вниз
+      var side=(Math.random()<0.5?-1:1);
+      finn.cx=sx0+(tx0-sx0)*0.5+side*W*0.24;
+      finn.cy=sy0+(ty0-sy0)*0.15-H*0.06;
       finn.trail=[];finn.sparks=[];
       finn.emotion='happy';
       return;
@@ -1291,7 +1307,7 @@ function openReader(raw){
   if(!sample){toast('Пусто');return;}
   // показать оболочку сразу
   var r=document.getElementById('matterReader');
-  if(r){r.hidden=false;r.style.display='';r.classList.add('chrome-hide');}
+  if(r){r.hidden=false;r.style.display='';r.classList.remove('chrome-hide');}
   var rt=document.getElementById('mReaderTitle');
   if(rt)rt.textContent=reader.title||'Книга';
   var pageEl=document.getElementById('mReaderPage');
@@ -1681,16 +1697,26 @@ function drawSpace(dt,t){
 
   stars.forEach(function(s){
     var pulse=0.65+0.35*Math.sin(t*1.4+s.pulse);
+    var twinkle=0.85+0.15*Math.sin(t*5.2+s.pulse*2.3);
     var r=s.baseR*(s.bg?1:pulse);
-    var a=s.bright*pulse;
+    var a=s.bright*pulse*twinkle;
     if(!s.bg){
-      ctx.beginPath();
-      ctx.fillStyle='hsla('+s.hue+',80%,70%,'+(0.08*pulse)+')';
-      ctx.arc(s.x,s.y,r*4.5,0,Math.PI*2);ctx.fill();
+      // мягкое многослойное свечение с плавным градиентным спадом
+      var glow=ctx.createRadialGradient(s.x,s.y,0,s.x,s.y,r*5.2);
+      glow.addColorStop(0,'hsla('+s.hue+',85%,78%,'+(0.24*pulse)+')');
+      glow.addColorStop(0.45,'hsla('+s.hue+',80%,65%,'+(0.1*pulse)+')');
+      glow.addColorStop(1,'hsla('+s.hue+',70%,50%,0)');
+      ctx.fillStyle=glow;
+      ctx.beginPath();ctx.arc(s.x,s.y,r*5.2,0,Math.PI*2);ctx.fill();
     }
     ctx.beginPath();
     ctx.fillStyle='hsla('+s.hue+',90%,85%,'+a+')';
     ctx.arc(s.x,s.y,r,0,Math.PI*2);ctx.fill();
+    if(!s.bg && r>3){
+      ctx.beginPath();
+      ctx.fillStyle='rgba(255,255,255,'+(0.55*pulse)+')';
+      ctx.arc(s.x,s.y,r*0.35,0,Math.PI*2);ctx.fill();
+    }
   });
 
   // дверь = чистая чёрная дыра + только вихрь (без «колец Сатурна»)
@@ -1754,37 +1780,51 @@ function drawSpace(dt,t){
   if(finn){
     updateFinn(dt,t);
     if(finn.state==='star'||finn.state==='fall'){
-      // хвост падающей звезды
+      // хвост настоящей падающей звезды — градиент от раскалённого белого
+      // ядра к огненно-оранжевому краю, а не однотонная линия
       if(finn.trail&&finn.trail.length>1){
         ctx.lineCap='round';
         for(var ti=1;ti<finn.trail.length;ti++){
           var a0=finn.trail[ti-1], a1=finn.trail[ti];
           var ta=ti/finn.trail.length;
+          var rC=255, gC=Math.round(150+90*ta), bC=Math.round(70+165*ta);
           ctx.beginPath();
-          ctx.strokeStyle='rgba(255,230,180,'+(0.1+0.7*ta)+')';
-          ctx.lineWidth=1+5*ta;
+          ctx.strokeStyle='rgba('+rC+','+gC+','+bC+','+(0.12+0.75*ta)+')';
+          ctx.lineWidth=1+5.5*ta;
           ctx.moveTo(a0.x,a0.y);ctx.lineTo(a1.x,a1.y);ctx.stroke();
         }
       }
       drawFinnStar(ctx, finn.x, finn.y, t);
     }else if(finn.state!=='enter' && finn.state!=='room'){
-      // вспышка рождения
+      // вспышка + ударная волна рождения
       if(finn.flash&&finn.flash>0){
         var fg=ctx.createRadialGradient(finn.x,finn.y,0,finn.x,finn.y,finn.size*2.5*finn.flash);
         fg.addColorStop(0,'rgba(255,255,240,'+(0.7*finn.flash)+')');
         fg.addColorStop(1,'rgba(255,160,80,0)');
         ctx.fillStyle=fg;
         ctx.beginPath();ctx.arc(finn.x,finn.y,finn.size*2.5*finn.flash,0,Math.PI*2);ctx.fill();
+        // расходящееся кольцо ударной волны
+        var ringR=finn.size*(1.1+(1.7-finn.flash)*3.4);
+        ctx.save();
+        ctx.globalAlpha=Math.max(0,Math.min(1,finn.flash*0.6));
+        ctx.strokeStyle='rgba(255,224,170,0.9)';
+        ctx.lineWidth=3;
+        ctx.beginPath();ctx.arc(finn.x,finn.y,ringR,0,Math.PI*2);ctx.stroke();
+        ctx.restore();
         finn.flash=Math.max(0,finn.flash-0.045);
       }
       finn.sparks.forEach(function(sp){
         ctx.beginPath();
         ctx.fillStyle='rgba(255,230,180,'+Math.max(0,sp.a)+')';
         ctx.arc(sp.x,sp.y,sp.r,0,Math.PI*2);ctx.fill();
-        sp.x+=(sp.vx||0)*0.016; sp.y+=(sp.vy||0)*0.016; sp.a-=0.06;
+        sp.x+=(sp.vx||0)*0.016; sp.y+=(sp.vy||0)*0.016; sp.vy=(sp.vy||0)+2; sp.a-=0.045;
       });
       finn.sparks=finn.sparks.filter(function(s){return s.a>0;});
+      // лицо проявляется плавно поверх вспышки, а не мгновенной подменой
+      var faceA=(finn.state==='birth')?Math.min(1,(finn.birthT||0)/0.32):1;
+      ctx.save();ctx.globalAlpha=faceA;
       drawFinnFace(ctx, finn.x, finn.y, finn.size*finn.scale, t);
+      ctx.restore();
     }
   }
 
@@ -1829,31 +1869,42 @@ function updateFinn(dt,t){
   if(finn.blink>0)finn.blink-=dt;
 
   if(finn.state==='fall'){
-    // метеор: сильное ускорение, длинный хвост, без мусора после
-    finn.fallV=(finn.fallV||120)+dt*3200;
-    finn.y+=finn.fallV*dt;
-    finn.x+=(finn.tx-finn.x)*Math.min(1,dt*2.2);
-    // плотный хвост
-    for(var k=0;k<3;k++){
-      finn.trail.push({
-        x:finn.x+(Math.random()-0.5)*6,
-        y:finn.y-k*4,
-        a:1
-      });
-    }
-    if(finn.trail.length>28)finn.trail.splice(0,finn.trail.length-28);
-    finn.sparks.forEach(function(s){s.a-=dt*2.5;s.y+=dt*30;});
-    finn.sparks=finn.sparks.filter(function(s){return s.a>0.05;});
+    // настоящий пролёт метеора: дуга Безье, ускорение к финалу, длинный
+    // светящийся хвост с градиентом от белого ядра к огненному краю
+    finn.fallT+=dt;
+    var p=Math.min(1,finn.fallT/(finn.fallDur||1.3));
+    var ep=p<0.5?2*p*p:1-Math.pow(-2*p+2,2)/2; // easeInOutQuad
+    var omp=1-ep;
+    finn.x=omp*omp*finn.sx+2*omp*ep*finn.cx+ep*ep*finn.tx;
+    finn.y=omp*omp*finn.sy+2*omp*ep*finn.cy+ep*ep*finn.ty;
+    finn.trail.push({x:finn.x,y:finn.y,a:1});
+    if(finn.trail.length>34)finn.trail.splice(0,finn.trail.length-34);
     finn.scale=1;
-    if(finn.y>=finn.ty){
-      finn.y=finn.ty; finn.x=finn.tx;
+    if(p>=1){
+      finn.x=finn.tx; finn.y=finn.ty;
+      finn.state='birth';
+      finn.birthT=0;
+      finn.scale=1.45;
+      finn.emotion='happy';
+      finn.flash=1.7;
+      finn.trail=[];
+      // радиальный взрыв искр — настоящее рождение, а не тихая подмена картинки
+      finn.sparks=[];
+      for(var bi=0;bi<26;bi++){
+        var ang=Math.random()*Math.PI*2;
+        var spd=60+Math.random()*150;
+        finn.sparks.push({x:finn.x,y:finn.y,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd-25,a:1,r:1.4+Math.random()*2.6});
+      }
+      setTimeout(function(){finnSay('Эй! Я с тобой.');},260);
+    }
+  }else if(finn.state==='birth'){
+    // спружинивающее приземление + плавное проявление лица поверх вспышки
+    finn.birthT+=dt;
+    var bp=Math.min(1,finn.birthT/0.5);
+    finn.scale=1.45-0.45*(1-Math.pow(1-bp,3));
+    if(bp>=1){
       finn.state='idle';
       finn.scale=1; finn.alpha=1;
-      finn.emotion='happy';
-      finn.flash=1.2;
-      finn.trail=[];
-      finn.sparks=[];
-      setTimeout(function(){finnSay('Эй! Я с тобой.');},200);
     }
   }else if(finn.state==='toDoor'){
     finn.x+=(finn.tx-finn.x)*Math.min(1,dt*2.4);
