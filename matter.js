@@ -190,17 +190,41 @@ function toggleMatterMute(){
 /* ---------- soft Finn speech (like main app) ---------- */
 function finnSay(text){
   if(!text)return;
-  var el=document.getElementById('matterDialog');
-  if(!el){
-    el=document.createElement('div');
-    el.id='matterDialog';
-    el.className='m-dialog';
-    if(root)root.appendChild(el);
+  // ответы солнца — сверху, без окна, строки сгорают сверху вниз
+  var box=document.getElementById('matterSpeech');
+  if(!box){
+    box=document.createElement('div');
+    box.id='matterSpeech';
+    box.className='m-speech';
+    if(root)root.appendChild(box);
   }
-  el.textContent=text;
-  el.classList.add('show');
-  clearTimeout(finnSay._t);
-  finnSay._t=setTimeout(function(){el.classList.remove('show');},4200);
+  // очистить предыдущие таймеры/строки
+  if(finnSay._timers){finnSay._timers.forEach(function(id){clearTimeout(id);});}
+  finnSay._timers=[];
+  box.innerHTML='';
+  box.style.display='flex';
+
+  // разбить на строки по ширине / предложениям
+  var lines=splitSpeechLines(String(text).trim(), 34);
+  lines.forEach(function(line,i){
+    var row=document.createElement('div');
+    row.className='m-speech-line';
+    row.textContent=line;
+    box.appendChild(row);
+    // через 2с после появления ответа — первая строка начинает гореть; каждая следующая +2с
+    var startBurn=2000+i*2000;
+    var tid=setTimeout(function(){
+      row.classList.add('burn');
+      // убрать из DOM после анимации
+      var tid2=setTimeout(function(){
+        if(row.parentNode)row.parentNode.removeChild(row);
+        if(box&&!box.children.length)box.style.display='none';
+      },2100);
+      finnSay._timers.push(tid2);
+    },startBurn);
+    finnSay._timers.push(tid);
+  });
+
   try{
     if(window.speechSynthesis){
       window.speechSynthesis.cancel();
@@ -209,6 +233,21 @@ function finnSay(text){
       window.speechSynthesis.speak(u);
     }
   }catch(e){}
+}
+
+function splitSpeechLines(text, maxChars){
+  maxChars=maxChars||34;
+  var words=String(text||'').replace(/\s+/g,' ').trim().split(' ');
+  var lines=[], cur='';
+  words.forEach(function(w){
+    if(!cur){cur=w;return;}
+    if((cur+' '+w).length<=maxChars)cur+=' '+w;
+    else{lines.push(cur);cur=w;}
+  });
+  if(cur)lines.push(cur);
+  // если одна очень длинная строка без пробелов
+  if(!lines.length&&text)lines=[text.slice(0,maxChars)];
+  return lines;
 }
 
 /* ---------- root shell ---------- */
@@ -353,7 +392,15 @@ function injectCSS(){
 '.m-reader-foot{position:absolute;left:0;right:0;bottom:0;text-align:center;padding:8px;padding-bottom:calc(8px + env(safe-area-inset-bottom,0px));font-size:11px;color:rgba(200,190,170,.55);transition:opacity .25s,transform .25s;background:linear-gradient(0deg,rgba(12,10,14,.92),rgba(12,10,14,0));pointer-events:none;height:36px;box-sizing:content-box}'+
 /* HTML hidden must beat display:flex — иначе при входе виден пустой «Книга» */
 '.m-reader[hidden],.m-panel[hidden],.m-hud[hidden],.m-room[hidden],.m-room-finn[hidden]{display:none!important}'+
-'.m-dialog{position:absolute;left:50%;bottom:calc(18% + 100px);transform:translateX(-50%) translateY(8px);'+'z-index:15;max-width:min(92vw,360px);max-height:28vh;overflow:auto;padding:14px 16px;border-radius:18px;'+'background:rgba(12,16,28,.88);border:1px solid rgba(255,255,255,.12);color:#E8ECF4;'+'font-size:15px;line-height:1.4;font-family:system-ui,sans-serif;text-align:center;'+'opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;'+'backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 8px 32px rgba(0,0,0,.45)}'+'.m-dialog.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}'+'.m-finn-close-space{position:absolute;z-index:16;width:36px;height:36px;border-radius:50%;'+'background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.22);color:#f5efe6;font-size:16px;'+'display:none;align-items:center;justify-content:center;padding:0}'+'.m-finn-close-space.show{display:flex}'+'body.matter-lock{overflow:hidden!important}';
+'.m-speech{position:absolute;left:0;right:0;top:0;z-index:18;pointer-events:none;'+
+'padding:calc(16px + env(safe-area-inset-top,0px)) 22px 8px;display:flex;flex-direction:column;align-items:center;gap:0;'+
+'background:transparent;max-height:42vh;overflow:visible}'+
+'.m-speech-line{font-family:Georgia,"Times New Roman",serif;font-size:17px;line-height:1.55;color:#FFE8C8;'+
+'text-align:center;max-width:min(92vw,380px);text-shadow:0 0 12px rgba(255,140,40,.35),0 1px 3px rgba(0,0,0,.7);'+
+'opacity:1;transform:none;filter:none;will-change:opacity,filter,transform;'+
+'transition:opacity 2s ease-in,filter 2s ease-in,transform 2s ease-in,color 2s ease-in}'+
+'.m-speech-line.burn{opacity:0;color:#3a1008;filter:blur(1.2px) brightness(1.8);transform:translateY(-6px) scaleY(0.85)}'+
+'.m-finn-close-space{position:absolute;z-index:16;width:36px;height:36px;border-radius:50%;'+'background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.22);color:#f5efe6;font-size:16px;'+'display:none;align-items:center;justify-content:center;padding:0}'+'.m-finn-close-space.show{display:flex}'+'body.matter-lock{overflow:hidden!important}';
   document.head.appendChild(s);
 }
 
@@ -847,8 +894,9 @@ function onCanvasTap(e){
     finn.x=W*0.5;finn.y=H*0.16;finn.scale=1;finn.alpha=1;
     finn.emotion='idle';
     finn.trail=[]; finn.sparks=[]; finn.flash=0; finn.fallV=0;
-    var d=document.getElementById('matterDialog');
-    if(d)d.classList.remove('show');
+    var d=document.getElementById('matterSpeech');
+    if(d){d.innerHTML='';d.style.display='none';}
+    if(finnSay._timers){finnSay._timers.forEach(function(id){clearTimeout(id);});finnSay._timers=[];}
     try{if(rec){rec.abort();rec=null;}}catch(err){}
   }
 }
@@ -1948,8 +1996,9 @@ function ensureSpaceCloseBtn(){
     finn.state='star';
     finn.x=W*0.5;finn.y=H*0.16;finn.scale=1;finn.alpha=1;
     b.classList.remove('show');
-    var d=document.getElementById('matterDialog');
-    if(d)d.classList.remove('show');
+    var d=document.getElementById('matterSpeech');
+    if(d){d.innerHTML='';d.style.display='none';}
+    if(finnSay._timers){finnSay._timers.forEach(function(id){clearTimeout(id);});finnSay._timers=[];}
   };
   root.appendChild(b);
   return b;
