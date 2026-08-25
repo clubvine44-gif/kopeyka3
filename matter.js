@@ -487,121 +487,109 @@ function resetFinn(){
   };
 }
 
+/* ---------- реалистичное солнце: кэшированная плазменная текстура ---------- */
+var sunTex=null, sunTexSize=0, sunTexAt=0;
+function paintSunTexture(){
+  if(!sunTex)return;
+  var tw=sunTex.width, r=tw/2;
+  var tctx=sunTex.getContext('2d');
+  tctx.clearRect(0,0,tw,tw);
+  var base=tctx.createRadialGradient(r,r,0,r,r,r);
+  base.addColorStop(0,'#FFF6D8');
+  base.addColorStop(0.35,'#FFD37A');
+  base.addColorStop(0.68,'#FF9A2E');
+  base.addColorStop(1,'#D94A12');
+  tctx.fillStyle=base;
+  tctx.beginPath();tctx.arc(r,r,r,0,Math.PI*2);tctx.fill();
+  // грануляция плазмы — конвективные ячейки внахлёст, имитация реальной поверхности звезды
+  tctx.globalCompositeOperation='overlay';
+  var n=Math.round(tw*0.55);
+  for(var i=0;i<n;i++){
+    var ang=Math.random()*Math.PI*2, rad=Math.sqrt(Math.random())*r*0.97;
+    var gx=r+Math.cos(ang)*rad, gy=r+Math.sin(ang)*rad;
+    var gr=r*(0.02+Math.random()*0.05);
+    var br=Math.random();
+    tctx.fillStyle= br>0.52 ? 'rgba(255,244,214,'+(0.10+0.16*br)+')' : 'rgba(120,30,0,'+(0.08+0.14*(1-br))+')';
+    tctx.beginPath();tctx.arc(gx,gy,gr,0,Math.PI*2);tctx.fill();
+  }
+  tctx.globalCompositeOperation='source-over';
+  sunTexAt=performance.now();
+}
+function ensureSunTexture(size){
+  var want=Math.max(96,Math.round(size*2.4));
+  if(sunTex && sunTexSize===want)return;
+  sunTex=document.createElement('canvas');
+  sunTex.width=sunTex.height=want;
+  sunTexSize=want;
+  paintSunTexture();
+}
+
 function drawFinnFace(c, cx, cy, size, t){
-  // Взрослая «звёздная» сущность: тёплый янтарь, живое пламя, без детского солнышка
+  // Реальное солнце: текстурная плазма + затемнение к краю + многослойная
+  // корона + редкие протуберанцы. Никакого лица, никаких мультяшных лепестков.
   var s=size;
-  var emo=(finn&&finn.emotion)||'idle';
+  ensureSunTexture(s);
+  if(performance.now()-sunTexAt>420)paintSunTexture(); // медленное «кипение», не каждый кадр — ради FPS
+
   c.save();
   c.translate(cx,cy);
-  var breath=1+0.03*Math.sin(t*2.1);
+  var breath=1+0.025*Math.sin(t*1.6);
 
-  // внешнее пламя — мягкие языки, не лучи-лучики
-  for(var i=0;i<12;i++){
-    var ang=(i/12)*Math.PI*2+t*0.55+Math.sin(t*1.7+i)*0.15;
-    var len=s*(1.15+0.25*Math.sin(t*3.2+i*0.9));
-    c.save();
-    c.rotate(ang);
-    var fl=c.createLinearGradient(0,0,0,-len);
-    fl.addColorStop(0,'rgba(255,210,140,0.55)');
-    fl.addColorStop(0.35,'rgba(255,120,50,0.28)');
-    fl.addColorStop(0.75,'rgba(180,40,30,0.1)');
-    fl.addColorStop(1,'rgba(40,0,0,0)');
-    c.fillStyle=fl;
-    c.beginPath();
-    c.moveTo(-s*0.12,s*0.05);
-    c.quadraticCurveTo(-s*0.06,-len*0.45,0,-len);
-    c.quadraticCurveTo(s*0.06,-len*0.45,s*0.12,s*0.05);
-    c.closePath();
-    c.fill();
-    c.restore();
-  }
-
-  // корона
-  var g0=c.createRadialGradient(0,0,s*0.15,0,0,s*1.55*breath);
-  g0.addColorStop(0,'rgba(255,240,200,0.55)');
-  g0.addColorStop(0.3,'rgba(255,150,60,0.28)');
-  g0.addColorStop(0.65,'rgba(200,50,40,0.12)');
-  g0.addColorStop(1,'rgba(0,0,0,0)');
-  c.fillStyle=g0;
-  c.beginPath();c.arc(0,0,s*1.55*breath,0,Math.PI*2);c.fill();
-
-  // тело — глубокий янтарь/медь, не жёлтый шарик
-  var body=c.createRadialGradient(-s*0.2,-s*0.25,s*0.05,0,0,s*0.92);
-  body.addColorStop(0,'#FFE8C0');
-  body.addColorStop(0.35,'#E8A04A');
-  body.addColorStop(0.7,'#C45A28');
-  body.addColorStop(1,'#6A2018');
-  c.fillStyle=body;
-  c.beginPath();c.arc(0,0,s*0.82,0,Math.PI*2);c.fill();
-
-  // внутренний жар
-  var core=c.createRadialGradient(-s*0.1,-s*0.12,0,0,0,s*0.5);
-  core.addColorStop(0,'rgba(255,250,230,0.55)');
-  core.addColorStop(1,'rgba(255,160,60,0)');
-  c.fillStyle=core;
-  c.beginPath();c.arc(0,0,s*0.5,0,Math.PI*2);c.fill();
-
-  // скулы — едва заметные, без «румянца ребёнка»
-  c.fillStyle='rgba(160,40,30,0.15)';
-  c.beginPath();c.ellipse(-s*0.34,s*0.1,s*0.12,s*0.07,0,0,Math.PI*2);c.fill();
-  c.beginPath();c.ellipse(s*0.34,s*0.1,s*0.12,s*0.07,0,0,Math.PI*2);c.fill();
-
-  // брови — спокойные, взрослые
-  c.strokeStyle='rgba(40,15,10,0.55)';
-  c.lineWidth=Math.max(1.5,s*0.04);
-  c.lineCap='round';
-  var browY=-s*0.2+(emo==='listening'?-s*0.03:0)+(emo==='think'?s*0.02:0);
-  c.beginPath();
-  c.moveTo(-s*0.4,browY+(emo==='think'?s*0.03:0));
-  c.quadraticCurveTo(-s*0.25,browY-s*0.04,-s*0.1,browY);
-  c.stroke();
-  c.beginPath();
-  c.moveTo(s*0.1,browY);
-  c.quadraticCurveTo(s*0.25,browY-s*0.04,s*0.4,browY+(emo==='think'?s*0.03:0));
-  c.stroke();
-
-  // глаза — спокойные, живые, без «демонического» тёмного белка
-  var eyeOpen=finn&&finn.blink>0?0.12:1;
-  var eyeH=s*0.14*eyeOpen;
-  var eyeY=-s*0.015;
-  [[-0.26],[0.26]].forEach(function(p){
-    var ex=p[0]*s;
-    // светлый белок
-    c.fillStyle='rgba(255,248,240,0.95)';
-    c.beginPath();c.ellipse(ex,eyeY,s*0.14,eyeH,0,0,Math.PI*2);c.fill();
-    if(eyeOpen>0.2){
-      // тёплая радужка
-      var iris=c.createRadialGradient(ex-s*0.02,eyeY-s*0.02,0,ex,eyeY,s*0.085);
-      iris.addColorStop(0,'#FFE8B0');
-      iris.addColorStop(0.45,'#D4953A');
-      iris.addColorStop(1,'#8A4A18');
-      c.fillStyle=iris;
-      c.beginPath();c.ellipse(ex,eyeY+s*0.01,s*0.075,eyeH*0.72,0,0,Math.PI*2);c.fill();
-      // зрачок
-      c.fillStyle='rgba(25,12,8,0.88)';
-      c.beginPath();c.arc(ex,eyeY+s*0.01,s*0.028*eyeOpen,0,Math.PI*2);c.fill();
-      // блик
-      c.fillStyle='rgba(255,255,255,0.75)';
-      c.beginPath();c.arc(ex-s*0.025,eyeY-s*0.025,s*0.022,0,Math.PI*2);c.fill();
-    }
+  // многослойная диффузная корона
+  var layers=[{mul:2.7,a:0.09},{mul:1.9,a:0.15},{mul:1.35,a:0.24}];
+  layers.forEach(function(L){
+    var rr=s*L.mul*breath;
+    var cg=c.createRadialGradient(0,0,s*0.6,0,0,rr);
+    cg.addColorStop(0,'rgba(255,210,120,'+L.a+')');
+    cg.addColorStop(0.55,'rgba(255,120,40,'+(L.a*0.4)+')');
+    cg.addColorStop(1,'rgba(255,60,10,0)');
+    c.fillStyle=cg;
+    c.beginPath();c.arc(0,0,rr,0,Math.PI*2);c.fill();
   });
 
-  // рот — сдержанный
-  c.strokeStyle='rgba(60,20,15,0.55)';
-  c.lineWidth=Math.max(1.3,s*0.035);
-  c.lineCap='round';
-  c.beginPath();
-  if(emo==='happy'){
-    c.moveTo(-s*0.14,s*0.28);
-    c.quadraticCurveTo(0,s*0.38,s*0.14,s*0.28);
-  }else if(emo==='listening'||emo==='think'){
-    c.moveTo(-s*0.08,s*0.3);
-    c.lineTo(s*0.08,s*0.3);
-  }else{
-    c.moveTo(-s*0.12,s*0.3);
-    c.quadraticCurveTo(0,s*0.34,s*0.12,s*0.3);
+  // редкий, сдержанный протуберанец у края — раз в несколько секунд, не «лепестки»
+  if(finn){
+    if(finn._flareAt==null||t-finn._flareAt>5){
+      finn._flareAt=t; finn._flareAng=Math.random()*Math.PI*2; finn._flareLen=0.22+Math.random()*0.3;
+    }
+    var fadeT=(t-finn._flareAt)/3.2;
+    var fa=Math.max(0,1-fadeT)*0.32;
+    if(fa>0.015){
+      c.save();
+      c.rotate(finn._flareAng);
+      var flen=s*(0.85+finn._flareLen);
+      var fg=c.createLinearGradient(0,-s*0.76,0,-flen);
+      fg.addColorStop(0,'rgba(255,205,130,'+fa+')');
+      fg.addColorStop(1,'rgba(255,80,20,0)');
+      c.strokeStyle=fg;
+      c.lineWidth=s*0.045;
+      c.lineCap='round';
+      c.beginPath();
+      c.moveTo(0,-s*0.78);
+      c.quadraticCurveTo(s*0.16,-(s*0.78+flen)*0.6,s*0.04,-flen);
+      c.stroke();
+      c.restore();
+    }
   }
-  c.stroke();
+
+  // диск — процедурная плазменная текстура, вырезанная по кругу
+  c.save();
+  c.beginPath();c.arc(0,0,s*0.82,0,Math.PI*2);c.clip();
+  c.drawImage(sunTex,-s*0.82*1.2,-s*0.82*1.2,s*0.82*2.4,s*0.82*2.4);
+  // затемнение к краю — настоящая сфера, а не плоский блин
+  var limb=c.createRadialGradient(0,0,s*0.35,0,0,s*0.82);
+  limb.addColorStop(0,'rgba(0,0,0,0)');
+  limb.addColorStop(0.75,'rgba(80,20,0,0.12)');
+  limb.addColorStop(1,'rgba(40,5,0,0.55)');
+  c.fillStyle=limb;
+  c.beginPath();c.arc(0,0,s*0.82,0,Math.PI*2);c.fill();
+  // тёплая внутренняя засветка
+  var hot=c.createRadialGradient(-s*0.08,-s*0.1,0,0,0,s*0.5);
+  hot.addColorStop(0,'rgba(255,250,225,0.35)');
+  hot.addColorStop(1,'rgba(255,160,60,0)');
+  c.fillStyle=hot;
+  c.beginPath();c.arc(0,0,s*0.5,0,Math.PI*2);c.fill();
+  c.restore();
 
   c.restore();
 }
@@ -1780,19 +1768,33 @@ function drawSpace(dt,t){
   if(finn){
     updateFinn(dt,t);
     if(finn.state==='star'||finn.state==='fall'){
-      // хвост настоящей падающей звезды — градиент от раскалённого белого
-      // ядра к огненно-оранжевому краю, а не однотонная линия
-      if(finn.trail&&finn.trail.length>1){
+      // хвост настоящей падающей звезды — сплошная сглаженная полоса с
+      // градиентом от раскалённого белого ядра к огненно-оранжевому краю
+      if(finn.trail&&finn.trail.length>2){
+        var tn=finn.trail.length;
         ctx.lineCap='round';
-        for(var ti=1;ti<finn.trail.length;ti++){
-          var a0=finn.trail[ti-1], a1=finn.trail[ti];
-          var ta=ti/finn.trail.length;
+        ctx.lineJoin='round';
+        for(var ti=1;ti<tn-1;ti++){
+          var pPrev=finn.trail[ti-1], pCur=finn.trail[ti], pNext=finn.trail[ti+1];
+          var mx0=(pPrev.x+pCur.x)/2, my0=(pPrev.y+pCur.y)/2;
+          var mx1=(pCur.x+pNext.x)/2, my1=(pCur.y+pNext.y)/2;
+          var ta=ti/tn;
           var rC=255, gC=Math.round(150+90*ta), bC=Math.round(70+165*ta);
           ctx.beginPath();
-          ctx.strokeStyle='rgba('+rC+','+gC+','+bC+','+(0.12+0.75*ta)+')';
-          ctx.lineWidth=1+5.5*ta;
-          ctx.moveTo(a0.x,a0.y);ctx.lineTo(a1.x,a1.y);ctx.stroke();
+          ctx.strokeStyle='rgba('+rC+','+gC+','+bC+','+(0.1+0.65*ta)+')';
+          ctx.lineWidth=1+6*ta;
+          ctx.moveTo(mx0,my0);
+          ctx.quadraticCurveTo(pCur.x,pCur.y,mx1,my1);
+          ctx.stroke();
         }
+        // тонкое раскалённое ядро поверх — как настоящий болид, а не линия
+        ctx.beginPath();ctx.strokeStyle='rgba(255,255,250,0.85)';ctx.lineWidth=1.4;
+        for(var tj=1;tj<tn;tj++){
+          var q0=finn.trail[tj-1], q1=finn.trail[tj];
+          if(tj===1)ctx.moveTo(q0.x,q0.y);
+          ctx.lineTo(q1.x,q1.y);
+        }
+        ctx.stroke();
       }
       drawFinnStar(ctx, finn.x, finn.y, t);
     }else if(finn.state!=='enter' && finn.state!=='room'){
@@ -1871,14 +1873,21 @@ function updateFinn(dt,t){
   if(finn.state==='fall'){
     // настоящий пролёт метеора: дуга Безье, ускорение к финалу, длинный
     // светящийся хвост с градиентом от белого ядра к огненному краю
+    var prevFX=finn.x, prevFY=finn.y;
     finn.fallT+=dt;
     var p=Math.min(1,finn.fallT/(finn.fallDur||1.3));
     var ep=p<0.5?2*p*p:1-Math.pow(-2*p+2,2)/2; // easeInOutQuad
     var omp=1-ep;
     finn.x=omp*omp*finn.sx+2*omp*ep*finn.cx+ep*ep*finn.tx;
     finn.y=omp*omp*finn.sy+2*omp*ep*finn.cy+ep*ep*finn.ty;
-    finn.trail.push({x:finn.x,y:finn.y,a:1});
-    if(finn.trail.length>34)finn.trail.splice(0,finn.trail.length-34);
+    // плотная подвыборка — без этого на быстрых участках дуги хвост
+    // выглядит прерывистыми точками, а не сплошной полосой
+    var fdist=Math.hypot(finn.x-prevFX,finn.y-prevFY);
+    var fsteps=Math.max(1,Math.ceil(fdist/5));
+    for(var fsi=1;fsi<=fsteps;fsi++){
+      finn.trail.push({x:prevFX+(finn.x-prevFX)*(fsi/fsteps),y:prevFY+(finn.y-prevFY)*(fsi/fsteps)});
+    }
+    if(finn.trail.length>70)finn.trail.splice(0,finn.trail.length-70);
     finn.scale=1;
     if(p>=1){
       finn.x=finn.tx; finn.y=finn.ty;
