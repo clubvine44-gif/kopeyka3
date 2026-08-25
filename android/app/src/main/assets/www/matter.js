@@ -367,15 +367,20 @@ function resize(){
   ctx.setTransform(dpr,0,0,dpr,0,0);
 }
 
+var skyMode='home';
+var galaxies=[];
 /* ---------- constellation + diagonal door ---------- */
 function buildStars(){
   stars=[];
   var goals=getGoals();
-  // Реальные относительные координаты Большой Медведицы (7) и Малой (7)
-  // Нормализованы 0..1 внутри bounding box созвездия
-  // По референсу пользователя: Большая — слева внизу (ковш снизу, ручка вверх-влево);
-  // Малая — справа вверху, отдельно, без наложений.
-  // Индексы Большой: 0 Alkaid(конец ручки) … 3 Megrez(стык) … 6 край ковша
+  var mode=skyMode||'home';
+  // Кассиопея (W) — 5 ярких
+  var cassiopeia=[[0.10,0.55],[0.30,0.25],[0.50,0.50],[0.70,0.20],[0.90,0.48]];
+  var cassLinks=[[0,1],[1,2],[2,3],[3,4]];
+  // Орион — пояс + плечи + ноги (упрощённо)
+  var orion=[[0.25,0.15],[0.75,0.18],[0.35,0.45],[0.50,0.48],[0.65,0.45],[0.30,0.78],[0.70,0.80]];
+  var orionLinks=[[0,2],[1,4],[2,3],[3,4],[2,5],[4,6],[0,1]];
+  // Большая Медведица
   var ursaMajor=[
     [0.05,0.05], // 0 Alkaid — кончик ручки (верх-лево)
     [0.18,0.22], // 1 Mizar
@@ -416,16 +421,36 @@ function buildStars(){
     return placed;
   }
   // Разные области экрана — не пересекаются
-  var majBox={ox:W*0.06, oy:H*0.36, bw:W*0.46, bh:H*0.48};
-  var minBox={ox:W*0.52, oy:H*0.10, bw:W*0.40, bh:H*0.34};
+  // Медведицы по краям, центр свободен под чёрную дыру
+  var majBox={ox:W*0.02, oy:H*0.42, bw:W*0.38, bh:H*0.42};
+  var minBox={ox:W*0.60, oy:H*0.08, bw:W*0.36, bh:H*0.30};
+  window.__matterLinks=[];
+  if(mode==='cass'){
+    var box={ox:W*0.12, oy:H*0.22, bw:W*0.76, bh:H*0.40};
+    var placed=placeInBox(cassiopeia, cassLinks, goals.slice(0,5), 'cass', box);
+    cassLinks.forEach(function(lk){ window.__matterLinks.push([placed[lk[0]], placed[lk[1]]]); });
+    goals.slice(5).forEach(function(g,i){
+      var x=W*0.15+((i%6)/6)*W*0.7;
+      var y=H*0.72+(Math.floor(i/6)*28);
+      stars.push({id:g.id,g:g,x:x,y:y,baseR:6+Math.min(5,(g.pct||0)/25),hue:g.type==='debt'?8:205,pulse:i,bright:0.7,group:'extra',idx:i});
+    });
+  }else if(mode==='orion'){
+    var box={ox:W*0.18, oy:H*0.16, bw:W*0.64, bh:H*0.62};
+    var placed=placeInBox(orion, orionLinks, goals.slice(0,7), 'orion', box);
+    orionLinks.forEach(function(lk){ window.__matterLinks.push([placed[lk[0]], placed[lk[1]]]); });
+    goals.slice(7).forEach(function(g,i){
+      var x=W*0.12+((i%5)/5)*W*0.76;
+      var y=H*0.82+(Math.floor(i/5)*26);
+      stars.push({id:g.id,g:g,x:x,y:y,baseR:6+Math.min(5,(g.pct||0)/25),hue:g.type==='debt'?8:200,pulse:i,bright:0.7,group:'extra',idx:i});
+    });
+  }else{
   var majGoals=goals.slice(0,7);
   var minGoals=goals.slice(7,14);
   var maj=placeInBox(ursaMajor, majLinks, majGoals, 'maj', majBox);
   var min=placeInBox(ursaMinor, minLinks, minGoals, 'min', minBox);
-  window.__matterLinks=[];
   majLinks.forEach(function(lk){ window.__matterLinks.push([maj[lk[0]], maj[lk[1]]]); });
   minLinks.forEach(function(lk){ window.__matterLinks.push([min[lk[0]], min[lk[1]]]); });
-  // лишние цели — аккуратная сетка под Большой Медведицей, без наложений
+  // лишние цели — сетка под Большой, не на центр
   var extra=goals.slice(14);
   if(extra.length){
     var cols=Math.max(3,Math.floor(majBox.bw/54));
@@ -451,23 +476,18 @@ function buildStars(){
       bg:true
     });
   }
-  // Дверь = мини чёрная дыра справа снизу (не на Медведицах)
-  var dx=W*0.86, dy=H*0.76;
-  var vortex=[];
-  for(var vi=0;vi<36;vi++){
-    vortex.push({
-      a:Math.random()*Math.PI*2,
-      r:18+Math.random()*34,
-      sp:1.2+Math.random()*2.4,
-      s:0.8+Math.random()*1.6
-    });
-  }
+  } // end home sky
+  // Дверь = чёрная дыра в центре экрана (между созвездиями)
   door={
-    x:dx,y:dy,r:48,
-    vortex:vortex,
+    x:W*0.5, y:H*0.50, r:Math.min(W,H)*0.072,
     open:0,opening:false,entered:false,
     swirl:0
   };
+  // галактики — по бокам от центра, не на дыре и не на ковшах
+  galaxies=[
+    {id:'cass', x:W*0.22, y:H*0.26, r:Math.min(W,H)*0.085, rot:-0.4, kind:1, label:'Кассиопея'},
+    {id:'orion', x:W*0.78, y:H*0.70, r:Math.min(W,H)*0.09, rot:0.55, kind:2, label:'Орион'}
+  ];
 }
 
 /* ---------- Finn state machine ---------- */
@@ -529,7 +549,7 @@ function drawFinnFace(c, cx, cy, size, t){
   var s=size;
   ensureSunTexture(s);
   // редкий фоновый refresh текстуры — незаметный
-  if(performance.now()-sunTexAt>2400)paintSunTexture();
+  /* texture refresh disabled — плавное пылание градиентами */
 
   c.save();
   c.translate(cx,cy);
@@ -572,28 +592,31 @@ function drawFinnFace(c, cx, cy, size, t){
     }
   }
 
-  // диск — текстура + плавный поток плазмы каждый кадр
+  // диск — плавное пылание без пузырей и без скачков кадров
   c.save();
   c.beginPath();c.arc(0,0,s*0.82,0,Math.PI*2);c.clip();
-  c.save();
-  c.rotate(t*0.12);
-  c.drawImage(sunTex,-s*0.82*1.2,-s*0.82*1.2,s*0.82*2.4,s*0.82*2.4);
-  c.restore();
-  // непрерывное «кипение» — мягкие ячейки, едущие по поверхности
-  for(var i=0;i<18;i++){
-    var a=t*0.7+i*0.9;
-    var rr=s*0.15+s*0.55*((i*0.37)%1);
-    var px=Math.cos(a)*rr, py=Math.sin(a*1.15)*rr*0.9;
-    var gr=s*(0.06+0.05*Math.sin(t*2+i));
-    var pulse=0.5+0.5*Math.sin(t*2.4+i*1.3);
-    c.beginPath();
-    c.fillStyle='rgba(255,240,200,'+(0.04+0.08*pulse)+')';
-    c.arc(px,py,gr,0,Math.PI*2);c.fill();
-    c.beginPath();
-    c.fillStyle='rgba(180,50,10,'+(0.03+0.05*(1-pulse))+')';
-    c.arc(px*0.85,py*0.85,gr*0.7,0,Math.PI*2);c.fill();
+  // базовый градиент (не прыгающая текстура)
+  var body=c.createRadialGradient(-s*0.12,-s*0.14,0,0,0,s*0.82);
+  body.addColorStop(0,'#FFF8E0');
+  body.addColorStop(0.28,'#FFE08A');
+  body.addColorStop(0.55,'#FFB040');
+  body.addColorStop(0.8,'#E86820');
+  body.addColorStop(1,'#A03010');
+  c.fillStyle=body;
+  c.beginPath();c.arc(0,0,s*0.82,0,Math.PI*2);c.fill();
+  // медленные широкие волны жара (не пузырьки)
+  for(var i=0;i<5;i++){
+    var a=t*0.35+i*1.25;
+    var ox=Math.cos(a)*s*0.18;
+    var oy=Math.sin(a*0.9)*s*0.14;
+    var wave=c.createRadialGradient(ox,oy,0,ox,oy,s*(0.35+0.08*Math.sin(t*1.1+i)));
+    wave.addColorStop(0,'rgba(255,250,220,'+(0.12+0.06*Math.sin(t*1.3+i))+')');
+    wave.addColorStop(0.6,'rgba(255,160,50,0.06)');
+    wave.addColorStop(1,'rgba(255,80,20,0)');
+    c.fillStyle=wave;
+    c.beginPath();c.arc(0,0,s*0.82,0,Math.PI*2);c.fill();
   }
-  // затемнение к краю — настоящая сфера, а не плоский блин
+  // затемнение к краю — сфера
   var limb=c.createRadialGradient(0,0,s*0.35,0,0,s*0.82);
   limb.addColorStop(0,'rgba(0,0,0,0)');
   limb.addColorStop(0.75,'rgba(80,20,0,0.12)');
@@ -712,15 +735,18 @@ function handleBack(){
 /* ---------- interaction ---------- */
 function findGoalStarAt(x,y){
   var best=null,bestD=1e12;
-  // не цеплять цели рядом с зародышем/Финой
-  var fx=finn?finn.x: -9999, fy=finn?finn.y: -9999;
-  var blockR2=(finn&&(finn.state==='star'||finn.state==='fall'||finn.state==='birth'))?(90*90):(50*50);
+  // блок только вокруг зародыша наверху (не idle-Фину внизу)
+  var blockX=W*0.5, blockY=H*0.16, blockR2=0;
+  if(finn&&finn.state==='star'){ blockR2=70*70; }
+  if(finn&&(finn.state==='fall'||finn.state==='birth')){ blockR2=110*110; blockX=finn.x; blockY=finn.y; }
   stars.forEach(function(s){
     if(s.bg||!s.g)return;
-    var nearFinn=(s.x-fx)*(s.x-fx)+(s.y-fy)*(s.y-fy);
-    if(nearFinn<blockR2)return;
+    if(blockR2>0){
+      var near=(s.x-blockX)*(s.x-blockX)+(s.y-blockY)*(s.y-blockY);
+      if(near<blockR2)return;
+    }
     var dx=x-s.x, dy=y-s.y, d=dx*dx+dy*dy;
-    var hit=Math.max(36, (s.baseR||5)*5+24);
+    var hit=Math.max(40, (s.baseR||5)*5.5+22);
     hit=hit*hit;
     if(d<hit && d<bestD){bestD=d;best=s;}
   });
@@ -774,10 +800,27 @@ function onCanvasTap(e){
     }
   }
 
-  // 3) Дверь
+  // 3a) Галактики — переход в другие созвездия
+  if(galaxies&&galaxies.length){
+    for(var gi=0;gi<galaxies.length;gi++){
+      var G=galaxies[gi];
+      var gdx=x-G.x, gdy=y-G.y;
+      if(gdx*gdx+gdy*gdy < (G.r*1.15)*(G.r*1.15)){
+        var next=G.id==='cass'?'cass':(G.id==='orion'?'orion':'home');
+        if(skyMode===next)next='home';
+        skyMode=next;
+        buildStars();
+        hidePanel();
+        finnSay(next==='home'?'Снова Медведицы.':(next==='cass'?'Кассиопея.':'Орион.'));
+        return;
+      }
+    }
+  }
+
+  // 3) Дверь в центре
   if(door){
     var dx2=x-door.x, dy2=y-door.y;
-    if(dx2*dx2+dy2*dy2 < (door.r+28)*(door.r+28)){
+    if(dx2*dx2+dy2*dy2 < (door.r+22)*(door.r+22)){
       if(finn && finn.state==='idle'){
         finn.state='toDoor';
         finn.tx=door.x; finn.ty=door.y;
@@ -793,8 +836,7 @@ function onCanvasTap(e){
   var best=findGoalStarAt(x,y);
   if(best){
     if(showStar._lock && Date.now()<showStar._lock)return;
-    if(showStar._lock && Date.now()-showStar._lock<350 && showStar._lock<1e12)return;
-    showStar._lock=Date.now();
+    showStar._lock=Date.now()+200;
     showStar(best);
     return;
   }
@@ -1688,10 +1730,16 @@ function drawSpace(dt,t){
   var g=ctx.createRadialGradient(W*0.5,H*0.4,0,W*0.5,H*0.5,Math.max(W,H)*0.7);
   g.addColorStop(0,'#0a1020');g.addColorStop(0.5,'#05080f');g.addColorStop(1,'#000');
   ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
-  // две галактики — порталы к другим созвездиям
-  var gr=Math.min(W,H)*0.09;
-  drawGalaxy(ctx, W*0.32, H*0.42, gr, -0.35, t, 1);
-  drawGalaxy(ctx, W*0.68, H*0.55, gr*1.05, 0.55, t, 2);
+  // галактики — порталы к другим созвездиям
+  if(galaxies&&galaxies.length){
+    galaxies.forEach(function(G){
+      drawGalaxy(ctx, G.x, G.y, G.r, G.rot, t, G.kind);
+    });
+  }else{
+    var gr=Math.min(W,H)*0.085;
+    drawGalaxy(ctx, W*0.22, H*0.26, gr, -0.35, t, 1);
+    drawGalaxy(ctx, W*0.78, H*0.70, gr*1.05, 0.55, t, 2);
+  }
 
   ctx.globalAlpha=0.12;
   var ng=ctx.createRadialGradient(W*0.3,H*0.3,0,W*0.3,H*0.3,W*0.5);
@@ -1747,55 +1795,49 @@ function drawSpace(dt,t){
     var dx=door.x, dy=door.y;
     var R=door.r*(1+door.open*0.5);
 
-    door.swirl=(door.swirl||0)+dt*(4.2+door.open*5);
-    // слабое рассеянное белое свечение ЗА дырой — чтобы она читалась на тёмном фоне
-    var backGlow=ctx.createRadialGradient(dx,dy,R*0.3,dx,dy,R*1.55);
-    backGlow.addColorStop(0,'rgba(0,0,0,0)');
-    backGlow.addColorStop(0.45,'rgba(220,230,255,0.04)');
-    backGlow.addColorStop(0.72,'rgba(200,215,255,0.11)');
-    backGlow.addColorStop(0.88,'rgba(180,200,255,0.07)');
-    backGlow.addColorStop(1,'rgba(0,0,0,0)');
-    ctx.beginPath();ctx.fillStyle=backGlow;ctx.arc(dx,dy,R*1.55,0,Math.PI*2);ctx.fill();
-
-    // вихрь — только сплошные спиральные потоки, без «бегающих точек»
-    for(var arm=0;arm<5;arm++){
-      ctx.beginPath();
-      for(var s=0;s<48;s++){
-        var p=s/48;
-        var rr2=R*(0.18+p*1.05);
-        var aa=door.swirl*1.1+arm*(Math.PI*2/5)+p*3.2;
-        var px=dx+Math.cos(aa)*rr2;
-        var py=dy+Math.sin(aa)*rr2*0.62;
-        if(s===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
-      }
-      ctx.strokeStyle='rgba(170,200,255,'+(0.07+0.05*(arm%2))+')';
-      ctx.lineWidth=1.1+arm*0.15;
-      ctx.lineCap='round';
-      ctx.stroke();
-    }
-    // второй слой — чуть быстрее, тоньше
-    for(var arm=0;arm<4;arm++){
-      ctx.beginPath();
-      for(var s=0;s<40;s++){
-        var p=s/40;
-        var rr2=R*(0.22+p*0.95);
-        var aa=-door.swirl*0.85+arm*(Math.PI/2)+p*2.8;
-        var px=dx+Math.cos(aa)*rr2;
-        var py=dy+Math.sin(aa)*rr2*0.58;
-        if(s===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
-      }
-      ctx.strokeStyle='rgba(140,175,230,'+(0.05+0.03*(arm%2))+')';
-      ctx.lineWidth=0.9;
-      ctx.stroke();
+    door.swirl=(door.swirl||0)+dt*(1.6+door.open*2.2);
+    // рассеянное свечение — не шар, а мягкий размытый ореол (слабее)
+    for(var gi=0;gi<5;gi++){
+      var ox=(gi-2)*R*0.35;
+      var oy=((gi%3)-1)*R*0.25;
+      var sg=ctx.createRadialGradient(dx+ox,dy+oy,R*0.2,dx+ox,dy+oy,R*(1.8+gi*0.15));
+      sg.addColorStop(0,'rgba(0,0,0,0)');
+      sg.addColorStop(0.55,'rgba(210,220,240,'+(0.012+gi*0.004)+')');
+      sg.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.beginPath();ctx.fillStyle=sg;ctx.arc(dx+ox,dy+oy,R*(1.8+gi*0.15),0,Math.PI*2);ctx.fill();
     }
 
-    // чёрный горизонт
-    var hg=ctx.createRadialGradient(dx,dy,0,dx,dy,R*0.52);
+    // аккреция: свет, затягиваемый в дыру (эллиптический диск, утончается к горизонту)
+    ctx.save();
+    for(var arm=0;arm<6;arm++){
+      for(var s=0;s<36;s++){
+        var p=s/36;
+        var aa=door.swirl*0.7+arm*(Math.PI/3)+p*2.6;
+        var rr=R*(0.55+p*1.35);
+        var px=dx+Math.cos(aa)*rr;
+        var py=dy+Math.sin(aa)*rr*0.38; // сильно сплюснуто — диск с ребра
+        // яркость растёт к внутреннему краю, гаснет снаружи
+        var al=0.04+0.14*(1-p)*Math.sin(p*Math.PI);
+        ctx.beginPath();
+        ctx.fillStyle='rgba(230,235,255,'+al+')';
+        ctx.arc(px,py,0.7+1.1*(1-p),0,Math.PI*2);ctx.fill();
+      }
+    }
+    // тонкое фотонное кольцо — край горизонта
+    ctx.beginPath();
+    ctx.strokeStyle='rgba(220,230,255,'+(0.18+0.08*Math.sin(door.swirl))+')';
+    ctx.lineWidth=1.2;
+    ctx.ellipse(dx,dy,R*0.62,R*0.24,0,0,Math.PI*2);
+    ctx.stroke();
+    ctx.restore();
+
+    // абсолютно чёрный горизонт событий
+    var hg=ctx.createRadialGradient(dx,dy,0,dx,dy,R*0.5);
     hg.addColorStop(0,'#000');
-    hg.addColorStop(0.75,'#000');
-    hg.addColorStop(0.92,'rgba(0,0,0,0.85)');
+    hg.addColorStop(0.7,'#000');
+    hg.addColorStop(0.9,'rgba(0,0,0,0.9)');
     hg.addColorStop(1,'rgba(0,0,0,0)');
-    ctx.beginPath();ctx.fillStyle=hg;ctx.arc(dx,dy,R*0.52,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.fillStyle=hg;ctx.arc(dx,dy,R*0.5,0,Math.PI*2);ctx.fill();
 
     if(door.open>0.12){
       ctx.fillStyle='rgba(0,0,0,'+Math.min(0.92,door.open)+')';
@@ -1837,49 +1879,36 @@ function drawSpace(dt,t){
       }
       drawFinnStar(ctx, finn.x, finn.y, t);
     }else if(finn.state!=='enter' && finn.state!=='room'){
-      // эпичный взрыв рождения: вспышка, несколько ударных волн, лучи, осколки
+      // импульс взрыва: вспышка + лучи + осколки, БЕЗ колец-границ
       if(finn.flash&&finn.flash>0){
         var fl=finn.flash;
         var fx=finn.x, fy=finn.y;
-        // ядро вспышки
-        var fg=ctx.createRadialGradient(fx,fy,0,fx,fy,finn.size*(1.2+2.8*fl));
-        fg.addColorStop(0,'rgba(255,255,255,'+(0.95*fl)+')');
-        fg.addColorStop(0.2,'rgba(255,240,180,'+(0.7*fl)+')');
-        fg.addColorStop(0.55,'rgba(255,140,40,'+(0.35*fl)+')');
+        var fg=ctx.createRadialGradient(fx,fy,0,fx,fy,finn.size*(1.4+3.2*fl));
+        fg.addColorStop(0,'rgba(255,255,255,'+(0.9*fl)+')');
+        fg.addColorStop(0.18,'rgba(255,240,180,'+(0.65*fl)+')');
+        fg.addColorStop(0.5,'rgba(255,140,40,'+(0.28*fl)+')');
         fg.addColorStop(1,'rgba(255,60,10,0)');
         ctx.fillStyle=fg;
-        ctx.beginPath();ctx.arc(fx,fy,finn.size*(1.2+2.8*fl),0,Math.PI*2);ctx.fill();
-        // несколько расходящихся колец разной скорости
-        for(var ri=0;ri<3;ri++){
-          var prog=(1.7-fl)+ri*0.18;
-          var ringR=finn.size*(1.2+prog*4.2);
-          var al=Math.max(0,fl*0.55-ri*0.12);
-          ctx.save();
-          ctx.globalAlpha=al;
-          ctx.strokeStyle=ri===0?'rgba(255,255,240,0.95)':'rgba(255,180,80,0.85)';
-          ctx.lineWidth=Math.max(1.2,4-ri*1.1);
-          ctx.beginPath();ctx.arc(fx,fy,ringR,0,Math.PI*2);ctx.stroke();
-          ctx.restore();
-        }
-        // радиальные лучи
+        ctx.beginPath();ctx.arc(fx,fy,finn.size*(1.4+3.2*fl),0,Math.PI*2);ctx.fill();
+        // радиальные лучи (импульс, не кольца)
         ctx.save();
-        ctx.globalAlpha=fl*0.55;
-        for(var ray=0;ray<12;ray++){
-          var ang=(ray/12)*Math.PI*2+fl*0.8;
-          var len=finn.size*(2.5+3.5*(1.2-fl));
+        ctx.globalAlpha=fl*0.5;
+        for(var ray=0;ray<14;ray++){
+          var ang=(ray/14)*Math.PI*2+fl*0.6;
+          var len=finn.size*(2.8+4*(1.15-fl));
           var grd=ctx.createLinearGradient(fx,fy,fx+Math.cos(ang)*len,fy+Math.sin(ang)*len);
-          grd.addColorStop(0,'rgba(255,255,220,0.9)');
-          grd.addColorStop(0.4,'rgba(255,160,60,0.35)');
+          grd.addColorStop(0,'rgba(255,255,230,0.85)');
+          grd.addColorStop(0.35,'rgba(255,170,70,0.3)');
           grd.addColorStop(1,'rgba(255,80,20,0)');
           ctx.strokeStyle=grd;
-          ctx.lineWidth=2;
+          ctx.lineWidth=1.8;
           ctx.beginPath();
-          ctx.moveTo(fx+Math.cos(ang)*finn.size*0.5,fy+Math.sin(ang)*finn.size*0.5);
+          ctx.moveTo(fx+Math.cos(ang)*finn.size*0.4,fy+Math.sin(ang)*finn.size*0.4);
           ctx.lineTo(fx+Math.cos(ang)*len,fy+Math.sin(ang)*len);
           ctx.stroke();
         }
         ctx.restore();
-        finn.flash=Math.max(0,finn.flash-0.032);
+        finn.flash=Math.max(0,finn.flash-0.034);
       }
       finn.sparks.forEach(function(sp){
         ctx.beginPath();
