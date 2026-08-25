@@ -9,6 +9,9 @@ var W=0,H=0,dpr=1, lastT=0, ambient=null, roomOpen=false;
 var MS=loadState();
 var finn=null; // canvas Finn state
 var roomAudio=null;
+var matterMuted=false;
+try{matterMuted=localStorage.getItem("finna_matter_muted")==="1";}catch(e){}
+
 var unlockedRoomAudio=null;
 var listenOnce=false;
 var rec=null;
@@ -90,19 +93,21 @@ function startAmbient(){
     if(unlockedRoomAudio){
       roomAudio=unlockedRoomAudio;
       roomAudio.loop=true;
-      roomAudio.volume=0.28;
+      roomAudio.volume=0.22;
       roomAudio.currentTime=0;
       var p2=roomAudio.play();
       if(p2&&p2.catch)p2.catch(function(){ startSynthAmbient(); });
       ambient={type:'mp3'};
+      applyMatterMute();
       return;
     }
     roomAudio=new Audio('matter-room.mp3');
     roomAudio.loop=true;
-    roomAudio.volume=0.28;
+    roomAudio.volume=0.22;
     var p=roomAudio.play();
     if(p&&p.catch)p.catch(function(){ startSynthAmbient(); });
     ambient={type:'mp3'};
+    applyMatterMute();
     return;
   }catch(e){}
   startSynthAmbient();
@@ -148,6 +153,41 @@ function stopAmbient(){
   ambient=null;
 }
 
+
+
+function bindMuteBtn(){
+  ['matterMuteBtn','matterMuteBtnRoom'].forEach(function(id){
+    var b=document.getElementById(id);
+    if(!b||b._bound)return;
+    b._bound=true;
+    b.onclick=function(e){e.preventDefault();e.stopPropagation();toggleMatterMute();};
+  });
+  applyMatterMute();
+}
+
+function applyMatterMute(){
+  try{
+    if(roomAudio){
+      roomAudio.muted=!!matterMuted;
+      if(!matterMuted)roomAudio.volume=0.22;
+    }
+    if(ambient&&ambient.type==='synth'&&ambient.master){
+      ambient.master.gain.value=matterMuted?0:0.024;
+    }
+  }catch(e){}
+  ['matterMuteBtn','matterMuteBtnRoom'].forEach(function(id){
+    var btn=document.getElementById(id);
+    if(btn)btn.textContent=matterMuted?'🔇':'🔊';
+  });
+}
+function toggleMatterMute(){
+  matterMuted=!matterMuted;
+  try{localStorage.setItem('finna_matter_muted',matterMuted?'1':'0');}catch(e){}
+  applyMatterMute();
+  if(matterMuted)pauseRoomAudio();
+  else resumeRoomAudio();
+}
+
 /* ---------- soft Finn speech (like main app) ---------- */
 function finnSay(text){
   if(!text)return;
@@ -182,8 +222,8 @@ function ensureRoot(){
     '<canvas id="matterCanvas"></canvas>'+
     '<div id="matterHud" class="m-hud" hidden>'+
       '<button type="button" class="m-exit" id="matterExit">✕</button>'+
+      '<button type="button" id="matterMuteBtn" class="m-mute" aria-label="Звук">🔊</button>'+
       '<div class="m-title">МОЯ МАТЕРИЯ</div>'+
-      '<!-- hint removed -->'+
     '</div>'+
     '<div id="matterRoom" class="m-room" hidden>'+
       '<div class="m-room-scene" id="matterRoomScene">'+
@@ -201,7 +241,7 @@ function ensureRoot(){
         '<button type="button" class="m-hot m-hot-md" data-obj="focus"  style="left:10%;top:38%" title="Фокус"></button>'+
         '<button type="button" class="m-hot m-hot-md" data-obj="door"   style="left:93%;top:48%" title="Выход"></button>'+
         '<button type="button" class="m-hot m-hot-sm" data-obj="globe"  style="left:88%;top:87%" title="Светильник"></button>'+
-        /* room Finn removed by design */+
+        '<button type="button" id="matterMuteBtnRoom" class="m-mute" aria-label="Звук">🔊</button>'+
       '</div>'+
     '</div>'+
     '<div id="matterPanel" class="m-panel" hidden>'+
@@ -270,7 +310,7 @@ function injectCSS(){
 '.m-hot-sm{width:64px;height:64px}'+
 '.m-hot-md{width:80px;height:80px}'+
 '.m-hot-lg{width:110px;height:96px;border-radius:24px}'+
-'.m-hot:active{background:rgba(255,220,120,.12);box-shadow:0 0 22px rgba(255,200,80,.28)}'+
+'.m-hot:active{background:rgba(255,220,120,.12);box-shadow:0 0 22px rgba(255,200,80,.28)}.m-mute{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:14px;z-index:30;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.18);background:rgba(0,0,0,.45);color:#E8F0FF;font-size:20px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}.m-mute:active{transform:scale(.94)}'+
 '.m-room-finn{position:absolute;left:12%;bottom:14%;transform:none;z-index:8;width:120px;height:120px;pointer-events:none}'+
 '.m-room-finn canvas{width:120px;height:120px;display:block;pointer-events:none}'+
 '.m-finn-x{position:absolute;top:-4px;right:-4px;width:28px;height:28px;border-radius:50%;'+
@@ -563,6 +603,7 @@ function drawFinnStar(c, x, y, t){
 var bh={r:2,max:0,swirl:0,fall:0,done:false};
 
 function startEnter(){
+  setTimeout(bindMuteBtn,50);
   phase='blackhole';
   bh={r:1.5,max:Math.max(W,H)*1.05,swirl:0,fall:0,done:false,t:0,bgStars:null};
   particles=[];
@@ -607,6 +648,7 @@ function enterRoom(){
   var hud=document.getElementById('matterHud');
   if(hud)hud.hidden=true;
   startAmbient();
+  bindMuteBtn();
   // Фины в комнате нет — комната личная
   if(finn){finn.inRoom=false;finn.state='star';}
   try{history.pushState({matter:'room'},'','#matter-room');}catch(e){}
@@ -1001,7 +1043,9 @@ function startListen(){
 }
 
 function handleCommand(text){
-  var t=String(text||'').toLowerCase();
+  var raw=String(text||'').trim();
+  var t=raw.toLowerCase();
+  if(!raw)return;
   if(/комнат|двер|войд|зайд|пошл|идём|идем/.test(t)){
     if(phase==='space'){
       if(finn&&(finn.state==='star'||finn.state==='idle'||finn.state==='morph')){
@@ -1023,15 +1067,39 @@ function handleCommand(text){
     else finnSay('Сначала зайдём в комнату.');
     return;
   }
-  // soft default like main Finn
-  var soft=[
-    'Слушаю тебя.',
-    'Я рядом.',
-    'Можешь просто отдохнуть.',
-    'Хочешь — покажу цели на звёздах.',
-    'В комнате тише. Зайдём?'
-  ];
-  finnSay(soft[Math.floor(Math.random()*soft.length)]);
+  // ИИ Фины — любой вопрос через общий модуль приложения
+  askFinnAI(raw);
+}
+
+var __matterAIHistory=[];
+function askFinnAI(userText){
+  if(finn)finn.emotion='thinking';
+  finnSay('Думаю…');
+  var ai=window.kopeykaAI;
+  if(!ai||typeof ai.askConversation!=='function'){
+    if(finn)finn.emotion='idle';
+    finnSay('ИИ пока недоступен. Проверь сеть или ключ в настройках.');
+    return;
+  }
+  var hist=__matterAIHistory.slice(-12);
+  __matterAIHistory.push({role:'user',content:userText});
+  ai.askConversation(hist, userText).then(function(o){
+    if(finn)finn.emotion='happy';
+    var answer='';
+    if(o&&o.mode==='action'){
+      answer=o.summary||o.text||'Могу выполнить действие — подтверди в основном чате Финны.';
+    }else{
+      answer=(o&&o.text)||'Не смогла ответить.';
+    }
+    // короче для бабла в Материи
+    if(answer.length>320)answer=answer.slice(0,300).replace(/\s+\S*$/,'')+'…';
+    __matterAIHistory.push({role:'assistant',content:answer});
+    finnSay(answer);
+  }).catch(function(err){
+    if(finn)finn.emotion='idle';
+    var msg=(err&&err.message)||'Ошибка ИИ';
+    finnSay('Не получилось: '+msg);
+  });
 }
 
 /* ---------- draw loop ---------- */
@@ -1049,94 +1117,84 @@ function loop(t){
 
 function drawBlackHole(dt){
   var cx=W/2, cy=H*0.52;
-  bh.swirl+=dt*(2.6+bh.r/Math.max(1,bh.max)*4);
+  bh.swirl+=dt*(6.5+bh.r/Math.max(1,bh.max)*8);
   var target=bh.max*0.78;
   bh.r+=(target-bh.r)*Math.min(1,dt*0.9);
   if(bh.r<10) bh.r+=dt*18;
   bh.t=(bh.t||0)+dt;
   if(bh.r>bh.max*0.26) bh.fall+=dt;
 
-  // фон
-  var fadeIn=Math.min(1,bh.t/0.7);
-  var veil=Math.min(0.94,0.2+fadeIn*0.75+bh.fall*0.35);
-  ctx.fillStyle='rgba(0,0,0,'+veil+')';
+  // полностью чёрный фон — без светлой вуали
+  ctx.fillStyle='#000';
   ctx.fillRect(0,0,W,H);
 
-  // звёзды фона, затягиваемые в дыру
-  if(!bh.bgStars){
-    bh.bgStars=[];
-    for(var i=0;i<130;i++){
-      bh.bgStars.push({
-        x:Math.random()*W,y:Math.random()*H,
-        r:0.35+Math.random()*1.5,
-        ph:Math.random()*6.28,sp:1.2+Math.random()*3.5
+  // плотный быстрый вихрь (много мелких точек + линии = сплошной поток)
+  if(!bh.vortexDense){
+    bh.vortexDense=[];
+    for(var i=0;i<220;i++){
+      bh.vortexDense.push({
+        a:Math.random()*Math.PI*2,
+        r:8+Math.random()*bh.max*0.95,
+        s:0.4+Math.random()*1.4,
+        sp:2.5+Math.random()*5.5,
+        arm:(i%4)
       });
     }
   }
-  bh.bgStars.forEach(function(s){
-    var a=0.12+0.75*(0.5+0.5*Math.sin(bh.t*s.sp+s.ph));
-    var dx=s.x-cx, dy=s.y-cy;
-    var dist=Math.sqrt(dx*dx+dy*dy)||1;
-    if(bh.r>18){
-      s.x-=dx/dist*dt*(12+bh.r*0.05);
-      s.y-=dy/dist*dt*(12+bh.r*0.05);
-      s.x+=(-dy/dist)*dt*bh.swirl*3.2;
-      s.y+=(dx/dist)*dt*bh.swirl*3.2;
-    }
+  // спиральные нити — непрерывный вихрь
+  for(var arm=0;arm<4;arm++){
     ctx.beginPath();
-    ctx.fillStyle='rgba(220,235,255,'+a+')';
-    ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fill();
-  });
-
-  // вихрь — спиральные потоки (не кольца планет)
-  particles.forEach(function(p){
-    p.a+=dt*p.sp*(1.4+bh.r/bh.max);
-    p.r=Math.max(3,p.r-dt*(12+bh.r*0.03));
-    if(p.r<5 && Math.random()<0.12){
-      p.r=25+Math.random()*bh.r*0.95;
-      p.a=Math.random()*Math.PI*2;
-    }
-    var rr=p.r*(0.5+0.6*bh.r/Math.max(1,bh.max*0.65));
-    // 3D-ish: perspective squash
-    var depth=0.45+0.55*(p.r/Math.max(1,bh.max*0.5));
-    var x=cx+Math.cos(p.a+bh.swirl)*rr;
-    var y=cy+Math.sin(p.a+bh.swirl)*rr*0.48*depth;
-    var al=0.18+0.55*(1-p.r/130)*depth;
-    ctx.beginPath();
-    ctx.fillStyle='rgba(170,200,255,'+al+')';
-    ctx.arc(x,y,p.s*(0.7+depth*0.5),0,Math.PI*2);ctx.fill();
-  });
-
-  // дополнительный слой спиральных «нитей»
-  for(var arm=0;arm<3;arm++){
-    ctx.beginPath();
-    for(var s=0;s<40;s++){
-      var rr2=bh.r*(0.2+s/40*0.95);
-      var aa=bh.swirl*1.1+arm*2.094+s*0.22;
+    for(var s=0;s<55;s++){
+      var rr2=bh.r*(0.12+s/55*1.05);
+      var aa=bh.swirl*1.35+arm*(Math.PI/2)+s*0.18;
       var px=cx+Math.cos(aa)*rr2;
-      var py=cy+Math.sin(aa)*rr2*0.5;
+      var py=cy+Math.sin(aa)*rr2*0.52;
       if(s===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
     }
-    ctx.strokeStyle='rgba(140,180,255,'+(0.06+0.04*arm)+')';
-    ctx.lineWidth=1.2;
+    ctx.strokeStyle='rgba(160,190,255,'+(0.1+0.05*arm)+')';
+    ctx.lineWidth=1.1;
     ctx.stroke();
   }
+  bh.vortexDense.forEach(function(p){
+    p.a+=dt*p.sp*(2.2+bh.r/bh.max);
+    p.r=Math.max(2,p.r-dt*(22+bh.r*0.06));
+    if(p.r<4){
+      p.r=12+Math.random()*bh.r*1.05;
+      p.a=Math.random()*Math.PI*2;
+    }
+    var rr=p.r*(0.55+0.5*bh.r/Math.max(1,bh.max*0.7));
+    var x=cx+Math.cos(p.a+bh.swirl)*rr;
+    var y=cy+Math.sin(p.a+bh.swirl)*rr*0.5;
+    var al=0.22+0.5*(1-p.r/Math.max(1,bh.max));
+    ctx.beginPath();
+    ctx.fillStyle='rgba(175,205,255,'+al+')';
+    ctx.arc(x,y,p.s,0,Math.PI*2);ctx.fill();
+  });
 
-  // чёрный горизонт (без ярких «сатурновых» колец)
-  var grd=ctx.createRadialGradient(cx,cy,0,cx,cy,bh.r*0.62);
+  // legacy particles тоже быстрее
+  particles.forEach(function(p){
+    p.a+=dt*p.sp*(2.5+bh.r/bh.max);
+    p.r=Math.max(2,p.r-dt*(20+bh.r*0.04));
+    if(p.r<4 && Math.random()<0.2){
+      p.r=20+Math.random()*bh.r*0.9;
+      p.a=Math.random()*Math.PI*2;
+    }
+    var rr=p.r*(0.5+0.55*bh.r/Math.max(1,bh.max*0.65));
+    var x=cx+Math.cos(p.a+bh.swirl)*rr;
+    var y=cy+Math.sin(p.a+bh.swirl)*rr*0.48;
+    var al=0.15+0.45*(1-p.r/120);
+    ctx.beginPath();
+    ctx.fillStyle='rgba(160,195,255,'+al+')';
+    ctx.arc(x,y,p.s*0.7,0,Math.PI*2);ctx.fill();
+  });
+
+  // чёрный горизонт — без светлого ореола
+  var grd=ctx.createRadialGradient(cx,cy,0,cx,cy,bh.r*0.55);
   grd.addColorStop(0,'#000');
-  grd.addColorStop(0.55,'#000');
-  grd.addColorStop(0.82,'rgba(8,12,24,0.95)');
-  grd.addColorStop(0.94,'rgba(40,60,100,0.25)');
+  grd.addColorStop(0.75,'#000');
+  grd.addColorStop(0.92,'rgba(0,0,0,0.85)');
   grd.addColorStop(1,'rgba(0,0,0,0)');
-  ctx.beginPath();ctx.fillStyle=grd;ctx.arc(cx,cy,bh.r*0.62,0,Math.PI*2);ctx.fill();
-
-  // тонкий край горизонта (не диск)
-  ctx.beginPath();
-  ctx.strokeStyle='rgba(180,210,255,'+(0.2+0.25*Math.sin(bh.t*3))+')';
-  ctx.lineWidth=1.5;
-  ctx.arc(cx,cy,bh.r*0.5,0,Math.PI*2);
-  ctx.stroke();
+  ctx.beginPath();ctx.fillStyle=grd;ctx.arc(cx,cy,bh.r*0.55,0,Math.PI*2);ctx.fill();
 
   if(bh.fall>0){
     var v=Math.min(1,bh.fall/1.05);
@@ -1192,42 +1250,47 @@ function drawSpace(dt,t){
         setTimeout(function(){enterRoom();},150);
       }
     }
-    door.swirl=(door.swirl||0)+dt*(2.8+door.open*4);
     var dx=door.x, dy=door.y;
     var R=door.r*(1+door.open*0.5);
 
-    // спиральный вихрь — частицы затягиваются внутрь
+    // только вихрь — быстрее, плотнее, без светлого ореола
+    door.swirl=(door.swirl||0)+dt*(5.5+door.open*6);
     if(door.vortex){
-      door.vortex.forEach(function(p){
-        p.a+=dt*p.sp*(1.3+door.open);
-        p.r=Math.max(4, p.r - dt*(6+door.open*14));
-        if(p.r<6){ p.r=22+Math.random()*38; p.a=Math.random()*Math.PI*2; }
-        var rr=p.r*(0.85+0.25*door.open);
-        // лёгкая эллиптичность вихря
-        var px=dx+Math.cos(p.a+door.swirl)*rr;
-        var py=dy+Math.sin(p.a+door.swirl)*rr*0.72;
-        var al=0.15+0.55*(1-p.r/60);
+      // спиральные нити
+      for(var arm=0;arm<3;arm++){
         ctx.beginPath();
-        ctx.fillStyle='rgba(200,220,255,'+al+')';
-        ctx.arc(px,py,p.s*0.9,0,Math.PI*2);ctx.fill();
+        for(var s=0;s<36;s++){
+          var rr2=R*(0.2+s/36*1.1);
+          var aa=door.swirl+arm*2.094+s*0.2;
+          var px=dx+Math.cos(aa)*rr2;
+          var py=dy+Math.sin(aa)*rr2*0.7;
+          if(s===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
+        }
+        ctx.strokeStyle='rgba(150,185,255,'+(0.1+0.04*arm)+')';
+        ctx.lineWidth=1;
+        ctx.stroke();
+      }
+      door.vortex.forEach(function(p){
+        p.a+=dt*p.sp*(2.4+door.open);
+        p.r=Math.max(3, p.r - dt*(14+door.open*22));
+        if(p.r<5){ p.r=18+Math.random()*42; p.a=Math.random()*Math.PI*2; }
+        var rr=p.r*(0.85+0.2*door.open);
+        var px=dx+Math.cos(p.a+door.swirl)*rr;
+        var py=dy+Math.sin(p.a+door.swirl)*rr*0.68;
+        var al=0.2+0.5*(1-p.r/55);
+        ctx.beginPath();
+        ctx.fillStyle='rgba(180,210,255,'+al+')';
+        ctx.arc(px,py,Math.max(0.5,p.s*0.75),0,Math.PI*2);ctx.fill();
       });
     }
 
-    // мягкое свечение края (не кольцо планет)
-    var eg=ctx.createRadialGradient(dx,dy,R*0.35,dx,dy,R*1.15);
-    eg.addColorStop(0,'rgba(0,0,0,0)');
-    eg.addColorStop(0.55,'rgba(30,50,90,0.12)');
-    eg.addColorStop(0.85,'rgba(120,160,220,0.18)');
-    eg.addColorStop(1,'rgba(0,0,0,0)');
-    ctx.beginPath();ctx.fillStyle=eg;ctx.arc(dx,dy,R*1.15,0,Math.PI*2);ctx.fill();
-
-    // абсолютно чёрный горизонт
-    var hg=ctx.createRadialGradient(dx,dy,0,dx,dy,R*0.55);
+    // чёрный горизонт без светлой области
+    var hg=ctx.createRadialGradient(dx,dy,0,dx,dy,R*0.5);
     hg.addColorStop(0,'#000');
-    hg.addColorStop(0.7,'#000');
-    hg.addColorStop(0.92,'rgba(10,14,28,0.9)');
+    hg.addColorStop(0.8,'#000');
+    hg.addColorStop(0.95,'rgba(0,0,0,0.7)');
     hg.addColorStop(1,'rgba(0,0,0,0)');
-    ctx.beginPath();ctx.fillStyle=hg;ctx.arc(dx,dy,R*0.55,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.fillStyle=hg;ctx.arc(dx,dy,R*0.5,0,Math.PI*2);ctx.fill();
 
     if(door.open>0.12){
       ctx.fillStyle='rgba(0,0,0,'+Math.min(0.92,door.open)+')';
@@ -1375,7 +1438,7 @@ function enterMatter(){
       unlockedRoomAudio.volume=0;
       var up=unlockedRoomAudio.play();
       if(up&&up.then)up.then(function(){
-        try{unlockedRoomAudio.pause();unlockedRoomAudio.currentTime=0;unlockedRoomAudio.volume=0.28;}catch(e){}
+        try{unlockedRoomAudio.pause();unlockedRoomAudio.currentTime=0;unlockedRoomAudio.volume=0.22;}catch(e){}
       }).catch(function(){ unlockedRoomAudio=null; });
     }
   }catch(e){unlockedRoomAudio=null;}
