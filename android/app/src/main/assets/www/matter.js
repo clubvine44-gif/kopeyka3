@@ -251,6 +251,7 @@ function ensureRoot(){
         '<button type="button" class="m-panel-close" id="mPanelClose">Закрыть</button>'+
       '</div>'+
     '</div>'+
+    '<input type="file" id="mBookFile" accept=".fb2,.txt,text/plain,application/x-fictionbook+xml" style="position:fixed;left:-9999px;width:1px;height:1px;opacity:0" tabindex="-1" aria-hidden="true">'+
     '<div id="matterReader" class="m-reader" hidden>'+
       '<div class="m-reader-head"><span id="mReaderTitle">Книга</span><button type="button" id="mReaderClose">✕</button></div>'+
       '<div class="m-reader-page" id="mReaderPage"></div>'+
@@ -331,6 +332,13 @@ function injectCSS(){
 '.m-panel-body .m-bar{height:8px;border-radius:99px;background:rgba(255,255,255,.08);margin:8px 0 4px;overflow:hidden}'+
 '.m-panel-body .m-bar>i{display:block;height:100%;background:linear-gradient(90deg,#E5A75E,#F0C060);border-radius:99px}'+
 '.m-panel-body button.m-act{display:block;width:100%;margin-top:10px;padding:12px;border-radius:12px;'+
+'.m-book-row{display:flex;align-items:center;gap:10px;padding:12px;margin-top:8px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08)}'+
+'.m-book-row .m-book-info{flex:1;min-width:0}'+
+'.m-book-row .m-book-title{font-weight:700;color:#F5E6C8;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
+'.m-book-row .m-book-meta{font-size:12px;color:rgba(200,190,170,.65);margin-top:3px}'+
+'.m-book-row .m-book-del{width:36px;height:36px;border-radius:10px;border:0;background:rgba(220,80,80,.2);color:#f8a0a0;font-size:16px;flex-shrink:0}'+
+'.m-book-row .m-book-open{padding:8px 12px;border-radius:10px;border:0;background:rgba(255,200,100,.18);color:#F5E6C8;font-size:13px;font-weight:700;flex-shrink:0}'+
+'.m-lib-status{font-size:12px;opacity:.7;margin:8px 0}'+
   'background:linear-gradient(135deg,#F0C384,#E5A75E);color:#1A1208;font-weight:700;border:0}'+
 '.m-panel-close{width:100%;padding:12px;border-radius:12px;background:rgba(255,255,255,.07);'+
   'border:1px solid rgba(255,255,255,.12);color:#E8F0FF;font-weight:600}'+
@@ -808,45 +816,8 @@ function onObject(id){
     },30);
     return;
   }
-    if(id==='book'){
-    // Только лёгкий UI — без FileReader/пагинации на клике (иначе WebView зависает)
-    var html='<p style="margin:0 0 14px;line-height:1.45;opacity:.9">Полка тишины.</p>'+
-      '<button type="button" class="m-act" id="mOpenDemo">Открыть демо-текст</button>'+
-      '<button type="button" class="m-act" id="mOpenNotes" style="margin-top:10px;background:rgba(255,255,255,.08);color:#E8F0FF">Заметка из дневника</button>';
-    showPanel('Книга', html);
-    setTimeout(function(){
-      var d=document.getElementById('mOpenDemo');
-      if(d)d.onclick=function(e){
-        e.preventDefault();e.stopPropagation();
-        hidePanel();
-        reader.bookId='demo';
-        reader.pages=[
-          'Тихая полка.\n\nЗдесь место для паузы.',
-          'Свайп влево — дальше.\nСвайп вправо — назад.',
-          'Позже сюда можно будет добавить свои тексты без зависаний.'
-        ];
-        reader.idx=0;
-        var r=document.getElementById('matterReader');
-        if(r){r.hidden=false;r.style.display='';}
-        var rt=document.getElementById('mReaderTitle');
-        if(rt)rt.textContent='Демо';
-        renderPage();
-      };
-      var n=document.getElementById('mOpenNotes');
-      if(n)n.onclick=function(e){
-        e.preventDefault();e.stopPropagation();
-        hidePanel();
-        var txt=(MS.diary&&MS.diary.trim())?MS.diary:'Пока пусто. Напиши что-нибудь в дневнике.';
-        reader.bookId='diary_view';
-        reader.pages=[txt.slice(0,1200)];
-        reader.idx=0;
-        var r=document.getElementById('matterReader');
-        if(r){r.hidden=false;r.style.display='';}
-        var rt=document.getElementById('mReaderTitle');
-        if(rt)rt.textContent='Из дневника';
-        renderPage();
-      };
-    },20);
+  if(id==='book'){
+    openBookLibrary();
     return;
   }
   if(id==='diary'||id==='desk'){
@@ -894,11 +865,165 @@ function onObject(id){
   }
 }
 
-/* ---------- FB2 / text reader, swipe-only, one page ---------- */
-var reader={pages:[],idx:0,bookId:'default'};
+/* ---------- Book library + swipe reader ---------- */
+var reader={pages:[],idx:0,bookId:null,title:''};
+
+function openBookLibrary(){
+  MS.books=MS.books||{};
+  MS.pageByBook=MS.pageByBook||{};
+  var keys=Object.keys(MS.books);
+  var html='<p style="margin:0 0 10px;opacity:.8;font-size:13px;line-height:1.4">Полка. Загрузи FB2 или TXT — прогресс сохранится.</p>';
+  if(!keys.length){
+    html+='<p class="m-lib-status">Пока пусто. Загрузи первую книгу.</p>';
+  }else{
+    keys.forEach(function(k){
+      var b=MS.books[k]||{};
+      var pages=Math.max(1, Number(b.pages)||1);
+      var cur=Math.min(pages-1, Math.max(0, Number(MS.pageByBook[k])||0));
+      var pct=Math.round((cur+1)/pages*100);
+      if(cur===0 && !(b.openedOnce)) pct=0;
+      var title=escapeHtml(b.title||'Без названия');
+      html+='<div class="m-book-row" data-book="'+k+'">'+
+        '<div class="m-book-info"><div class="m-book-title">'+title+'</div>'+
+        '<div class="m-book-meta">'+pct+'% · стр. '+(cur+1)+' / '+pages+'</div></div>'+
+        '<button type="button" class="m-book-open" data-open="'+k+'">Читать</button>'+
+        '<button type="button" class="m-book-del" data-del="'+k+'" title="Удалить">✕</button></div>';
+    });
+  }
+  html+='<button type="button" class="m-act" id="mLoadBook" style="margin-top:14px">Загрузить книгу (FB2 / TXT)</button>';
+  html+='<div class="m-lib-status" id="mLibStatus"></div>';
+  showPanel('Книги', html);
+  setTimeout(function(){
+    var body=document.getElementById('mPanelBody');
+    if(!body)return;
+    body.querySelectorAll('[data-open]').forEach(function(btn){
+      btn.onclick=function(e){
+        e.preventDefault();e.stopPropagation();
+        openSavedBook(btn.getAttribute('data-open'));
+      };
+    });
+    body.querySelectorAll('[data-del]').forEach(function(btn){
+      btn.onclick=function(e){
+        e.preventDefault();e.stopPropagation();
+        var id=btn.getAttribute('data-del');
+        if(!id)return;
+        delete MS.books[id];
+        if(MS.pageByBook) delete MS.pageByBook[id];
+        try{saveState();}catch(err){}
+        toast('Книга удалена');
+        openBookLibrary();
+      };
+    });
+    var load=document.getElementById('mLoadBook');
+    if(load)load.onclick=function(e){
+      e.preventDefault();e.stopPropagation();
+      pickBookFile();
+    };
+  },20);
+}
+
+function escapeHtml(s){
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function setLibStatus(msg){
+  var el=document.getElementById('mLibStatus');
+  if(el)el.textContent=msg||'';
+}
+
+function pickBookFile(){
+  var input=document.getElementById('mBookFile');
+  if(!input){
+    toast('Загрузка недоступна');
+    return;
+  }
+  input.value='';
+  input.onchange=function(){
+    var f=input.files&&input.files[0];
+    input.value='';
+    if(!f)return;
+    if(f.size>2.5*1024*1024){
+      toast('Файл слишком большой (макс. 2.5 МБ)');
+      return;
+    }
+    setLibStatus('Читаю файл…');
+    var fr=new FileReader();
+    fr.onerror=function(){
+      setLibStatus('');
+      toast('Не удалось прочитать файл');
+    };
+    fr.onload=function(){
+      var raw=String(fr.result||'');
+      // отложить тяжёлую работу — не блокировать UI
+      setTimeout(function(){importBookText(raw, f.name||'Книга');},30);
+    };
+    fr.readAsText(f);
+  };
+  // небольшой delay — WebView иногда глотает синхронный click
+  setTimeout(function(){
+    try{input.click();}catch(e){toast('Не удалось открыть выбор файла');}
+  },50);
+}
+
+function importBookText(raw, filename){
+  try{
+    setLibStatus('Обрабатываю…');
+    var isFb2=/<FictionBook|<body/i.test(raw.slice(0,4000)) || /\.fb2$/i.test(filename||'');
+    var text=isFb2?parseFb2(raw):String(raw||'');
+    text=text.replace(/\r/g,'').trim();
+    if(!text){
+      setLibStatus('');
+      toast('Пустой файл');
+      return;
+    }
+    // лимит хранения — чтобы localStorage не убивал WebView
+    if(text.length>180000)text=text.slice(0,180000);
+    var title=filename?String(filename).replace(/\.(fb2|txt)$/i,''):'Книга';
+    if(isFb2){
+      var tm=raw.match(/<book-title[^>]*>([\s\S]*?)<\/book-title>/i);
+      if(tm){
+        var tt=tm[1].replace(/<[^>]+>/g,'').trim();
+        if(tt)title=tt.slice(0,80);
+      }
+    }
+    var pages=paginate(text);
+    var id='b_'+Date.now();
+    MS.books=MS.books||{};
+    MS.pageByBook=MS.pageByBook||{};
+    MS.books[id]={
+      title:title,
+      raw:text,
+      pages:pages.length,
+      addedAt:Date.now(),
+      openedOnce:false
+    };
+    MS.pageByBook[id]=0;
+    try{saveState();}catch(e){
+      // если не влезло — урезать текст
+      MS.books[id].raw=text.slice(0,60000);
+      try{saveState();}catch(e2){toast('Не хватило места для сохранения');}
+    }
+    setLibStatus('');
+    toast('Книга добавлена');
+    openBookLibrary();
+  }catch(err){
+    setLibStatus('');
+    toast('Ошибка обработки');
+  }
+}
+
+function openSavedBook(id){
+  var b=(MS.books||{})[id];
+  if(!b||!b.raw){toast('Нет текста книги');return;}
+  hidePanel();
+  reader.bookId=id;
+  reader.title=b.title||'Книга';
+  // музыка выкл на время чтения
+  pauseRoomAudio();
+  openReader(b.raw);
+}
 
 function parseFb2(xml){
-  // strip tags, keep paragraphs
   var t=String(xml||'');
   t=t.replace(/<\?[^?]*\?>/g,'');
   t=t.replace(/<binary[\s\S]*?<\/binary>/gi,'');
@@ -913,96 +1038,139 @@ function parseFb2(xml){
 }
 
 function paginate(text){
-  // fit text into one screen page by measuring
   var pageEl=document.getElementById('mReaderPage');
-  if(!pageEl)return [text];
-  var maxH=pageEl.clientHeight|| (window.innerHeight*0.72);
-  var pages=[], rest=text;
+  var maxH=(pageEl&&pageEl.clientHeight)?pageEl.clientHeight:(window.innerHeight*0.72);
+  var width=(pageEl&&pageEl.clientWidth)?pageEl.clientWidth:300;
+  var pages=[], rest=String(text||'');
   var probe=document.createElement('div');
-  probe.style.cssText='position:absolute;visibility:hidden;width:'+(pageEl.clientWidth||300)+'px;font:16px/1.55 Georgia,serif;white-space:pre-wrap;padding:0';
+  probe.style.cssText='position:absolute;left:-9999px;visibility:hidden;width:'+width+'px;font:16px/1.55 Georgia,"Times New Roman",serif;white-space:pre-wrap;padding:0';
   document.body.appendChild(probe);
-  while(rest.length){
-    // binary search length that fits
-    var lo=80, hi=rest.length, best=rest.length;
-    while(lo<=hi){
-      var mid=(lo+hi)>>1;
-      probe.textContent=rest.slice(0,mid);
-      if(probe.offsetHeight<=maxH-8){best=mid;lo=mid+1;}
-      else hi=mid-1;
+  try{
+    while(rest.length){
+      var lo=60, hi=Math.min(rest.length, 2800), best=Math.min(rest.length, 400);
+      while(lo<=hi){
+        var mid=(lo+hi)>>1;
+        probe.textContent=rest.slice(0,mid);
+        if(probe.offsetHeight<=maxH-8){best=mid;lo=mid+1;}
+        else hi=mid-1;
+      }
+      if(best<rest.length){
+        var slice=rest.slice(0,best);
+        var br=Math.max(slice.lastIndexOf('\n\n'), slice.lastIndexOf('\n'), slice.lastIndexOf(' '));
+        if(br>best*0.5) best=br+1;
+      }
+      var page=rest.slice(0,best).trim();
+      if(page)pages.push(page);
+      rest=rest.slice(best).trim();
+      if(pages.length>500)break;
     }
-    // prefer break at paragraph/space
-    if(best<rest.length){
-      var slice=rest.slice(0,best);
-      var br=Math.max(slice.lastIndexOf('\n\n'), slice.lastIndexOf('\n'), slice.lastIndexOf(' '));
-      if(br>best*0.55) best=br+1;
-    }
-    pages.push(rest.slice(0,best).trim());
-    rest=rest.slice(best).trim();
-    if(pages.length>400)break;
+  }finally{
+    try{document.body.removeChild(probe);}catch(e){}
   }
-  document.body.removeChild(probe);
   return pages.length?pages:[''];
 }
 
-
 function openReader(raw){
-  if(window.__matterReaderBookId){reader.bookId=window.__matterReaderBookId;window.__matterReaderBookId=null;}
-  var sample=raw||(
-    'Тихая полка.\n\n'+
-    'Здесь можно читать то, что важно именно тебе. Добавь FB2-файл позже — прогресс сохранится.\n\n'+
-    'А пока — несколько строк для паузы.\n\n'+
-    '«Деньги — это инструмент. Спокойствие — цель. '+
-    'Каждый маленький шаг в сторону подушки безопасности делает ночь чуть тише.»\n\n'+
-    'Когда будешь готов — свайпни влево, чтобы перевернуть страницу. '+
-    'Назад — свайп вправо. Без кнопок, только жест.'
-  );
-  var text=/<FictionBook|<body/i.test(sample)?parseFb2(sample):sample;
-  if(text.length>150000)text=text.slice(0,150000);
-  reader.pages=paginate(text);
-  reader.idx=MS.pageByBook[reader.bookId]|0;
-  if(reader.idx>=reader.pages.length)reader.idx=0;
+  var sample=raw||'';
+  if(!sample){toast('Пусто');return;}
+  // показать оболочку сразу
   var r=document.getElementById('matterReader');
   if(r){r.hidden=false;r.style.display='';}
-  renderPage();
+  var rt=document.getElementById('mReaderTitle');
+  if(rt)rt.textContent=reader.title||'Книга';
+  var pageEl=document.getElementById('mReaderPage');
+  if(pageEl)pageEl.textContent='…';
+  var prog=document.getElementById('mReaderProg');
+  if(prog)prog.textContent='…';
+
+  pauseRoomAudio();
+
+  setTimeout(function(){
+    var text=/<FictionBook|<body/i.test(sample.slice(0,800))?parseFb2(sample):sample;
+    if(text.length>180000)text=text.slice(0,180000);
+    reader.pages=paginate(text);
+    var start=0;
+    if(reader.bookId && MS.pageByBook && MS.pageByBook[reader.bookId]!=null){
+      start=Math.min(reader.pages.length-1, Math.max(0, Number(MS.pageByBook[reader.bookId])||0));
+    }
+    reader.idx=start;
+    if(reader.bookId && MS.books && MS.books[reader.bookId]){
+      MS.books[reader.bookId].pages=reader.pages.length;
+      MS.books[reader.bookId].openedOnce=true;
+    }
+    persistReaderProgress();
+    renderPage();
+  },40);
+}
+
+function persistReaderProgress(){
+  if(!reader.bookId)return;
+  MS.pageByBook=MS.pageByBook||{};
+  MS.pageByBook[reader.bookId]=reader.idx;
+  if(MS.books&&MS.books[reader.bookId]){
+    MS.books[reader.bookId].pages=Math.max(1, reader.pages.length||1);
+  }
+  try{saveState();}catch(e){}
 }
 
 function renderPage(){
-  var el=document.getElementById('mReaderPage');
+  var page=document.getElementById('mReaderPage');
   var prog=document.getElementById('mReaderProg');
-  if(!el)return;
-  el.textContent=reader.pages[reader.idx]||'';
-  if(prog)prog.textContent=(reader.idx+1)+' / '+reader.pages.length;
-  MS.pageByBook[reader.bookId]=reader.idx;
-  saveState();
+  if(!page)return;
+  var total=Math.max(1, reader.pages.length);
+  reader.idx=Math.min(total-1, Math.max(0, reader.idx));
+  page.textContent=reader.pages[reader.idx]||'';
+  if(prog){
+    var pct=Math.round((reader.idx+1)/total*100);
+    prog.textContent=(reader.idx+1)+' / '+total+' · '+pct+'%';
+  }
+  persistReaderProgress();
 }
 
 function closeReader(){
+  persistReaderProgress();
   var r=document.getElementById('matterReader');
   if(r){r.hidden=true;r.style.display='none';}
+  reader.pages=[];
+  reader.idx=0;
+  // вернуть музыку комнаты, если ещё в комнате и не muted
+  if(phase==='room' && !matterMuted){
+    resumeRoomAudio();
+  }
 }
 
 function setupReaderSwipe(){
-  var startX=0,startY=0;
-  var page=null;
-  function bind(){
-    page=document.getElementById('mReaderPage');
-    if(!page||page._sw)return;
-    page._sw=true;
-    page.addEventListener('touchstart',function(e){
-      if(!e.touches[0])return;
-      startX=e.touches[0].clientX;startY=e.touches[0].clientY;
-    },{passive:true});
-    page.addEventListener('touchend',function(e){
-      if(!e.changedTouches[0])return;
-      var dx=e.changedTouches[0].clientX-startX;
-      var dy=e.changedTouches[0].clientY-startY;
-      if(Math.abs(dx)<40||Math.abs(dx)<Math.abs(dy))return;
-      if(dx<0 && reader.idx<reader.pages.length-1){reader.idx++;renderPage();}
-      else if(dx>0 && reader.idx>0){reader.idx--;renderPage();}
-    },{passive:true});
-  }
-  setTimeout(bind,0);
+  var page=document.getElementById('mReaderPage');
+  if(!page||page._swipeBound)return;
+  page._swipeBound=true;
+  var sx=0,sy=0;
+  page.addEventListener('touchstart',function(e){
+    if(!e.changedTouches||!e.changedTouches[0])return;
+    sx=e.changedTouches[0].clientX; sy=e.changedTouches[0].clientY;
+  },{passive:true});
+  page.addEventListener('touchend',function(e){
+    if(!e.changedTouches||!e.changedTouches[0])return;
+    var dx=e.changedTouches[0].clientX-sx;
+    var dy=e.changedTouches[0].clientY-sy;
+    if(Math.abs(dx)<40||Math.abs(dx)<Math.abs(dy))return;
+    if(dx<0){
+      if(reader.idx<reader.pages.length-1){reader.idx++;renderPage();}
+    }else{
+      if(reader.idx>0){reader.idx--;renderPage();}
+    }
+  },{passive:true});
+  // клик по краям — тоже листание (удобно)
+  page.addEventListener('click',function(e){
+    var rect=page.getBoundingClientRect();
+    var x=e.clientX-rect.left;
+    if(x>rect.width*0.72){
+      if(reader.idx<reader.pages.length-1){reader.idx++;renderPage();}
+    }else if(x<rect.width*0.28){
+      if(reader.idx>0){reader.idx--;renderPage();}
+    }
+  });
 }
+
 
 /* ---------- voice ---------- */
 function startListen(){
