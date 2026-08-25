@@ -125,7 +125,12 @@ function open(opts){
       stage.style.top=target.y+'px';
       stage.style.transform='translateY(-50%) scale(1)';
       stage.style.opacity='1';
-      setTimeout(function(){openingAnim=false;},580);
+      setTimeout(function(){
+        openingAnim=false;
+        if(opts.matterInvite){
+          try{showMatterInvite();}catch(e){}
+        }
+      },580);
     });
 
     try{
@@ -330,6 +335,56 @@ function kaEmo(emotion,duration){
 }
 
 var _clearReplyTimer=null,_showReplyTimer=null,_pinReply=false;
+
+function showMatterInvite(){
+  var el=document.getElementById('kaReply');
+  if(!el)return;
+  if(_clearReplyTimer){clearTimeout(_clearReplyTimer);_clearReplyTimer=null;}
+  if(_showReplyTimer){clearTimeout(_showReplyTimer);_showReplyTimer=null;}
+  _pinReply=true;
+  el.classList.remove('hide','ka-cal-mode');
+  el.innerHTML='';
+  var nm='';
+  try{if(typeof window.getUserName==='function')nm=window.getUserName()||'';}catch(x){}
+  var p=document.createElement('div');
+  p.className='ka-reply-text';
+  p.textContent=(nm?('Привет, '+nm+'! '):'Привет! ')+'Исследуем Материю? Там созвездия твоих целей, комната и солнце-Фина.';
+  el.appendChild(p);
+  var row=document.createElement('div');
+  row.className='ka-act-row';
+  var no=document.createElement('button');
+  no.className='ka-act';
+  no.type='button';
+  no.textContent='Отмена';
+  no.onclick=function(e){
+    e.preventDefault();e.stopPropagation();
+    _pinReply=false;
+    clearReply();
+    try{status((nm?('Привет, '+nm+'! '):'')+'Нажми на меня, чтобы говорить');}catch(x){}
+  };
+  var ok=document.createElement('button');
+  ok.className='ka-act ok';
+  ok.type='button';
+  ok.textContent='Да, погнали';
+  ok.onclick=function(e){
+    e.preventDefault();e.stopPropagation();
+    _pinReply=false;
+    try{close();}catch(x){}
+    setTimeout(function(){
+      try{
+        if(window.FinMatter&&window.FinMatter.enter)window.FinMatter.enter({tour:true});
+        else if(typeof toast==='function')toast('Материя загружается…');
+      }catch(err){if(typeof toast==='function')toast('Не удалось открыть Материю');}
+    },220);
+  };
+  row.appendChild(no);
+  row.appendChild(ok);
+  el.appendChild(row);
+  void el.offsetWidth;
+  el.classList.add('show');
+  try{status('Материя');}catch(x){}
+}
+
 function showReply(text,actions){
   var el=document.getElementById('kaReply');
   if(!el)return;

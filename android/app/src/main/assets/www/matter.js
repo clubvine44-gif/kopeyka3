@@ -700,6 +700,49 @@ function enterConstellation(){
   if(hud)hud.hidden=false;
   if(!MS.firstEnter){MS.firstEnter=new Date().toISOString();saveState();}
   try{history.pushState({matter:'space'},'','#matter');}catch(e){}
+  // тур: по приглашению или первый раз
+  var needTour=!!window.__matterTourPending || !MS.matterTourDone;
+  window.__matterTourPending=false;
+  if(needTour){
+    setTimeout(function(){startMatterTour();},700);
+  }
+}
+
+function startMatterTour(){
+  if(phase!=='space'||!finn)return;
+  if(startMatterTour._running)return;
+  startMatterTour._running=true;
+  // сразу роняем солнце
+  if(finn.state==='star'){
+    var sx0=finn.x, sy0=finn.y;
+    var tx0=W*0.5, ty0=H*0.72;
+    finn.state='fall';
+    finn.fallT=0;
+    finn.fallDur=1.2;
+    finn.sx=sx0; finn.sy=sy0;
+    finn.tx=tx0; finn.ty=ty0;
+    finn.cx=sx0+(tx0-sx0)*0.5;
+    finn.cy=sy0+(ty0-sy0)*0.12-H*0.04;
+    finn.trail=[];finn.sparks=[];
+    finn.emotion='happy';
+  }
+  var steps=[
+    {delay:1600, text:'Это Материя — твоё пространство целей и тишины.'},
+    {delay:5200, text:'Созвездия — это твои цели. Нажми на звезду, чтобы увидеть прогресс.'},
+    {delay:9200, text:'Я — солнце. Нажми на меня, чтобы говорить. В пустое небо — чтобы свернуть.'},
+    {delay:13200, text:'Галактики ведут к другим созвездиям. Чёрная дыра справа — вход в комнату.'},
+    {delay:17200, text:'Исследуй. Я рядом.'}
+  ];
+  steps.forEach(function(s){
+    setTimeout(function(){
+      if(phase!=='space')return;
+      finnSay(s.text);
+    }, s.delay);
+  });
+  setTimeout(function(){
+    startMatterTour._running=false;
+    try{MS.matterTourDone=true;saveState();}catch(e){}
+  }, 20000);
 }
 
 function openDoorAnim(){
@@ -2134,6 +2177,9 @@ function updateFinn(dt,t){
 
 /* ---------- public API ---------- */
 function enterMatter(){
+  var opts=arguments[0]||{};
+  window.__matterTourPending=!!(opts&&opts.tour);
+
   ensureRoot();
   // разблокировка аудио — обязательно синхронно в обработчике клика,
   // иначе .play() внутри setTimeout при входе в комнату будет заблокирован

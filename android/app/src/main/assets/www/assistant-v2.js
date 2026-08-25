@@ -96,10 +96,10 @@ function open(opts){
             '</div>'+
             '<div class="ka-ring"></div>'+
             '<div class="ka-ring ka-ring2"></div>'+
+            '<button type="button" class="ka-matter-btn" id="kaMatterBtn" aria-label="Материя">'+
+              '<span class="ka-matter-orbit"></span><span class="ka-matter-ic">🌌</span>'+
+            '</button>'+
           '</div>'+
-          '<button type="button" class="ka-matter-btn" id="kaMatterBtn" aria-label="Материя">'+
-            '<span class="ka-matter-ic">🌌</span><span class="ka-matter-txt">Материя</span><span class="ka-matter-tag">β</span>'+
-          '</button>'+
         '</div>'+
         '<div class="ka-hint" id="kaStatus">'+(_nm?('Привет, '+_nm+'! '):'')+'Нажми на меня, чтобы говорить</div>'+
       '</div>';
@@ -125,7 +125,12 @@ function open(opts){
       stage.style.top=target.y+'px';
       stage.style.transform='translateY(-50%) scale(1)';
       stage.style.opacity='1';
-      setTimeout(function(){openingAnim=false;},580);
+      setTimeout(function(){
+        openingAnim=false;
+        if(opts.matterInvite){
+          try{showMatterInvite();}catch(e){}
+        }
+      },580);
     });
 
     try{
@@ -212,10 +217,16 @@ function style(){
   'will-change:transform,top,opacity;pointer-events:auto}'+
   '.ka-center{position:absolute;left:50%;top:0;transform:translateX(-50%);width:132px;height:132px}'+
   '.ka-center{position:relative;display:flex;flex-direction:column;align-items:center;gap:14px}'+
-'.ka-matter-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:999px;border:1px solid rgba(150,170,255,.35);background:linear-gradient(135deg,rgba(50,40,100,.9),rgba(25,18,55,.95));color:#E4EAFF;font-size:13px;font-weight:700;letter-spacing:.02em;box-shadow:0 4px 18px rgba(60,50,140,.35);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);cursor:pointer}'+
-'.ka-matter-btn:active{transform:scale(.96);opacity:.9}'+
-'.ka-matter-ic{font-size:15px;line-height:1}'+
-'.ka-matter-tag{font-size:10px;opacity:.65;font-weight:600}'+
+'.ka-matter-btn{position:absolute;right:-8px;top:-8px;z-index:5;width:38px;height:38px;border-radius:50%;'+
+'display:flex;align-items:center;justify-content:center;border:1.5px solid rgba(170,190,255,.5);'+
+'background:radial-gradient(circle at 35% 30%,rgba(150,130,255,.55),rgba(30,20,60,.96) 62%,rgba(14,10,30,.98));'+
+'box-shadow:0 6px 20px rgba(50,30,110,.5),0 0 18px rgba(150,130,255,.4),inset 0 0 8px rgba(200,190,255,.18);'+
+'cursor:pointer;animation:kaMatterFloat 3.6s ease-in-out infinite}'+
+'.ka-matter-btn:active{transform:scale(.9)}'+
+'.ka-matter-ic{font-size:16px;line-height:1;filter:drop-shadow(0 0 4px rgba(200,190,255,.6))}'+
+'.ka-matter-orbit{position:absolute;inset:-6px;border-radius:50%;border:1px dashed rgba(170,190,255,.4);animation:kaMatterSpin 9s linear infinite;pointer-events:none}'+
+'@keyframes kaMatterFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}'+
+'@keyframes kaMatterSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}'+
 '.ka-bubble{position:relative;width:132px;height:132px;border-radius:50%;cursor:pointer;'+
   'background:radial-gradient(circle at 35% 30%,rgba(120,210,255,.4),rgba(14,22,40,.92) 55%,rgba(8,12,22,.98));'+
   'border:1.5px solid rgba(94,200,255,.5);'+
@@ -324,6 +335,56 @@ function kaEmo(emotion,duration){
 }
 
 var _clearReplyTimer=null,_showReplyTimer=null,_pinReply=false;
+
+function showMatterInvite(){
+  var el=document.getElementById('kaReply');
+  if(!el)return;
+  if(_clearReplyTimer){clearTimeout(_clearReplyTimer);_clearReplyTimer=null;}
+  if(_showReplyTimer){clearTimeout(_showReplyTimer);_showReplyTimer=null;}
+  _pinReply=true;
+  el.classList.remove('hide','ka-cal-mode');
+  el.innerHTML='';
+  var nm='';
+  try{if(typeof window.getUserName==='function')nm=window.getUserName()||'';}catch(x){}
+  var p=document.createElement('div');
+  p.className='ka-reply-text';
+  p.textContent=(nm?('Привет, '+nm+'! '):'Привет! ')+'Исследуем Материю? Там созвездия твоих целей, комната и солнце-Фина.';
+  el.appendChild(p);
+  var row=document.createElement('div');
+  row.className='ka-act-row';
+  var no=document.createElement('button');
+  no.className='ka-act';
+  no.type='button';
+  no.textContent='Отмена';
+  no.onclick=function(e){
+    e.preventDefault();e.stopPropagation();
+    _pinReply=false;
+    clearReply();
+    try{status((nm?('Привет, '+nm+'! '):'')+'Нажми на меня, чтобы говорить');}catch(x){}
+  };
+  var ok=document.createElement('button');
+  ok.className='ka-act ok';
+  ok.type='button';
+  ok.textContent='Да, погнали';
+  ok.onclick=function(e){
+    e.preventDefault();e.stopPropagation();
+    _pinReply=false;
+    try{close();}catch(x){}
+    setTimeout(function(){
+      try{
+        if(window.FinMatter&&window.FinMatter.enter)window.FinMatter.enter({tour:true});
+        else if(typeof toast==='function')toast('Материя загружается…');
+      }catch(err){if(typeof toast==='function')toast('Не удалось открыть Материю');}
+    },220);
+  };
+  row.appendChild(no);
+  row.appendChild(ok);
+  el.appendChild(row);
+  void el.offsetWidth;
+  el.classList.add('show');
+  try{status('Материя');}catch(x){}
+}
+
 function showReply(text,actions){
   var el=document.getElementById('kaReply');
   if(!el)return;
