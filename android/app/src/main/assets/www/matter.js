@@ -854,77 +854,64 @@ function drawTourHighlight(t){
   if(!tourHL||!ctx)return;
   var now=performance.now();
   if(tourHL.until && now>tourHL.until){ tourHL=null; return; }
-  var pulse=0.55+0.45*Math.sin(t*2.8);
+  var pulse=0.55+0.45*Math.sin(t*2.6);
   ctx.save();
+  // мягкое внешнее свечение БЕЗ контура; центр почти прозрачный — объект читается
   if(tourHL.kind==='sun' && finn){
-    var rg=ctx.createRadialGradient(finn.x,finn.y,0,finn.x,finn.y,95);
-    rg.addColorStop(0,'rgba(255,230,140,'+(0.28+0.18*pulse)+')');
-    rg.addColorStop(0.45,'rgba(255,180,60,'+(0.14+0.1*pulse)+')');
-    rg.addColorStop(1,'rgba(255,140,40,0)');
+    var rg=ctx.createRadialGradient(finn.x,finn.y,12,finn.x,finn.y,100);
+    rg.addColorStop(0,'rgba(255,230,140,0)');
+    rg.addColorStop(0.35,'rgba(255,200,100,'+(0.16+0.1*pulse)+')');
+    rg.addColorStop(0.7,'rgba(255,160,50,'+(0.1+0.06*pulse)+')');
+    rg.addColorStop(1,'rgba(255,120,30,0)');
     ctx.fillStyle=rg;
-    ctx.beginPath();ctx.arc(finn.x,finn.y,95,0,Math.PI*2);ctx.fill();
-    ctx.beginPath();
-    ctx.strokeStyle='rgba(255,240,180,'+(0.55+0.25*pulse)+')';
-    ctx.lineWidth=2;
-    ctx.arc(finn.x,finn.y,38+6*pulse,0,Math.PI*2);ctx.stroke();
+    ctx.beginPath();ctx.arc(finn.x,finn.y,100,0,Math.PI*2);ctx.fill();
   }else if(tourHL.kind==='ursa'){
     stars.forEach(function(s){
       if(s.bg||s.group!=='maj')return;
-      var g=ctx.createRadialGradient(s.x,s.y,0,s.x,s.y,32);
-      g.addColorStop(0,'rgba(200,230,255,'+(0.55+0.25*pulse)+')');
-      g.addColorStop(0.5,'rgba(140,190,255,'+(0.22+0.12*pulse)+')');
+      var g=ctx.createRadialGradient(s.x,s.y,2,s.x,s.y,36);
+      g.addColorStop(0,'rgba(200,230,255,0)');
+      g.addColorStop(0.35,'rgba(180,220,255,'+(0.28+0.14*pulse)+')');
       g.addColorStop(1,'rgba(100,160,255,0)');
       ctx.fillStyle=g;
-      ctx.beginPath();ctx.arc(s.x,s.y,32,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.arc(s.x,s.y,36,0,Math.PI*2);ctx.fill();
     });
     if(window.__matterLinks){
-      ctx.strokeStyle='rgba(210,235,255,'+(0.65+0.25*pulse)+')';
-      ctx.lineWidth=2.4;
-      ctx.shadowColor='rgba(140,200,255,0.6)';
-      ctx.shadowBlur=8;
+      ctx.strokeStyle='rgba(190,220,255,'+(0.45+0.2*pulse)+')';
+      ctx.lineWidth=1.8;
       window.__matterLinks.forEach(function(pair){
         if(!pair[0]||!pair[1])return;
         if(pair[0].group!=='maj'&&pair[1].group!=='maj')return;
         ctx.beginPath();ctx.moveTo(pair[0].x,pair[0].y);ctx.lineTo(pair[1].x,pair[1].y);ctx.stroke();
       });
-      ctx.shadowBlur=0;
     }
   }else if(tourHL.kind==='galaxies'){
     var elapsed=(now-(tourHL.t0||now))/1000;
     if(elapsed<3.8 && galaxies){
       galaxies.forEach(function(G){
-        var g=ctx.createRadialGradient(G.x,G.y,0,G.x,G.y,G.r*2.2);
-        g.addColorStop(0,'rgba(230,210,255,'+(0.4+0.2*pulse)+')');
-        g.addColorStop(0.5,'rgba(160,140,230,'+(0.18+0.1*pulse)+')');
+        var g=ctx.createRadialGradient(G.x,G.y,G.r*0.35,G.x,G.y,G.r*2.3);
+        g.addColorStop(0,'rgba(230,210,255,0)');
+        g.addColorStop(0.4,'rgba(190,170,255,'+(0.22+0.12*pulse)+')');
         g.addColorStop(1,'rgba(120,100,200,0)');
         ctx.fillStyle=g;
-        ctx.beginPath();ctx.arc(G.x,G.y,G.r*2.2,0,Math.PI*2);ctx.fill();
-        ctx.beginPath();
-        ctx.strokeStyle='rgba(220,200,255,'+(0.5+0.25*pulse)+')';
-        ctx.lineWidth=2;
-        ctx.arc(G.x,G.y,G.r*1.15,0,Math.PI*2);ctx.stroke();
+        ctx.beginPath();ctx.arc(G.x,G.y,G.r*2.3,0,Math.PI*2);ctx.fill();
       });
     }else if(door){
-      var g=ctx.createRadialGradient(door.x,door.y,0,door.x,door.y,door.r*2.6);
-      g.addColorStop(0,'rgba(200,225,255,'+(0.4+0.2*pulse)+')');
-      g.addColorStop(0.5,'rgba(120,160,230,'+(0.18+0.1*pulse)+')');
+      var g=ctx.createRadialGradient(door.x,door.y,door.r*0.4,door.x,door.y,door.r*2.5);
+      g.addColorStop(0,'rgba(200,225,255,0)');
+      g.addColorStop(0.4,'rgba(160,200,255,'+(0.22+0.12*pulse)+')');
       g.addColorStop(1,'rgba(80,120,200,0)');
       ctx.fillStyle=g;
-      ctx.beginPath();ctx.arc(door.x,door.y,door.r*2.6,0,Math.PI*2);ctx.fill();
-      ctx.beginPath();
-      ctx.strokeStyle='rgba(200,230,255,'+(0.55+0.25*pulse)+')';
-      ctx.lineWidth=2.2;
-      ctx.arc(door.x,door.y,door.r*1.2,0,Math.PI*2);ctx.stroke();
+      ctx.beginPath();ctx.arc(door.x,door.y,door.r*2.5,0,Math.PI*2);ctx.fill();
     }
   }else if(tourHL.kind==='nebulae' && nebulae){
     nebulae.forEach(function(n){
       if(n.born)return;
-      var g=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,n.s*2);
-      g.addColorStop(0,'hsla('+n.hue+',85%,75%,'+(0.35+0.2*pulse)+')');
-      g.addColorStop(0.5,'hsla('+n.hue+',70%,55%,'+(0.16+0.1*pulse)+')');
+      var g=ctx.createRadialGradient(n.x,n.y,n.s*0.25,n.x,n.y,n.s*2.1);
+      g.addColorStop(0,'hsla('+n.hue+',80%,70%,0)');
+      g.addColorStop(0.4,'hsla('+n.hue+',75%,65%,'+(0.2+0.12*pulse)+')');
       g.addColorStop(1,'rgba(0,0,0,0)');
       ctx.fillStyle=g;
-      ctx.beginPath();ctx.arc(n.x,n.y,n.s*2,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.arc(n.x,n.y,n.s*2.1,0,Math.PI*2);ctx.fill();
     });
   }
   ctx.restore();
@@ -2278,29 +2265,18 @@ function drawSpace(dt,t){
     drawCosmicDust(t);
   }
   var inTour=!!(tourLock||startMatterTour._running);
-  // во время тура — минимум фона, чтобы голос не рвался
+  // объекты всегда видны; во время тура чуть проще, но узнаваемы
   if(!inTour){
     drawNebulae(t);
     updateNebulaBirth(dt);
     updateTitleDust(dt);
-  }else if(tourHL&&tourHL.kind==='nebulae'){
-    // только простая подсветка (в drawTourHighlight), без слоёв туманностей
+  }else{
+    drawNebulae(t); // сами туманности на месте + подсветка сверху
   }
   if(galaxies&&galaxies.length){
-    if(inTour){
-      // лёгкие пятна вместо спиралей
-      galaxies.forEach(function(G){
-        var gg=ctx.createRadialGradient(G.x,G.y,0,G.x,G.y,G.r*1.3);
-        gg.addColorStop(0,'rgba(200,190,240,0.18)');
-        gg.addColorStop(1,'rgba(0,0,0,0)');
-        ctx.fillStyle=gg;
-        ctx.beginPath();ctx.arc(G.x,G.y,G.r*1.3,0,Math.PI*2);ctx.fill();
-      });
-    }else{
-      galaxies.forEach(function(G){
-        drawGalaxy(ctx, G.x, G.y, G.r, G.rot, t, G.kind);
-      });
-    }
+    galaxies.forEach(function(G){
+      drawGalaxy(ctx, G.x, G.y, G.r, G.rot, t, G.kind);
+    });
   }
 
   ctx.globalAlpha=0.12;
@@ -2536,7 +2512,8 @@ function updateFinn(dt,t){
     var prevFX=finn.x, prevFY=finn.y;
     finn.fallT+=dt;
     var p=Math.min(1,finn.fallT/(finn.fallDur||1.3));
-    var ep=p<0.5?2*p*p:1-Math.pow(-2*p+2,2)/2; // easeInOutQuad
+    // плавное торможение к концу — без рывка в точке посадки
+    var ep=1-Math.pow(1-p,2.4);
     var omp=1-ep;
     finn.x=omp*omp*finn.sx+2*omp*ep*finn.cx+ep*ep*finn.tx;
     finn.y=omp*omp*finn.sy+2*omp*ep*finn.cy+ep*ep*finn.ty;
@@ -2552,35 +2529,33 @@ function updateFinn(dt,t){
       finn.x=finn.tx; finn.y=finn.ty;
       finn.state='birth';
       finn.birthT=0;
-      finn.scale=1.45;
+      finn.scale=1; // без рывка масштаба
       finn.emotion='happy';
-      finn.flash=1.85;
-      // осколки взрыва
-      var bn=finn._tourFall?4:12;
+      var tourFall=!!finn._tourFall;
+      finn.flash=tourFall?0.7:1.2;
+      finn.trail=[];
+      finn.sparks=[];
+      var bn=tourFall?5:14;
       for(var bi=0;bi<bn;bi++){
-        var ba=Math.random()*Math.PI*2;
-        var bsp=50+Math.random()*140;
-        finn.sparks.push({x:finn.x,y:finn.y,r:1.2+Math.random()*2.2,a:0.85,vx:Math.cos(ba)*bsp,vy:Math.sin(ba)*bsp});
+        var ang=Math.random()*Math.PI*2;
+        var spd=40+Math.random()*(tourFall?80:140);
+        finn.sparks.push({x:finn.x,y:finn.y,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd-15,a:0.9,r:1.2+Math.random()*2});
       }
       finn._tourFall=false;
-      finn.trail=[];
-      // радиальный взрыв искр — настоящее рождение, а не тихая подмена картинки
-      finn.sparks=[];
-      for(var bi=0;bi<26;bi++){
-        var ang=Math.random()*Math.PI*2;
-        var spd=60+Math.random()*150;
-        finn.sparks.push({x:finn.x,y:finn.y,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd-25,a:1,r:1.4+Math.random()*2.6});
+      if(!tourLock && !startMatterTour._running){
+        setTimeout(function(){finnSay('Эй! Я с тобой.');},280);
       }
-      setTimeout(function(){finnSay('Эй! Я с тобой.');},260);
     }
   }else if(finn.state==='birth'){
-    // спружинивающее приземление + плавное проявление лица поверх вспышки
+    // плавное проявление солнца без подпрыгивания
     finn.birthT+=dt;
-    var bp=Math.min(1,finn.birthT/0.5);
-    finn.scale=1.45-0.45*(1-Math.pow(1-bp,3));
+    var bp=Math.min(1,finn.birthT/0.55);
+    var ease=1-Math.pow(1-bp,2.5);
+    finn.scale=0.92+0.08*ease;
     if(bp>=1){
       finn.state='idle';
       finn.scale=1; finn.alpha=1;
+      finn.flash=0;
     }
   }else if(finn.state==='toDoor'){
     finn.x+=(finn.tx-finn.x)*Math.min(1,dt*2.4);
