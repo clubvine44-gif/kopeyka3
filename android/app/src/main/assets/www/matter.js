@@ -192,54 +192,21 @@ var speechEmbers=[];
 
 function finnSay(text){
   if(!text)return;
-  var box=document.getElementById('matterSpeech');
-  if(!box){
-    box=document.createElement('div');
-    box.id='matterSpeech';
-    box.className='m-speech';
-    if(root)root.appendChild(box);
+  // обычный диалог как в основном приложении Финны
+  var el=document.getElementById('matterDialog');
+  if(!el){
+    el=document.createElement('div');
+    el.id='matterDialog';
+    el.className='m-dialog';
+    if(root)root.appendChild(el);
   }
-  if(finnSay._timers){finnSay._timers.forEach(function(id){clearTimeout(id);});}
-  finnSay._timers=[];
-  speechEmbers=[];
-  box.innerHTML='';
-  box.style.display='flex';
-
-  // позиция: над солнцем, ближе к центру, не на край экрана
-  var fy=(finn&&finn.y)?finn.y:(H*0.72);
-  var topPx=Math.max(H*0.28, Math.min(H*0.48, fy-(finn&&finn.size?finn.size:58)*2.1-24));
-  box.style.top=topPx+'px';
-  box.style.bottom='auto';
-
-  var lines=splitSpeechLines(String(text).trim(), 32);
-  lines.forEach(function(line,i){
-    var row=document.createElement('div');
-    row.className='m-speech-line';
-    // по буквам — для огня
-    var html='';
-    for(var ci=0;ci<line.length;ci++){
-      var ch=line.charAt(ci);
-      var delay=(ci*0.045).toFixed(3);
-      if(ch===' ')html+='<span class="m-ch" style="transition-delay:'+delay+'s">&nbsp;</span>';
-      else html+='<span class="m-ch" style="transition-delay:'+delay+'s">'+ch.replace(/</g,'&lt;')+'</span>';
-    }
-    row.innerHTML=html;
-    box.appendChild(row);
-
-    var startBurn=2000+i*2000;
-    var tid=setTimeout(function(){
-      row.classList.add('burn');
-      // искры/угли над строкой
-      spawnSpeechEmbers(box, row, 22);
-      var tid2=setTimeout(function(){
-        if(row.parentNode)row.parentNode.removeChild(row);
-        if(box&&!box.children.length)box.style.display='none';
-      },1600+line.length*45);
-      finnSay._timers.push(tid2);
-    },startBurn);
-    finnSay._timers.push(tid);
-  });
-
+  // убрать burn-слой если остался
+  var burn=document.getElementById('matterSpeech');
+  if(burn){burn.innerHTML='';burn.style.display='none';}
+  el.textContent=text;
+  el.classList.add('show');
+  clearTimeout(finnSay._t);
+  finnSay._t=setTimeout(function(){el.classList.remove('show');},4800);
   try{
     if(window.speechSynthesis){
       window.speechSynthesis.cancel();
@@ -250,62 +217,7 @@ function finnSay(text){
   }catch(e){}
 }
 
-function spawnSpeechEmbers(box, row, n){
-  if(!canvas||!box||!row)return;
-  var br=row.getBoundingClientRect();
-  var cr=canvas.getBoundingClientRect();
-  var scaleX=canvas.width/Math.max(1,cr.width)/ (window.devicePixelRatio||1);
-  // use CSS pixels relative to canvas
-  var dpr=window.devicePixelRatio||1;
-  for(var i=0;i<n;i++){
-    var px=(br.left-cr.left)+Math.random()*br.width;
-    var py=(br.top-cr.top)+Math.random()*br.height*0.6;
-    speechEmbers.push({
-      x:px, y:py,
-      vx:(Math.random()-0.5)*40,
-      vy:-(30+Math.random()*70),
-      r:1+Math.random()*2.5,
-      a:0.9+Math.random()*0.1,
-      life:0.8+Math.random()*0.9,
-      hue:20+Math.random()*30
-    });
-  }
-}
 
-function updateSpeechEmbers(dt){
-  if(!speechEmbers.length||!ctx)return;
-  for(var i=speechEmbers.length-1;i>=0;i--){
-    var p=speechEmbers[i];
-    p.life-=dt;
-    p.a=Math.max(0,p.life);
-    p.x+=p.vx*dt;
-    p.y+=p.vy*dt;
-    p.vy-=25*dt; // вверх
-    p.vx*=0.98;
-    if(p.life<=0){speechEmbers.splice(i,1);continue;}
-    var g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r*3);
-    g.addColorStop(0,'rgba(255,255,200,'+(p.a*0.95)+')');
-    g.addColorStop(0.4,'rgba(255,'+Math.floor(100+p.hue)+',20,'+(p.a*0.7)+')');
-    g.addColorStop(1,'rgba(180,30,0,0)');
-    ctx.beginPath();
-    ctx.fillStyle=g;
-    ctx.arc(p.x,p.y,p.r*3,0,Math.PI*2);ctx.fill();
-  }
-}
-
-function splitSpeechLines(text, maxChars){
-  maxChars=maxChars||32;
-  var words=String(text||'').replace(/\s+/g,' ').trim().split(' ');
-  var lines=[], cur='';
-  words.forEach(function(w){
-    if(!cur){cur=w;return;}
-    if((cur+' '+w).length<=maxChars)cur+=' '+w;
-    else{lines.push(cur);cur=w;}
-  });
-  if(cur)lines.push(cur);
-  if(!lines.length&&text)lines=[text.slice(0,maxChars)];
-  return lines;
-}
 
 /* ---------- root shell ---------- */
 function ensureRoot(){
@@ -364,12 +276,13 @@ function ensureRoot(){
   root.querySelectorAll('.m-hot').forEach(function(b){
     b.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();onObject(b.dataset.obj);});
   });
-  canvas.addEventListener('click',onCanvasTap);
-  canvas.addEventListener('touchend',function(e){
-    if(!e.changedTouches||!e.changedTouches[0])return;
-    var t=e.changedTouches[0];
-    onCanvasTap({clientX:t.clientX,clientY:t.clientY,preventDefault:function(){}});
-  },{passive:false});
+  // один путь ввода — без двойного click+touchend (из‑за него мигали панели)
+  canvas.addEventListener('pointerup',function(e){
+    if(e.pointerType==='mouse' && e.button!==0)return;
+    e.preventDefault();
+    onCanvasTap({clientX:e.clientX,clientY:e.clientY,preventDefault:function(){}});
+  });
+  canvas.addEventListener('click',function(e){e.preventDefault();},{passive:false});
   setupReaderSwipe();
   // history back
   window.addEventListener('popstate',function(ev){
@@ -449,17 +362,13 @@ function injectCSS(){
 '.m-reader-foot{position:absolute;left:0;right:0;bottom:0;text-align:center;padding:8px;padding-bottom:calc(8px + env(safe-area-inset-bottom,0px));font-size:11px;color:rgba(200,190,170,.55);transition:opacity .25s,transform .25s;background:linear-gradient(0deg,rgba(12,10,14,.92),rgba(12,10,14,0));pointer-events:none;height:36px;box-sizing:content-box}'+
 /* HTML hidden must beat display:flex — иначе при входе виден пустой «Книга» */
 '.m-reader[hidden],.m-panel[hidden],.m-hud[hidden],.m-room[hidden],.m-room-finn[hidden]{display:none!important}'+
-'.m-speech{position:absolute;left:50%;z-index:18;pointer-events:none;'+
-'transform:translateX(-50%);width:min(90vw,360px);display:flex;flex-direction:column;align-items:center;gap:2px;'+
-'background:transparent;overflow:visible}'+
-'.m-speech-line{font-family:Georgia,"Times New Roman",serif;font-size:16px;line-height:1.5;'+
-'text-align:center;white-space:pre-wrap;letter-spacing:0.02em}'+
-'.m-speech-line .m-ch{display:inline-block;color:#FFEFD0;'+
-'text-shadow:0 0 10px rgba(255,160,50,.4),0 1px 2px rgba(0,0,0,.65);'+
-'transition:color .55s ease,opacity .9s ease,transform .9s ease,text-shadow .55s ease,filter .7s ease}'+
-'.m-speech-line.burn .m-ch{color:#1a0600;opacity:0;'+
-'text-shadow:0 0 6px #ff6600,0 -6px 14px #ff3300,0 -12px 20px rgba(255,100,0,.5);'+
-'transform:translateY(-14px) scale(0.75);filter:blur(0.6px)}'+
+'.m-dialog{position:absolute;left:50%;bottom:calc(16% + 110px);transform:translateX(-50%) translateY(8px);'+
+'z-index:15;max-width:min(90vw,340px);max-height:26vh;overflow:auto;padding:12px 16px;border-radius:16px;'+
+'background:rgba(14,12,22,.92);border:1px solid rgba(255,255,255,.14);color:#F0EDE6;'+
+'font-size:15px;line-height:1.4;font-family:system-ui,-apple-system,sans-serif;text-align:center;'+
+'opacity:0;pointer-events:none;transition:opacity .22s,transform .22s;'+
+'backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 8px 28px rgba(0,0,0,.4)}'+
+'.m-dialog.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}'+
 '.m-finn-close-space{position:absolute;z-index:16;width:36px;height:36px;border-radius:50%;'+'background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.22);color:#f5efe6;font-size:16px;'+'display:none;align-items:center;justify-content:center;padding:0}'+'.m-finn-close-space.show{display:flex}'+'body.matter-lock{overflow:hidden!important}';
   document.head.appendChild(s);
 }
@@ -533,23 +442,15 @@ function buildStars(){
   var minBox={ox:W*0.60, oy:H*0.08, bw:W*0.36, bh:H*0.30};
   window.__matterLinks=[];
   if(mode==='cass'){
-    var box={ox:W*0.12, oy:H*0.22, bw:W*0.76, bh:H*0.40};
+    // только форма Кассиопеи — без лишних целей снизу
+    var box={ox:W*0.14, oy:H*0.28, bw:W*0.72, bh:H*0.36};
     var placed=placeInBox(cassiopeia, cassLinks, goals.slice(0,5), 'cass', box);
     cassLinks.forEach(function(lk){ window.__matterLinks.push([placed[lk[0]], placed[lk[1]]]); });
-    goals.slice(5).forEach(function(g,i){
-      var x=W*0.15+((i%6)/6)*W*0.7;
-      var y=H*0.72+(Math.floor(i/6)*28);
-      stars.push({id:g.id,g:g,x:x,y:y,baseR:6+Math.min(5,(g.pct||0)/25),hue:g.type==='debt'?8:205,pulse:i,bright:0.7,group:'extra',idx:i});
-    });
   }else if(mode==='orion'){
-    var box={ox:W*0.18, oy:H*0.16, bw:W*0.64, bh:H*0.62};
+    // только форма Ориона — без россыпи целей
+    var box={ox:W*0.20, oy:H*0.20, bw:W*0.60, bh:H*0.55};
     var placed=placeInBox(orion, orionLinks, goals.slice(0,7), 'orion', box);
     orionLinks.forEach(function(lk){ window.__matterLinks.push([placed[lk[0]], placed[lk[1]]]); });
-    goals.slice(7).forEach(function(g,i){
-      var x=W*0.12+((i%5)/5)*W*0.76;
-      var y=H*0.82+(Math.floor(i/5)*26);
-      stars.push({id:g.id,g:g,x:x,y:y,baseR:6+Math.min(5,(g.pct||0)/25),hue:g.type==='debt'?8:200,pulse:i,bright:0.7,group:'extra',idx:i});
-    });
   }else{
   var majGoals=goals.slice(0,7);
   var minGoals=goals.slice(7,14);
@@ -563,11 +464,13 @@ function buildStars(){
     var cols=Math.max(3,Math.floor(majBox.bw/54));
     var cellW=majBox.bw/cols;
     var rowH=26;
-    var baseY=Math.min(H-40, majBox.oy+majBox.bh+34);
+    var baseY=Math.min(H*0.92, majBox.oy+majBox.bh+28);
     extra.forEach(function(g,i){
       var col=i%cols, row=Math.floor(i/cols);
       var x=majBox.ox+cellW*(col+0.5);
-      var y=Math.min(H-24, baseY+row*rowH);
+      var y=Math.min(H*0.90, baseY+row*rowH);
+      // не лезем под дверь справа
+      if(x>W*0.72 && y>H*0.65){ x=majBox.ox+cellW*((col%Math.max(1,cols-1))+0.5); }
       stars.push({
         id:g.id,g:g,x:x,y:y,baseR:3.2+Math.min(3,(g.pct||0)/40),
         hue:g.type==='debt'?8:(g.urgent?38:200),pulse:i*0.6,bright:0.5+(g.pct||0)/250
@@ -584,16 +487,16 @@ function buildStars(){
     });
   }
   } // end home sky
-  // Дверь = чёрная дыра в центре экрана (между созвездиями)
+  // Дверь = чёрная дыра справа снизу (не на созвездиях)
   door={
-    x:W*0.5, y:H*0.50, r:Math.min(W,H)*0.072,
+    x:W*0.86, y:H*0.76, r:Math.min(W,H)*0.068,
     open:0,opening:false,entered:false,
     swirl:0
   };
-  // галактики — по бокам от центра, не на дыре и не на ковшах
+  // галактики — слева-верх и правее-центр, без пересечений
   galaxies=[
-    {id:'cass', x:W*0.22, y:H*0.26, r:Math.min(W,H)*0.085, rot:-0.4, kind:1, label:'Кассиопея'},
-    {id:'orion', x:W*0.78, y:H*0.70, r:Math.min(W,H)*0.09, rot:0.55, kind:2, label:'Орион'}
+    {id:'cass', x:W*0.18, y:H*0.22, r:Math.min(W,H)*0.08, rot:-0.4, kind:1, label:'Кассиопея'},
+    {id:'orion', x:W*0.82, y:H*0.38, r:Math.min(W,H)*0.085, rot:0.55, kind:2, label:'Орион'}
   ];
 }
 
@@ -842,10 +745,8 @@ function handleBack(){
 /* ---------- interaction ---------- */
 function findGoalStarAt(x,y){
   var best=null,bestD=1e12;
-  // блок только вокруг зародыша наверху (не idle-Фину внизу)
   var blockX=W*0.5, blockY=H*0.16, blockR2=0;
-  if(finn&&finn.state==='star'){ blockR2=70*70; }
-  if(finn&&(finn.state==='fall'||finn.state==='birth')){ blockR2=110*110; blockX=finn.x; blockY=finn.y; }
+  if(finn&&finn.state==='star'){ blockR2=56*56; }
   stars.forEach(function(s){
     if(s.bg||!s.g)return;
     if(blockR2>0){
@@ -853,7 +754,7 @@ function findGoalStarAt(x,y){
       if(near<blockR2)return;
     }
     var dx=x-s.x, dy=y-s.y, d=dx*dx+dy*dy;
-    var hit=Math.max(40, (s.baseR||5)*5.5+22);
+    var hit=Math.max(44, (s.baseR||5)*6+20);
     hit=hit*hit;
     if(d<hit && d<bestD){bestD=d;best=s;}
   });
@@ -862,44 +763,47 @@ function findGoalStarAt(x,y){
 
 function onCanvasTap(e){
   if(phase!=='space')return;
-  // не открывать звёзды поверх уже открытой панели
+  // антидребезг: один тап = одно действие
+  var now=Date.now();
+  if(onCanvasTap._lock && now-onCanvasTap._lock<320)return;
+  onCanvasTap._lock=now;
+
   var pan=document.getElementById('matterPanel');
-  if(pan&&!pan.hidden)return;
+  if(pan&&!pan.hidden&&pan.style.display!=='none'){
+    // тап по фону закрывает панель; по карточке — нет
+    return;
+  }
+
   var rect=canvas.getBoundingClientRect();
   var x=e.clientX-rect.left, y=e.clientY-rect.top;
 
-  // 1) Звезда-зародыш Фины — ТОЛЬКО рождение, никогда не цель/долг
-  if(finn && (finn.state==='star'||finn.state==='fall'||finn.state==='birth')){
+  // 1) Звезда-зародыш Фины
+  if(finn && finn.state==='star'){
     var dx=x-finn.x, dy=y-finn.y;
-    var seedHit=72*72; // широкий хит, чтобы не задеть соседнюю цель
-    if(finn.state==='star' && dx*dx+dy*dy < seedHit){
+    if(dx*dx+dy*dy < 64*64){
       var sx0=finn.x, sy0=finn.y;
       var tx0=W*0.5, ty0=H*0.72;
       finn.state='fall';
       finn.fallT=0;
-      finn.fallDur=1.15+Math.random()*0.25;
+      finn.fallDur=1.15;
       finn.sx=sx0; finn.sy=sy0;
       finn.tx=tx0; finn.ty=ty0;
       var side=(Math.random()<0.5?-1:1);
-      finn.cx=sx0+(tx0-sx0)*0.5+side*W*0.24;
-      finn.cy=sy0+(ty0-sy0)*0.15-H*0.06;
+      finn.cx=sx0+(tx0-sx0)*0.5+side*W*0.22;
+      finn.cy=sy0+(ty0-sy0)*0.15-H*0.05;
       finn.trail=[];finn.sparks=[];
       finn.emotion='happy';
-      showStar._lock=Date.now()+800; // блок открытия целей после тапа
       hidePanel();
       return;
     }
-    // во время падения/рождения — не открывать цели в этой зоне
-    if(finn.state!=='star' && dx*dx+dy*dy < 100*100){
-      return;
-    }
   }
+  if(finn && (finn.state==='fall'||finn.state==='birth'))return;
 
-  // 2) Фина в idle — тап по ней = голос
+  // 2) Фина idle — голос
   if(finn && finn.state==='idle'){
-    var dx=x-finn.x, dy=y-finn.y;
-    var hitR=(finn.size||58)*1.05;
-    if(dx*dx+dy*dy < hitR*hitR){
+    var dxf=x-finn.x, dyf=y-finn.y;
+    var hitR=(finn.size||58)*1.1;
+    if(dxf*dxf+dyf*dyf < hitR*hitR){
       finn.emotion='listening';
       finnSay('Слушаю…');
       startListen();
@@ -907,27 +811,27 @@ function onCanvasTap(e){
     }
   }
 
-  // 3a) Галактики — переход в другие созвездия
+  // 3) Галактики — смена неба (цели только на home)
   if(galaxies&&galaxies.length){
     for(var gi=0;gi<galaxies.length;gi++){
       var G=galaxies[gi];
       var gdx=x-G.x, gdy=y-G.y;
-      if(gdx*gdx+gdy*gdy < (G.r*1.15)*(G.r*1.15)){
+      if(gdx*gdx+gdy*gdy < (G.r*1.2)*(G.r*1.2)){
         var next=G.id==='cass'?'cass':(G.id==='orion'?'orion':'home');
         if(skyMode===next)next='home';
         skyMode=next;
-        buildStars();
         hidePanel();
+        buildStars();
         finnSay(next==='home'?'Снова Медведицы.':(next==='cass'?'Кассиопея.':'Орион.'));
         return;
       }
     }
   }
 
-  // 3) Дверь в центре
+  // 4) Дверь
   if(door){
     var dx2=x-door.x, dy2=y-door.y;
-    if(dx2*dx2+dy2*dy2 < (door.r+22)*(door.r+22)){
+    if(dx2*dx2+dy2*dy2 < (door.r+24)*(door.r+24)){
       if(finn && finn.state==='idle'){
         finn.state='toDoor';
         finn.tx=door.x; finn.ty=door.y;
@@ -939,27 +843,26 @@ function onCanvasTap(e){
     }
   }
 
-  // 4) Звёзды целей — работают и когда Фина idle
+  // 5) Звёзды целей
   var best=findGoalStarAt(x,y);
-  if(best){
-    if(showStar._lock && Date.now()<showStar._lock)return;
-    showStar._lock=Date.now()+200;
+  if(best && best.g){
     showStar(best);
     return;
   }
 
-  // 5) Тап в пустоту при idle Фине — свернуть её
+  // 6) Пустота при idle — свернуть Фину
   if(finn && finn.state==='idle'){
     finn.state='star';
     finn.x=W*0.5;finn.y=H*0.16;finn.scale=1;finn.alpha=1;
     finn.emotion='idle';
     finn.trail=[]; finn.sparks=[]; finn.flash=0; finn.fallV=0;
-    var d=document.getElementById('matterSpeech');
-    if(d){d.innerHTML='';d.style.display='none';}
-    if(finnSay._timers){finnSay._timers.forEach(function(id){clearTimeout(id);});finnSay._timers=[];}
+    var d=document.getElementById('matterDialog');
+    if(d)d.classList.remove('show');
     try{if(rec){rec.abort();rec=null;}}catch(err){}
   }
 }
+
+
 
 function fmt(n){
   n=Math.round(+n||0);
@@ -984,13 +887,20 @@ function showStar(s){
 
 function showPanel(title, html){
   var p=document.getElementById('matterPanel');
-  document.getElementById('mPanelTitle').textContent=title;
-  document.getElementById('mPanelBody').innerHTML=html;
-  if(p){p.hidden=false;p.style.display='';}
+  if(!p)return;
+  document.getElementById('mPanelTitle').textContent=title||'';
+  document.getElementById('mPanelBody').innerHTML=html||'';
+  p.hidden=false;
+  p.style.display='flex';
+  p.style.opacity='1';
+  p.style.visibility='visible';
 }
 function hidePanel(){
   var p=document.getElementById('matterPanel');
-  if(p){p.hidden=true;p.style.display='none';}
+  if(!p)return;
+  p.hidden=true;
+  p.style.display='none';
+  p.style.opacity='0';
 }
 
 function onObject(id){
@@ -1680,7 +1590,7 @@ function loop(t){
   var dt=Math.min(0.05,(t-lastT)/1000);lastT=t;
   resize();
   if(phase==='blackhole')drawBlackHole(dt);
-  else if(phase==='space'){drawSpace(dt,t/1000);updateSpeechEmbers(dt);}
+  else if(phase==='space')drawSpace(dt,t/1000);
   else if(phase==='room'){ /* room DOM only */ }
 }
 
