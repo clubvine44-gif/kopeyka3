@@ -97,6 +97,9 @@ function open(opts){
             '<div class="ka-ring"></div>'+
             '<div class="ka-ring ka-ring2"></div>'+
           '</div>'+
+          '<button type="button" class="ka-matter-btn" id="kaMatterBtn" aria-label="Материя">'+
+            '<span class="ka-matter-ic">🌌</span><span class="ka-matter-txt">Материя</span><span class="ka-matter-tag">β</span>'+
+          '</button>'+
         '</div>'+
         '<div class="ka-hint" id="kaStatus">'+(_nm?('Привет, '+_nm+'! '):'')+'Нажми на меня, чтобы говорить</div>'+
       '</div>';
@@ -135,6 +138,21 @@ function open(opts){
 
     var bd=document.getElementById('kaBackdrop');
     if(bd)bd.addEventListener('click',function(){close();});
+    var mBtn=document.getElementById('kaMatterBtn');
+    if(mBtn){
+      mBtn.addEventListener('click',function(e){
+        e.preventDefault();e.stopPropagation();
+        try{
+          if(typeof close==='function')close();
+        }catch(x){}
+        setTimeout(function(){
+          try{
+            if(window.FinMatter&&window.FinMatter.enter)window.FinMatter.enter();
+            else if(typeof toast==='function')toast('Материя загружается…');
+          }catch(err){if(typeof toast==='function')toast('Не удалось открыть Материю');}
+        },180);
+      });
+    }
     var bubbleTap=document.getElementById('kaBubble');
     if(bubbleTap){
       bubbleTap.addEventListener('click',function(e){
@@ -193,7 +211,12 @@ function style(){
   '.ka-stage{position:absolute;z-index:2;width:100%;left:0!important;height:180px;display:block;'+
   'will-change:transform,top,opacity;pointer-events:auto}'+
   '.ka-center{position:absolute;left:50%;top:0;transform:translateX(-50%);width:132px;height:132px}'+
-  '.ka-bubble{position:relative;width:132px;height:132px;border-radius:50%;cursor:pointer;'+
+  '.ka-center{position:relative;display:flex;flex-direction:column;align-items:center;gap:14px}'+
+'.ka-matter-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:999px;border:1px solid rgba(150,170,255,.35);background:linear-gradient(135deg,rgba(50,40,100,.9),rgba(25,18,55,.95));color:#E4EAFF;font-size:13px;font-weight:700;letter-spacing:.02em;box-shadow:0 4px 18px rgba(60,50,140,.35);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);cursor:pointer}'+
+'.ka-matter-btn:active{transform:scale(.96);opacity:.9}'+
+'.ka-matter-ic{font-size:15px;line-height:1}'+
+'.ka-matter-tag{font-size:10px;opacity:.65;font-weight:600}'+
+'.ka-bubble{position:relative;width:132px;height:132px;border-radius:50%;cursor:pointer;'+
   'background:radial-gradient(circle at 35% 30%,rgba(120,210,255,.4),rgba(14,22,40,.92) 55%,rgba(8,12,22,.98));'+
   'border:1.5px solid rgba(94,200,255,.5);'+
   'box-shadow:0 16px 48px rgba(0,0,0,.5),0 0 36px rgba(94,200,255,.26),inset 0 0 20px rgba(94,200,255,.12);'+

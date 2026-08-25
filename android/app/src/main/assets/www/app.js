@@ -1863,31 +1863,6 @@ function bindFabHold(){
 function setup(){
   var fab=document.getElementById('fab'),radial=document.getElementById('radial');
   if(radial){radial.querySelectorAll('button').forEach(function(btn){btn.onclick=function(){radial.classList.remove('show');if(fab)fab.classList.remove('open');var a=btn.dataset.act;if(a==='income')addIncome();else if(a==='expense')addExpense();else if(a==='reserve')addReserve();else if(a==='debt')addDebt();else if(a==='oblig')addObligation();else if(a==='matter'){try{if(window.FinMatter)window.FinMatter.enter();else toast('Материя загружается…');}catch(e){toast('Не удалось открыть Материю');}}};});}
-  var mBtn=document.getElementById('matterBetaBtn');
-  if(mBtn&&!mBtn._bound){
-    mBtn._bound=true;
-    mBtn.onclick=function(e){
-      e.preventDefault();e.stopPropagation();
-      try{
-        if(window.FinMatter&&window.FinMatter.enter)window.FinMatter.enter();
-        else toast('Материя загружается…');
-      }catch(err){toast('Не удалось открыть Материю');}
-    };
-  }
-  // приветствие Фины про Материю (один раз за сессию / мягко)
-  try{
-    if(!window.__matterGreeted){
-      window.__matterGreeted=true;
-      setTimeout(function(){
-        var name='';
-        try{if(typeof getUserName==='function')name=getUserName()||'';}catch(e){}
-        if(!name){try{name=localStorage.getItem('finna_user_name')||'';}catch(e){}}
-        name=String(name||'').trim()||'друг';
-        var msg='Привет, '+name+'. Заглянем в Материю?';
-        if(typeof window.toast==='function')window.toast(msg);
-      },1200);
-    }
-  }catch(e){}
 
   bindFabHold();
   var av=document.getElementById('finnAvatar');
