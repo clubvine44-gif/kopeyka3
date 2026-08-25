@@ -189,7 +189,7 @@ function ensureRoot(){
       '<div class="m-room-scene" id="matterRoomScene">'+
         '<div class="m-room-bg"></div>'+
         /* Hotspots: размер зоны ≈ размер объекта; дневник точно на книге-дневнике */
-        '<button type="button" class="m-hot m-hot-sm" data-obj="diary"  style="left:14%;top:86%;width:88px;height:72px" title="Дневник"></button>'+
+        '<button type="button" class="m-hot m-hot-sm" data-obj="diary"  style="left:13%;top:85%;width:96px;height:80px" title="Дневник"></button>'+
         '<button type="button" class="m-hot m-hot-md" data-obj="book"   style="left:50%;top:71%" title="Книга"></button>'+
         '<button type="button" class="m-hot m-hot-md" data-obj="plant"  style="left:73%;top:55%" title="Растение"></button>'+
         '<button type="button" class="m-hot m-hot-sm" data-obj="piggy"  style="left:77%;top:40%" title="Копилка"></button>'+
@@ -325,67 +325,65 @@ function buildStars(){
   var goals=getGoals();
   // Реальные относительные координаты Большой Медведицы (7) и Малой (7)
   // Нормализованы 0..1 внутри bounding box созвездия
-  // Большая Медведица (Ковш): порядок Dubhe, Merak, Phecda, Megrez, Alioth, Mizar, Alkaid
-  // ковш слева, ручка вправо-вверх; Dubhe-Merak — указатели на Полярную
+  // По референсу пользователя: Большая — слева внизу (ковш снизу, ручка вверх-влево);
+  // Малая — справа вверху, отдельно, без наложений.
+  // Индексы Большой: 0 Alkaid(конец ручки) … 3 Megrez(стык) … 6 край ковша
   var ursaMajor=[
-    [0.18,0.30], // 0 Dubhe  (верх ковша, указатель)
-    [0.18,0.48], // 1 Merak  (низ ковша, указатель)
-    [0.34,0.52], // 2 Phecda (низ ковша у ручки)
-    [0.34,0.34], // 3 Megrez (верх ковша у ручки)
-    [0.50,0.30], // 4 Alioth
-    [0.64,0.24], // 5 Mizar
-    [0.80,0.14]  // 6 Alkaid
+    [0.05,0.05], // 0 Alkaid — кончик ручки (верх-лево)
+    [0.18,0.22], // 1 Mizar
+    [0.30,0.38], // 2 Alioth
+    [0.42,0.50], // 3 Megrez — стык ручки и ковша
+    [0.58,0.42], // 4 Dubhe — верх ковша
+    [0.72,0.58], // 5 Merak — низ внешнего края ковша
+    [0.48,0.70]  // 6 Phecda — низ ковша
   ];
-  // Малая Медведица: Полярная на конце ручки; ковш «смотрит» примерно к Большой
-  // указатели Большой → Полярная (~5× расстояние Dubhe-Merak вверх)
+  var majLinks=[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,3]]; // ручка + ковш-ромб
+  // Малая Медведица — правый верх, компактнее
   var ursaMinor=[
-    [0.18,0.02], // 0 Polaris (над указателями)
-    [0.28,0.10], // 1
-    [0.36,0.18], // 2
-    [0.44,0.24], // 3 стык ручки/ковша
-    [0.40,0.34], // 4 ковш
-    [0.50,0.36], // 5 Kochab-ish
-    [0.52,0.26]  // 6 Pherkad-ish
+    [0.22,0.08], // 0 Polaris — кончик ручки
+    [0.38,0.18], // 1
+    [0.50,0.30], // 2
+    [0.58,0.42], // 3 стык
+    [0.48,0.55], // 4 ковш
+    [0.68,0.58], // 5
+    [0.72,0.40]  // 6
   ];
-  var majLinks=[[0,1],[1,2],[2,3],[3,0],[3,4],[4,5],[5,6]]; // ковш + ручка
   var minLinks=[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,3]];
-  var ox=W*0.10, oy=H*0.18;
-  var bw=W*0.78, bh=H*0.52;
-  function place(pts, links, list, group){
+
+  function placeInBox(pts, links, list, group, box){
     var placed=[];
     pts.forEach(function(p,i){
       var g=list[i]||null;
-      var x=ox+p[0]*bw, y=oy+p[1]*bh;
+      var x=box.ox+p[0]*box.bw, y=box.oy+p[1]*box.bh;
       var hue=g?(g.type==='debt'?8:(g.urgent?38:205)):210;
       var st={
         id:g?g.id:('empty_'+group+'_'+i), g:g, x:x, y:y,
-        baseR:g?(g.type==='debt'?3.4:(4.2+Math.min(5,(g.pct||0)/28))):2.6,
-        hue:hue, pulse:i*0.7, bright:g?(0.6+(g.pct||0)/220):0.35,
+        baseR:g?(g.type==='debt'?3.4:(4.4+Math.min(5,(g.pct||0)/28))):(group==='min'?2.4:2.8),
+        hue:hue, pulse:i*0.7, bright:g?(0.65+(g.pct||0)/220):0.4,
         group:group, idx:i
       };
       stars.push(st);
       placed.push(st);
     });
-    // store links as pairs of star refs later via indices
-    placed._links=links;
     return placed;
   }
+  // Разные области экрана — не пересекаются
+  var majBox={ox:W*0.06, oy:H*0.36, bw:W*0.46, bh:H*0.48};
+  var minBox={ox:W*0.52, oy:H*0.10, bw:W*0.40, bh:H*0.34};
   var majGoals=goals.slice(0,7);
   var minGoals=goals.slice(7,14);
-  var maj=place(ursaMajor, majLinks, majGoals, 'maj');
-  var min=place(ursaMinor, minLinks, minGoals, 'min');
-  // link metadata for drawSpace
+  var maj=placeInBox(ursaMajor, majLinks, majGoals, 'maj', majBox);
+  var min=placeInBox(ursaMinor, minLinks, minGoals, 'min', minBox);
   window.__matterLinks=[];
   majLinks.forEach(function(lk){ window.__matterLinks.push([maj[lk[0]], maj[lk[1]]]); });
   minLinks.forEach(function(lk){ window.__matterLinks.push([min[lk[0]], min[lk[1]]]); });
-  // leftover goals — soft arc near major
+  // лишние цели — под Большой, не на Малую
   goals.slice(14).forEach(function(g,i){
-    var ang=(-0.4)+(i*0.35);
-    var x=ox+bw*0.5+Math.cos(ang)*bw*0.22;
-    var y=oy+bh*0.85+Math.sin(ang)*bh*0.12;
+    var x=majBox.ox+majBox.bw*(0.15+0.12*(i%5));
+    var y=majBox.oy+majBox.bh*0.92+((i*7)%20);
     stars.push({
-      id:g.id,g:g,x:x,y:y,baseR:3.5+Math.min(4,(g.pct||0)/40),
-      hue:g.type==='debt'?8:(g.urgent?38:200),pulse:i,bright:0.55+(g.pct||0)/250
+      id:g.id,g:g,x:x,y:y,baseR:3.2+Math.min(3,(g.pct||0)/40),
+      hue:g.type==='debt'?8:(g.urgent?38:200),pulse:i,bright:0.5+(g.pct||0)/250
     });
   });
   for(var i=0;i<90;i++){
@@ -769,72 +767,51 @@ function onObject(id){
     return;
   }
     if(id==='book'){
-    var books=MS.books||{};
-    var keys=Object.keys(books);
-    var html='<p style="margin:0 0 12px;line-height:1.45;opacity:.9">Полка. Открой сохранённую книгу или вставь текст.</p>';
-    if(keys.length){
-      keys.slice(0,6).forEach(function(k){
-        var b=books[k]||{};
-        html+='<button type="button" class="m-act" data-open-book="'+k+'" style="margin-top:8px">'+(b.title||'Книга')+'</button>';
-      });
-    }
-    html+='<button type="button" class="m-act" id="mPasteBook" style="margin-top:12px">Вставить текст книги</button>';
-    html+='<button type="button" class="m-act" id="mDemoBook" style="margin-top:8px;background:rgba(255,255,255,.08);color:#E8F0FF">Открыть демо-страницу</button>';
-    showPanel('Книги', html);
+    // Только лёгкий UI — без FileReader/пагинации на клике (иначе WebView зависает)
+    var html='<p style="margin:0 0 14px;line-height:1.45;opacity:.9">Полка тишины.</p>'+
+      '<button type="button" class="m-act" id="mOpenDemo">Открыть демо-текст</button>'+
+      '<button type="button" class="m-act" id="mOpenNotes" style="margin-top:10px;background:rgba(255,255,255,.08);color:#E8F0FF">Заметка из дневника</button>';
+    showPanel('Книга', html);
     setTimeout(function(){
-      var body=document.getElementById('mPanelBody');
-      if(!body)return;
-      var demo=document.getElementById('mDemoBook');
-      if(demo)demo.onclick=function(e){
+      var d=document.getElementById('mOpenDemo');
+      if(d)d.onclick=function(e){
         e.preventDefault();e.stopPropagation();
         hidePanel();
-        openReader('Тихая полка.\n\nЭто демо-страница. Здесь позже — твои книги.\n\nСвайп влево — следующая страница.\nСвайп вправо — назад.');
+        reader.bookId='demo';
+        reader.pages=[
+          'Тихая полка.\n\nЗдесь место для паузы.',
+          'Свайп влево — дальше.\nСвайп вправо — назад.',
+          'Позже сюда можно будет добавить свои тексты без зависаний.'
+        ];
+        reader.idx=0;
+        var r=document.getElementById('matterReader');
+        if(r){r.hidden=false;r.style.display='';}
+        var rt=document.getElementById('mReaderTitle');
+        if(rt)rt.textContent='Демо';
+        renderPage();
       };
-      var paste=document.getElementById('mPasteBook');
-      if(paste)paste.onclick=function(e){
+      var n=document.getElementById('mOpenNotes');
+      if(n)n.onclick=function(e){
         e.preventDefault();e.stopPropagation();
-        var ta=document.createElement('textarea');
-        ta.placeholder='Вставь текст книги сюда…';
-        ta.style.cssText='width:100%;min-height:140px;border-radius:14px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.14);color:#F5E6C8;padding:10px;margin-top:8px';
-        var save=document.createElement('button');
-        save.type='button';save.className='m-act';save.textContent='Открыть';
-        save.style.marginTop='10px';
-        body.innerHTML='';
-        body.appendChild(ta);body.appendChild(save);
-        save.onclick=function(ev){
-          ev.preventDefault();ev.stopPropagation();
-          var raw=String(ta.value||'').trim();
-          if(!raw){toast('Пусто');return;}
-          if(raw.length>120000)raw=raw.slice(0,120000);
-          var id='b_'+Date.now();
-          MS.books=MS.books||{};
-          MS.books[id]={title:'Заметка',raw:raw,pages:1};
-          MS.pageByBook[id]=0;
-          try{saveState();}catch(err){}
-          hidePanel();
-          reader.bookId=id;
-          openReader(raw);
-        };
+        hidePanel();
+        var txt=(MS.diary&&MS.diary.trim())?MS.diary:'Пока пусто. Напиши что-нибудь в дневнике.';
+        reader.bookId='diary_view';
+        reader.pages=[txt.slice(0,1200)];
+        reader.idx=0;
+        var r=document.getElementById('matterReader');
+        if(r){r.hidden=false;r.style.display='';}
+        var rt=document.getElementById('mReaderTitle');
+        if(rt)rt.textContent='Из дневника';
+        renderPage();
       };
-      body.querySelectorAll('[data-open-book]').forEach(function(btn){
-        btn.onclick=function(e){
-          e.preventDefault();e.stopPropagation();
-          var id=btn.getAttribute('data-open-book');
-          var b=(MS.books||{})[id];
-          if(!b||!b.raw){toast('Нет текста');return;}
-          reader.bookId=id;
-          hidePanel();
-          openReader(b.raw);
-        };
-      });
     },20);
     return;
   }
   if(id==='diary'||id==='desk'){
-    var html='Личные заметки только на этом устройстве.\n\n';
-    html+='<textarea id="mDiary" style="width:100%;min-height:100px;border-radius:12px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.12);color:#F5E6C8;padding:10px;resize:vertical">'+(MS.diary||'')+'</textarea>';
-    html+='<button type="button" class="m-act" id="mSaveDiary">Сохранить</button>';
-    showPanel(id==='desk'?'Рабочий стол · дневник':'Дневник', html);
+    var html='<p style="margin:0 0 10px;opacity:.75;font-size:13px">Только на этом устройстве · никто не увидит</p>';
+    html+='<textarea id="mDiary" style="width:100%;min-height:140px;border-radius:18px;background:rgba(12,8,20,.55);border:1px solid rgba(255,180,220,.2);color:#F8E8F0;padding:14px;resize:vertical;font-size:15px;line-height:1.45;outline:none">'+(MS.diary||'')+'</textarea>';
+    html+='<button type="button" class="m-act" id="mSaveDiary" style="margin-top:12px">Сохранить</button>';
+    showPanel(id==='desk'?'Стол · заметка':'Дневник', html);
     setTimeout(function(){
       var b=document.getElementById('mSaveDiary');
       if(b)b.onclick=function(){
@@ -1072,96 +1049,97 @@ function loop(t){
 
 function drawBlackHole(dt){
   var cx=W/2, cy=H*0.52;
-  // рост из точки + ускорение «падения»
-  bh.swirl+=dt*(2.4+bh.r/Math.max(1,bh.max)*3.5);
-  var target=bh.max*0.72;
-  bh.r+= (target - bh.r)*Math.min(1,dt*0.85);
-  if(bh.r<8) bh.r+=dt*14; // быстрый старт из точки
+  bh.swirl+=dt*(2.6+bh.r/Math.max(1,bh.max)*4);
+  var target=bh.max*0.78;
+  bh.r+=(target-bh.r)*Math.min(1,dt*0.9);
+  if(bh.r<10) bh.r+=dt*18;
   bh.t=(bh.t||0)+dt;
-  if(bh.r>bh.max*0.28) bh.fall+=dt;
+  if(bh.r>bh.max*0.26) bh.fall+=dt;
 
-  // фон: сначала полупрозрачный (ещё видно приложение), потом космос
-  var fadeIn=Math.min(1, bh.t/0.9);
-  var veil=Math.min(0.92, 0.25+fadeIn*0.7+bh.fall*0.35);
+  // фон
+  var fadeIn=Math.min(1,bh.t/0.7);
+  var veil=Math.min(0.94,0.2+fadeIn*0.75+bh.fall*0.35);
   ctx.fillStyle='rgba(0,0,0,'+veil+')';
   ctx.fillRect(0,0,W,H);
 
-  // мерцающие фоновые звёзды
+  // звёзды фона, затягиваемые в дыру
   if(!bh.bgStars){
     bh.bgStars=[];
-    for(var i=0;i<110;i++){
+    for(var i=0;i<130;i++){
       bh.bgStars.push({
-        x:Math.random()*W, y:Math.random()*H,
-        r:0.4+Math.random()*1.6,
-        ph:Math.random()*6.28, sp:1.5+Math.random()*3
+        x:Math.random()*W,y:Math.random()*H,
+        r:0.35+Math.random()*1.5,
+        ph:Math.random()*6.28,sp:1.2+Math.random()*3.5
       });
     }
   }
   bh.bgStars.forEach(function(s){
-    var a=0.15+0.75*(0.5+0.5*Math.sin(bh.t*s.sp+s.ph));
-    // лёгкий засос к центру
+    var a=0.12+0.75*(0.5+0.5*Math.sin(bh.t*s.sp+s.ph));
     var dx=s.x-cx, dy=s.y-cy;
     var dist=Math.sqrt(dx*dx+dy*dy)||1;
-    if(bh.r>20){
-      s.x-=dx/dist*dt*(8+bh.r*0.04);
-      s.y-=dy/dist*dt*(8+bh.r*0.04);
-      // орбитальный закрут
-      s.x+=(-dy/dist)*dt*bh.swirl*2.5;
-      s.y+=(dx/dist)*dt*bh.swirl*2.5;
+    if(bh.r>18){
+      s.x-=dx/dist*dt*(12+bh.r*0.05);
+      s.y-=dy/dist*dt*(12+bh.r*0.05);
+      s.x+=(-dy/dist)*dt*bh.swirl*3.2;
+      s.y+=(dx/dist)*dt*bh.swirl*3.2;
     }
     ctx.beginPath();
-    ctx.fillStyle='rgba(210,230,255,'+a+')';
+    ctx.fillStyle='rgba(220,235,255,'+a+')';
     ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fill();
   });
 
-  // вихрь частиц (аккреция)
+  // вихрь — спиральные потоки (не кольца планет)
   particles.forEach(function(p){
-    p.a+=dt*p.sp*(1.2+bh.r/bh.max);
-    p.r=Math.max(3,p.r-dt*(10+bh.r*0.02));
-    if(p.r<6 && Math.random()<0.08){
-      p.r=30+Math.random()*bh.r*0.9;
+    p.a+=dt*p.sp*(1.4+bh.r/bh.max);
+    p.r=Math.max(3,p.r-dt*(12+bh.r*0.03));
+    if(p.r<5 && Math.random()<0.12){
+      p.r=25+Math.random()*bh.r*0.95;
       p.a=Math.random()*Math.PI*2;
     }
-    var rr=p.r*(0.55+0.55*bh.r/Math.max(1,bh.max*0.6));
+    var rr=p.r*(0.5+0.6*bh.r/Math.max(1,bh.max*0.65));
+    // 3D-ish: perspective squash
+    var depth=0.45+0.55*(p.r/Math.max(1,bh.max*0.5));
     var x=cx+Math.cos(p.a+bh.swirl)*rr;
-    var y=cy+Math.sin(p.a+bh.swirl)*rr*0.52;
-    var a=0.2+0.55*(1-p.r/120);
+    var y=cy+Math.sin(p.a+bh.swirl)*rr*0.48*depth;
+    var al=0.18+0.55*(1-p.r/130)*depth;
     ctx.beginPath();
-    ctx.fillStyle='rgba(160,200,255,'+a+')';
-    ctx.arc(x,y,p.s*(0.8+bh.r/bh.max),0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='rgba(170,200,255,'+al+')';
+    ctx.arc(x,y,p.s*(0.7+depth*0.5),0,Math.PI*2);ctx.fill();
   });
 
-  // диск аккреции — эллипсы
-  for(var i=0;i<22;i++){
-    var rr=bh.r*(0.28+i*0.045);
+  // дополнительный слой спиральных «нитей»
+  for(var arm=0;arm<3;arm++){
     ctx.beginPath();
-    ctx.strokeStyle='rgba(120,170,255,'+(0.03+i*0.007)+')';
-    ctx.lineWidth=1.5+i*0.05;
-    ctx.ellipse(cx,cy,rr,rr*0.36,bh.swirl*0.12,0,Math.PI*2);
+    for(var s=0;s<40;s++){
+      var rr2=bh.r*(0.2+s/40*0.95);
+      var aa=bh.swirl*1.1+arm*2.094+s*0.22;
+      var px=cx+Math.cos(aa)*rr2;
+      var py=cy+Math.sin(aa)*rr2*0.5;
+      if(s===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
+    }
+    ctx.strokeStyle='rgba(140,180,255,'+(0.06+0.04*arm)+')';
+    ctx.lineWidth=1.2;
     ctx.stroke();
   }
 
-  // фотонное кольцо
-  if(bh.r>12){
-    ctx.beginPath();
-    ctx.strokeStyle='rgba(255,220,180,'+(0.25+0.35*Math.sin(bh.t*4))+')';
-    ctx.lineWidth=2.5;
-    ctx.ellipse(cx,cy,bh.r*0.62,bh.r*0.22,bh.swirl*0.08,0,Math.PI*2);
-    ctx.stroke();
-  }
-
-  // горизонт событий
-  var grd=ctx.createRadialGradient(cx,cy,0,cx,cy,bh.r*0.58);
-  grd.addColorStop(0,'rgba(0,0,0,1)');
-  grd.addColorStop(0.5,'rgba(5,5,15,1)');
-  grd.addColorStop(0.78,'rgba(30,50,110,0.45)');
-  grd.addColorStop(0.92,'rgba(180,200,255,0.25)');
+  // чёрный горизонт (без ярких «сатурновых» колец)
+  var grd=ctx.createRadialGradient(cx,cy,0,cx,cy,bh.r*0.62);
+  grd.addColorStop(0,'#000');
+  grd.addColorStop(0.55,'#000');
+  grd.addColorStop(0.82,'rgba(8,12,24,0.95)');
+  grd.addColorStop(0.94,'rgba(40,60,100,0.25)');
   grd.addColorStop(1,'rgba(0,0,0,0)');
-  ctx.beginPath();ctx.fillStyle=grd;ctx.arc(cx,cy,bh.r*0.58,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.fillStyle=grd;ctx.arc(cx,cy,bh.r*0.62,0,Math.PI*2);ctx.fill();
 
-  // эффект падения — затемнение + лёгкий zoom vignette
+  // тонкий край горизонта (не диск)
+  ctx.beginPath();
+  ctx.strokeStyle='rgba(180,210,255,'+(0.2+0.25*Math.sin(bh.t*3))+')';
+  ctx.lineWidth=1.5;
+  ctx.arc(cx,cy,bh.r*0.5,0,Math.PI*2);
+  ctx.stroke();
+
   if(bh.fall>0){
-    var v=Math.min(1,bh.fall/1.15);
+    var v=Math.min(1,bh.fall/1.05);
     ctx.fillStyle='rgba(0,0,0,'+v+')';
     ctx.fillRect(0,0,W,H);
     if(v>0.94){enterConstellation();}
