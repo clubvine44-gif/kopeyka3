@@ -305,8 +305,11 @@ function injectCSS(){
 '.m-hud button{pointer-events:auto}'+
 '.m-exit{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#E8F0FF;font-size:14px}'+
 '.m-title{position:absolute;left:50%;transform:translateX(-50%);font-family:Georgia,"Times New Roman",serif;font-style:italic;font-weight:600;letter-spacing:.22em;font-size:13px;color:#E8F4FF;'+
-  'text-shadow:0 0 12px rgba(120,180,255,.9),0 0 28px rgba(80,140,255,.55),0 0 48px rgba(60,100,255,.35);animation:mTitlePulse 3.5s ease-in-out infinite alternate}'+
-'@keyframes mTitlePulse{from{opacity:.82;filter:brightness(.95)}to{opacity:1;filter:brightness(1.12)}}'+
+  'text-shadow:0 0 12px rgba(120,180,255,.9),0 0 28px rgba(80,140,255,.55),0 0 48px rgba(60,100,255,.35);opacity:1;pointer-events:none;white-space:nowrap}'+
+'.m-title.dissolve{animation:mTitleDust 2.4s ease-in forwards}'+
+'@keyframes mTitleDust{0%{opacity:1;filter:blur(0);letter-spacing:.22em;transform:translateX(-50%) scale(1);color:#E8F4FF;text-shadow:0 0 12px rgba(200,230,255,.9)}'+
+'35%{opacity:.9;filter:blur(0.5px);color:#fff;letter-spacing:.28em;text-shadow:0 0 28px rgba(255,255,255,.95)}'+
+'100%{opacity:0;filter:blur(7px);letter-spacing:.6em;transform:translateX(-50%) scale(1.1);color:rgba(255,255,255,0);text-shadow:0 0 40px rgba(255,255,255,0)}}'+
 '.m-hint{font-size:11px;color:rgba(180,200,230,.65);max-width:40%;text-align:right}'+
 '.m-room{position:absolute;inset:0;z-index:10;background:#0a0604}'+
 '.m-room-scene{position:absolute;inset:0;overflow:hidden}'+
@@ -387,6 +390,9 @@ var skyMode='home';
 var galaxies=[];
 var meteors=[];
 var meteorSpawnT=0;
+var nebulae=[];
+var titleDust=[];
+var nebulaBirth=null;
 
 /* ---------- constellation + diagonal door ---------- */
 function buildStars(){
@@ -501,6 +507,7 @@ function buildStars(){
     {id:'cass', x:W*0.18, y:H*0.22, r:Math.min(W,H)*0.08, rot:-0.4, kind:1, label:'Кассиопея'},
     {id:'orion', x:W*0.82, y:H*0.38, r:Math.min(W,H)*0.085, rot:0.55, kind:2, label:'Орион'}
   ];
+  buildNebulae();
 }
 
 /* ---------- Finn state machine ---------- */
@@ -700,6 +707,7 @@ function enterConstellation(){
   if(hud)hud.hidden=false;
   if(!MS.firstEnter){MS.firstEnter=new Date().toISOString();saveState();}
   try{history.pushState({matter:'space'},'','#matter');}catch(e){}
+  try{showMatterTitle();}catch(e){}
   // тур: по приглашению или первый раз
   var needTour=!!window.__matterTourPending || !MS.matterTourDone;
   window.__matterTourPending=false;
@@ -731,7 +739,8 @@ function startMatterTour(){
     {delay:5200, text:'Созвездия — это твои цели. Нажми на звезду, чтобы увидеть прогресс.'},
     {delay:9200, text:'Я — солнце. Нажми на меня, чтобы говорить. В пустое небо — чтобы свернуть.'},
     {delay:13200, text:'Галактики ведут к другим созвездиям. Чёрная дыра справа — вход в комнату.'},
-    {delay:17200, text:'Исследуй. Я рядом.'}
+    {delay:17200, text:'Туманности — колыбели звёзд. Закрой все цели — одна станет новой звездой-целью.'},
+    {delay:21200, text:'Исследуй. Я рядом.'}
   ];
   steps.forEach(function(s){
     setTimeout(function(){
@@ -742,7 +751,7 @@ function startMatterTour(){
   setTimeout(function(){
     startMatterTour._running=false;
     try{MS.matterTourDone=true;saveState();}catch(e){}
-  }, 20000);
+  }, 24500);
 }
 
 function openDoorAnim(){
@@ -1810,6 +1819,216 @@ function spawnMeteor(){
   });
 }
 
+
+function buildNebulae(){
+  nebulae=[];
+  var mode=skyMode||'home';
+  var slots;
+  if(mode==='cass'){
+    slots=[
+      {x:0.12,y:0.72,s:0.11,hue:300,seed:1.7},
+      {x:0.88,y:0.18,s:0.09,hue:200,seed:3.1}
+    ];
+  }else if(mode==='orion'){
+    slots=[
+      {x:0.10,y:0.35,s:0.10,hue:210,seed:2.2},
+      {x:0.90,y:0.82,s:0.12,hue:330,seed:4.4}
+    ];
+  }else{
+    slots=[
+      {x:0.42,y:0.18,s:0.10,hue:280,seed:1.3},
+      {x:0.55,y:0.78,s:0.11,hue:190,seed:5.6}
+    ];
+  }
+  slots.forEach(function(s,i){
+    nebulae.push({
+      id:'neb_'+mode+'_'+i,
+      x:W*s.x, y:H*s.y,
+      s:Math.min(W,H)*s.s,
+      hue:s.hue, seed:s.seed,
+      pulse:Math.random()*Math.PI*2,
+      born:!!(MS&&MS.nebulaBornAt&&i===0)
+    });
+  });
+  tryScheduleNebulaBirth();
+}
+
+function tryScheduleNebulaBirth(){
+  if(nebulaBirth||!nebulae.length)return;
+  var goals=getGoals();
+  if(!goals.length)return;
+  var allDone=goals.every(function(g){return (g.pct||0)>=100;});
+  if(!allDone)return;
+  if(MS.nebulaBornAt)return;
+  var n=null;
+  for(var i=0;i<nebulae.length;i++){ if(!nebulae[i].born){ n=nebulae[i]; break; } }
+  if(!n)return;
+  nebulaBirth={n:n, t:0, phase:'charge'};
+}
+
+function updateNebulaBirth(dt){
+  if(!nebulaBirth)return;
+  var b=nebulaBirth;
+  b.t+=dt;
+  if(b.phase==='charge' && b.t>1.2){ b.phase='boom'; b.t=0; }
+  else if(b.phase==='boom' && b.t>1.6){
+    var n=b.n;
+    n.born=true;
+    var newGoal={
+      id:'neb_goal_'+Date.now(),
+      name:'Новая звезда',
+      type:'goal',
+      saved:0, target:10000, pct:0, urgent:false
+    };
+    stars.push({
+      id:newGoal.id, g:newGoal,
+      x:n.x, y:n.y,
+      baseR:7.5, hue:48, pulse:0, bright:0.9,
+      group:'born', idx:0
+    });
+    try{MS.nebulaBornAt=new Date().toISOString();saveState();}catch(e){}
+    finnSay('Туманность стала звездой — новая цель родилась.');
+    nebulaBirth=null;
+  }
+}
+
+function drawNebulae(t){
+  if(!ctx||!nebulae.length)return;
+  nebulae.forEach(function(n){
+    if(n.born)return;
+    var pulse=0.92+0.08*Math.sin(t*0.4+n.pulse);
+    var R=n.s*pulse;
+    ctx.save();
+    ctx.translate(n.x,n.y);
+    var g0=ctx.createRadialGradient(0,0,0,0,0,R*1.5);
+    g0.addColorStop(0,'hsla('+n.hue+',70%,65%,0.07)');
+    g0.addColorStop(0.45,'hsla('+(n.hue+40)+',60%,45%,0.04)');
+    g0.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=g0;
+    ctx.beginPath();ctx.arc(0,0,R*1.5,0,Math.PI*2);ctx.fill();
+    for(var i=0;i<4;i++){
+      var ang=(n.seed+i*0.9)+t*0.03*(i%2?1:-1);
+      ctx.save();
+      ctx.rotate(ang*0.15);
+      ctx.scale(1.25+i*0.08, 0.55+i*0.06);
+      var g=ctx.createRadialGradient(-R*0.1,0,0,0,0,R*(0.7-i*0.08));
+      var a=0.09-i*0.015;
+      g.addColorStop(0,'hsla('+(n.hue+i*18)+',75%,70%,'+(a*1.4)+')');
+      g.addColorStop(0.5,'hsla('+(n.hue+30)+',55%,50%,'+a+')');
+      g.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=g;
+      ctx.beginPath();ctx.arc(0,0,R*(0.75-i*0.08),0,Math.PI*2);ctx.fill();
+      ctx.restore();
+    }
+    var core=ctx.createRadialGradient(0,0,0,0,0,R*0.22);
+    core.addColorStop(0,'rgba(255,250,240,0.35)');
+    core.addColorStop(0.4,'hsla('+n.hue+',80%,75%,0.12)');
+    core.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=core;
+    ctx.beginPath();ctx.arc(0,0,R*0.22,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+  });
+  if(nebulaBirth){
+    var b=nebulaBirth, n=b.n;
+    if(b.phase==='charge'){
+      var c=Math.min(1,b.t/1.2);
+      var cg=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,n.s*(0.5+c*1.2));
+      cg.addColorStop(0,'rgba(255,255,255,'+(0.15+0.35*c)+')');
+      cg.addColorStop(0.5,'hsla('+n.hue+',90%,70%,'+(0.12*c)+')');
+      cg.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=cg;
+      ctx.beginPath();ctx.arc(n.x,n.y,n.s*(0.5+c*1.2),0,Math.PI*2);ctx.fill();
+    }else if(b.phase==='boom'){
+      var c=Math.min(1,b.t/1.6);
+      var R=n.s*(0.8+c*3.5);
+      var bg=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,R);
+      bg.addColorStop(0,'rgba(255,255,255,'+(0.9*(1-c))+')');
+      bg.addColorStop(0.2,'rgba(255,230,180,'+(0.5*(1-c))+')');
+      bg.addColorStop(0.55,'hsla('+n.hue+',90%,60%,'+(0.25*(1-c))+')');
+      bg.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=bg;
+      ctx.beginPath();ctx.arc(n.x,n.y,R,0,Math.PI*2);ctx.fill();
+      ctx.save();ctx.globalAlpha=0.45*(1-c);
+      for(var ri=0;ri<10;ri++){
+        var ang=(ri/10)*Math.PI*2+c;
+        var len=n.s*(1.5+c*4);
+        var grd=ctx.createLinearGradient(n.x,n.y,n.x+Math.cos(ang)*len,n.y+Math.sin(ang)*len);
+        grd.addColorStop(0,'rgba(255,255,240,0.9)');
+        grd.addColorStop(1,'rgba(255,200,100,0)');
+        ctx.strokeStyle=grd;ctx.lineWidth=1.5;
+        ctx.beginPath();
+        ctx.moveTo(n.x,n.y);
+        ctx.lineTo(n.x+Math.cos(ang)*len,n.y+Math.sin(ang)*len);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+}
+
+function drawCosmicDust(t){
+  if(!ctx)return;
+  ctx.save();
+  for(var i=0;i<12;i++){
+    var x=((i*97.3+t*3)%W+W)%W;
+    var y=((i*53.1+17)%H+H)%H;
+    var g=ctx.createRadialGradient(x,y,0,x,y,18+i%5);
+    g.addColorStop(0,'rgba(180,190,220,'+(0.015+(i%3)*0.006)+')');
+    g.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=g;
+    ctx.beginPath();ctx.arc(x,y,20+i%5,0,Math.PI*2);ctx.fill();
+  }
+  ctx.restore();
+}
+
+function showMatterTitle(){
+  var title=document.querySelector('#matterHud .m-title');
+  if(!title)return;
+  title.classList.remove('dissolve');
+  title.style.display='block';
+  title.style.opacity='1';
+  title.style.visibility='visible';
+  clearTimeout(showMatterTitle._t);
+  showMatterTitle._t=setTimeout(function(){
+    title.classList.add('dissolve');
+    try{
+      var r=title.getBoundingClientRect();
+      var cr=canvas.getBoundingClientRect();
+      var cx=(r.left+r.width/2-cr.left);
+      var cy=(r.top+r.height/2-cr.top);
+      titleDust=[];
+      for(var i=0;i<28;i++){
+        titleDust.push({
+          x:cx+(Math.random()-0.5)*r.width*0.8,
+          y:cy+(Math.random()-0.5)*8,
+          vx:(Math.random()-0.5)*40,
+          vy:-(8+Math.random()*35),
+          a:0.7+Math.random()*0.3,
+          r:0.6+Math.random()*1.4,
+          life:1.2+Math.random()*0.8
+        });
+      }
+    }catch(e){}
+    setTimeout(function(){
+      if(title){title.style.display='none';title.classList.remove('dissolve');}
+    },2500);
+  },2000);
+}
+
+function updateTitleDust(dt){
+  if(!titleDust.length||!ctx)return;
+  for(var i=titleDust.length-1;i>=0;i--){
+    var p=titleDust[i];
+    p.life-=dt; p.a=Math.max(0,p.life);
+    p.x+=p.vx*dt; p.y+=p.vy*dt;
+    p.vx*=0.98;
+    if(p.life<=0){titleDust.splice(i,1);continue;}
+    ctx.beginPath();
+    ctx.fillStyle='rgba(255,255,255,'+(p.a*0.7)+')';
+    ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();
+  }
+}
+
 function updateMeteors(dt){
   meteorSpawnT-=dt;
   // редко: ~1 метеор каждые 2.5–5.5 сек, максимум 3 одновременно
@@ -1865,6 +2084,10 @@ function drawSpace(dt,t){
   ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
   updateMeteors(dt);
   drawMeteors();
+  drawCosmicDust(t);
+  drawNebulae(t);
+  updateNebulaBirth(dt);
+  updateTitleDust(dt);
   // галактики — порталы к другим созвездиям
   if(galaxies&&galaxies.length){
     galaxies.forEach(function(G){
