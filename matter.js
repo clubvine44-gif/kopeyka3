@@ -711,7 +711,7 @@ function enterConstellation(){
   if(!MS.firstEnter){MS.firstEnter=new Date().toISOString();saveState();}
   try{history.pushState({matter:'space'},'','#matter');}catch(e){}
   // разово переиграть аудио-тур после фикса голоса
-  if(!MS.tourAudioV2){ MS.matterTourDone=false; MS.tourAudioV2=1; try{saveState();}catch(e){} }
+  if(!MS.tourAudioV3){ MS.matterTourDone=false; MS.tourAudioV3=1; try{saveState();}catch(e){} }
   var needTour=!!window.__matterTourPending || !MS.matterTourDone;
   window.__matterTourPending=false;
   if(needTour){
@@ -734,7 +734,7 @@ function enterConstellation(){
 
 var tourTracks=[
   {src:'matter-tour-1.mp3', dur:6500, hl:'space'},
-  {src:'matter-tour-2.mp3', dur:7500, hl:'sun', fallAt:3800},
+  {src:'matter-tour-2.mp3', dur:7500, hl:'sun', fallAt:4500},
   {src:'matter-tour-3.mp3', dur:7600, hl:'ursa'},
   {src:'matter-tour-4.mp3', dur:7600, hl:'galaxies'},
   {src:'matter-tour-5.mp3', dur:12200, hl:'nebulae'}
@@ -761,10 +761,6 @@ function ensureTourAudio(){
   try{
     tourAudio=new Audio();
     tourAudio.preload='auto';
-    // прогрев дорожек (WebView)
-    tourTracks.forEach(function(tr){
-      try{ var x=new Audio(tr.src); x.preload='auto'; }catch(e){}
-    });
   }catch(e){ tourAudio=null; }
   return tourAudio;
 }
@@ -775,12 +771,13 @@ function startFinnFallSmooth(){
   var tx0=W*0.5, ty0=H*0.58;
   finn.state='fall';
   finn.fallT=0;
-  finn.fallDur=1.25;
+  finn.fallDur=1.15;
   finn.sx=sx0; finn.sy=sy0;
   finn.tx=tx0; finn.ty=ty0;
   finn.cx=sx0+(tx0-sx0)*0.45;
   finn.cy=sy0+(ty0-sy0)*0.2;
   finn.trail=[];finn.sparks=[];finn.flash=0;
+  finn._tourFall=true; // лёгкий взрыв без роя искр
   finn.emotion='happy';
 }
 
@@ -857,60 +854,77 @@ function drawTourHighlight(t){
   if(!tourHL||!ctx)return;
   var now=performance.now();
   if(tourHL.until && now>tourHL.until){ tourHL=null; return; }
-  var pulse=0.5+0.5*Math.sin(t*3.2);
+  var pulse=0.55+0.45*Math.sin(t*2.8);
   ctx.save();
   if(tourHL.kind==='sun' && finn){
-    var rg=ctx.createRadialGradient(finn.x,finn.y,0,finn.x,finn.y,70);
-    rg.addColorStop(0,'rgba(255,220,120,'+(0.12+0.1*pulse)+')');
-    rg.addColorStop(1,'rgba(255,180,60,0)');
+    var rg=ctx.createRadialGradient(finn.x,finn.y,0,finn.x,finn.y,95);
+    rg.addColorStop(0,'rgba(255,230,140,'+(0.28+0.18*pulse)+')');
+    rg.addColorStop(0.45,'rgba(255,180,60,'+(0.14+0.1*pulse)+')');
+    rg.addColorStop(1,'rgba(255,140,40,0)');
     ctx.fillStyle=rg;
-    ctx.beginPath();ctx.arc(finn.x,finn.y,70,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(finn.x,finn.y,95,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();
+    ctx.strokeStyle='rgba(255,240,180,'+(0.55+0.25*pulse)+')';
+    ctx.lineWidth=2;
+    ctx.arc(finn.x,finn.y,38+6*pulse,0,Math.PI*2);ctx.stroke();
   }else if(tourHL.kind==='ursa'){
-    // подсветка звёзд Большой Медведицы
     stars.forEach(function(s){
       if(s.bg||s.group!=='maj')return;
-      var g=ctx.createRadialGradient(s.x,s.y,0,s.x,s.y,22);
-      g.addColorStop(0,'rgba(160,210,255,'+(0.35+0.2*pulse)+')');
+      var g=ctx.createRadialGradient(s.x,s.y,0,s.x,s.y,32);
+      g.addColorStop(0,'rgba(200,230,255,'+(0.55+0.25*pulse)+')');
+      g.addColorStop(0.5,'rgba(140,190,255,'+(0.22+0.12*pulse)+')');
       g.addColorStop(1,'rgba(100,160,255,0)');
       ctx.fillStyle=g;
-      ctx.beginPath();ctx.arc(s.x,s.y,22,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.arc(s.x,s.y,32,0,Math.PI*2);ctx.fill();
     });
-    // линии
     if(window.__matterLinks){
-      ctx.strokeStyle='rgba(180,220,255,'+(0.35+0.2*pulse)+')';
-      ctx.lineWidth=1.6;
+      ctx.strokeStyle='rgba(210,235,255,'+(0.65+0.25*pulse)+')';
+      ctx.lineWidth=2.4;
+      ctx.shadowColor='rgba(140,200,255,0.6)';
+      ctx.shadowBlur=8;
       window.__matterLinks.forEach(function(pair){
         if(!pair[0]||!pair[1])return;
         if(pair[0].group!=='maj'&&pair[1].group!=='maj')return;
         ctx.beginPath();ctx.moveTo(pair[0].x,pair[0].y);ctx.lineTo(pair[1].x,pair[1].y);ctx.stroke();
       });
+      ctx.shadowBlur=0;
     }
   }else if(tourHL.kind==='galaxies'){
     var elapsed=(now-(tourHL.t0||now))/1000;
-    // первые ~3.5с галактики, потом дыра
     if(elapsed<3.8 && galaxies){
       galaxies.forEach(function(G){
-        var g=ctx.createRadialGradient(G.x,G.y,0,G.x,G.y,G.r*1.8);
-        g.addColorStop(0,'rgba(200,180,255,'+(0.2+0.15*pulse)+')');
+        var g=ctx.createRadialGradient(G.x,G.y,0,G.x,G.y,G.r*2.2);
+        g.addColorStop(0,'rgba(230,210,255,'+(0.4+0.2*pulse)+')');
+        g.addColorStop(0.5,'rgba(160,140,230,'+(0.18+0.1*pulse)+')');
         g.addColorStop(1,'rgba(120,100,200,0)');
         ctx.fillStyle=g;
-        ctx.beginPath();ctx.arc(G.x,G.y,G.r*1.8,0,Math.PI*2);ctx.fill();
+        ctx.beginPath();ctx.arc(G.x,G.y,G.r*2.2,0,Math.PI*2);ctx.fill();
+        ctx.beginPath();
+        ctx.strokeStyle='rgba(220,200,255,'+(0.5+0.25*pulse)+')';
+        ctx.lineWidth=2;
+        ctx.arc(G.x,G.y,G.r*1.15,0,Math.PI*2);ctx.stroke();
       });
     }else if(door){
-      var g=ctx.createRadialGradient(door.x,door.y,0,door.x,door.y,door.r*2.2);
-      g.addColorStop(0,'rgba(180,210,255,'+(0.25+0.15*pulse)+')');
+      var g=ctx.createRadialGradient(door.x,door.y,0,door.x,door.y,door.r*2.6);
+      g.addColorStop(0,'rgba(200,225,255,'+(0.4+0.2*pulse)+')');
+      g.addColorStop(0.5,'rgba(120,160,230,'+(0.18+0.1*pulse)+')');
       g.addColorStop(1,'rgba(80,120,200,0)');
       ctx.fillStyle=g;
-      ctx.beginPath();ctx.arc(door.x,door.y,door.r*2.2,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.arc(door.x,door.y,door.r*2.6,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();
+      ctx.strokeStyle='rgba(200,230,255,'+(0.55+0.25*pulse)+')';
+      ctx.lineWidth=2.2;
+      ctx.arc(door.x,door.y,door.r*1.2,0,Math.PI*2);ctx.stroke();
     }
   }else if(tourHL.kind==='nebulae' && nebulae){
     nebulae.forEach(function(n){
       if(n.born)return;
-      var g=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,n.s*1.6);
-      g.addColorStop(0,'hsla('+n.hue+',80%,70%,'+(0.18+0.12*pulse)+')');
+      var g=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,n.s*2);
+      g.addColorStop(0,'hsla('+n.hue+',85%,75%,'+(0.35+0.2*pulse)+')');
+      g.addColorStop(0.5,'hsla('+n.hue+',70%,55%,'+(0.16+0.1*pulse)+')');
       g.addColorStop(1,'rgba(0,0,0,0)');
       ctx.fillStyle=g;
-      ctx.beginPath();ctx.arc(n.x,n.y,n.s*1.6,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.arc(n.x,n.y,n.s*2,0,Math.PI*2);ctx.fill();
     });
   }
   ctx.restore();
@@ -2263,21 +2277,30 @@ function drawSpace(dt,t){
     drawMeteors();
     drawCosmicDust(t);
   }
-  // туманности легче во время тура
-  drawNebulae(t);
-  if(!tourLock){
+  var inTour=!!(tourLock||startMatterTour._running);
+  // во время тура — минимум фона, чтобы голос не рвался
+  if(!inTour){
+    drawNebulae(t);
     updateNebulaBirth(dt);
     updateTitleDust(dt);
+  }else if(tourHL&&tourHL.kind==='nebulae'){
+    // только простая подсветка (в drawTourHighlight), без слоёв туманностей
   }
-  // галактики — порталы к другим созвездиям
   if(galaxies&&galaxies.length){
-    galaxies.forEach(function(G){
-      drawGalaxy(ctx, G.x, G.y, G.r, G.rot, t, G.kind);
-    });
-  }else{
-    var gr=Math.min(W,H)*0.085;
-    drawGalaxy(ctx, W*0.22, H*0.26, gr, -0.35, t, 1);
-    drawGalaxy(ctx, W*0.78, H*0.70, gr*1.05, 0.55, t, 2);
+    if(inTour){
+      // лёгкие пятна вместо спиралей
+      galaxies.forEach(function(G){
+        var gg=ctx.createRadialGradient(G.x,G.y,0,G.x,G.y,G.r*1.3);
+        gg.addColorStop(0,'rgba(200,190,240,0.18)');
+        gg.addColorStop(1,'rgba(0,0,0,0)');
+        ctx.fillStyle=gg;
+        ctx.beginPath();ctx.arc(G.x,G.y,G.r*1.3,0,Math.PI*2);ctx.fill();
+      });
+    }else{
+      galaxies.forEach(function(G){
+        drawGalaxy(ctx, G.x, G.y, G.r, G.rot, t, G.kind);
+      });
+    }
   }
 
   ctx.globalAlpha=0.12;
@@ -2298,13 +2321,13 @@ function drawSpace(dt,t){
     ctx.stroke();
   });
 
+  var inTourStars=!!(tourLock||startMatterTour._running);
   stars.forEach(function(s){
     var pulse=0.65+0.35*Math.sin(t*1.4+s.pulse);
     var twinkle=0.85+0.15*Math.sin(t*5.2+s.pulse*2.3);
     var r=s.baseR*(s.bg?1:pulse);
     var a=s.bright*pulse*twinkle;
-    if(!s.bg){
-      // мягкое многослойное свечение с плавным градиентным спадом
+    if(!s.bg && !inTourStars){
       var glow=ctx.createRadialGradient(s.x,s.y,0,s.x,s.y,r*5.2);
       glow.addColorStop(0,'hsla('+s.hue+',85%,78%,'+(0.24*pulse)+')');
       glow.addColorStop(0.45,'hsla('+s.hue+',80%,65%,'+(0.1*pulse)+')');
@@ -2334,7 +2357,7 @@ function drawSpace(dt,t){
     var dx=door.x, dy=door.y;
     var R=door.r*(1+door.open*0.5);
 
-    door.swirl=(door.swirl||0)+dt*(1.6+door.open*2.2);
+    door.swirl=(door.swirl||0)+dt*((tourLock||startMatterTour._running)?0.6:(1.6+door.open*2.2));
     // рассеянное свечение — не шар, а мягкий размытый ореол (слабее)
     for(var gi=0;gi<5;gi++){
       var ox=(gi-2)*R*0.35;
@@ -2533,11 +2556,13 @@ function updateFinn(dt,t){
       finn.emotion='happy';
       finn.flash=1.85;
       // осколки взрыва
-      for(var bi=0;bi<12;bi++){
+      var bn=finn._tourFall?4:12;
+      for(var bi=0;bi<bn;bi++){
         var ba=Math.random()*Math.PI*2;
-        var bsp=60+Math.random()*160;
-        finn.sparks.push({x:finn.x,y:finn.y,r:1.2+Math.random()*2.5,a:0.9,vx:Math.cos(ba)*bsp,vy:Math.sin(ba)*bsp});
+        var bsp=50+Math.random()*140;
+        finn.sparks.push({x:finn.x,y:finn.y,r:1.2+Math.random()*2.2,a:0.85,vx:Math.cos(ba)*bsp,vy:Math.sin(ba)*bsp});
       }
+      finn._tourFall=false;
       finn.trail=[];
       // радиальный взрыв искр — настоящее рождение, а не тихая подмена картинки
       finn.sparks=[];
