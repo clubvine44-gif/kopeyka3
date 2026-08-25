@@ -1912,55 +1912,94 @@ function drawBlackHole(dt){
 function drawGalaxy(ctx, gx, gy, scale, rot, t, kind){
   ctx.save();
   ctx.translate(gx,gy);
-  ctx.rotate(rot+t*0.015);
-  // soft outer halo
-  var hg=ctx.createRadialGradient(0,0,0,0,0,scale*1.6);
-  hg.addColorStop(0,kind===2?'rgba(255,210,170,0.12)':'rgba(170,195,255,0.14)');
-  hg.addColorStop(0.45,kind===2?'rgba(180,100,80,0.05)':'rgba(80,100,180,0.05)');
+  ctx.rotate(rot+t*0.012);
+
+  // мягкое диффузное гало
+  var hg=ctx.createRadialGradient(0,0,0,0,0,scale*1.7);
+  hg.addColorStop(0,kind===2?'rgba(255,205,165,0.10)':'rgba(165,190,255,0.12)');
+  hg.addColorStop(0.5,kind===2?'rgba(170,90,70,0.045)':'rgba(75,95,175,0.045)');
   hg.addColorStop(1,'rgba(0,0,0,0)');
   ctx.fillStyle=hg;
-  ctx.beginPath();ctx.arc(0,0,scale*1.6,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(0,0,scale*1.7,0,Math.PI*2);ctx.fill();
 
-  // dust disk (ellipse)
+  // диск пыли
   ctx.save();
-  ctx.scale(1,0.55);
-  var disk=ctx.createRadialGradient(0,0,scale*0.08,0,0,scale*1.05);
-  disk.addColorStop(0,'rgba(255,245,230,0.2)');
-  disk.addColorStop(0.3,kind===2?'rgba(220,140,90,0.12)':'rgba(140,160,220,0.12)');
-  disk.addColorStop(0.7,'rgba(40,50,90,0.04)');
+  ctx.scale(1,0.5);
+  var disk=ctx.createRadialGradient(0,0,scale*0.06,0,0,scale*1.1);
+  disk.addColorStop(0,'rgba(255,248,235,0.16)');
+  disk.addColorStop(0.35,kind===2?'rgba(200,120,80,0.09)':'rgba(120,145,210,0.09)');
+  disk.addColorStop(0.75,'rgba(35,45,80,0.035)');
   disk.addColorStop(1,'rgba(0,0,0,0)');
   ctx.fillStyle=disk;
-  ctx.beginPath();ctx.arc(0,0,scale*1.05,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(0,0,scale*1.1,0,Math.PI*2);ctx.fill();
   ctx.restore();
 
-  // spiral arms — denser, smoother
+  // непрерывные дымчатые рукава — сплошная светящаяся лента, а не пунктир из кружков
   for(var arm=0;arm<2;arm++){
-    for(var i=0;i<90;i++){
-      var p=i/90;
-      var ang=arm*Math.PI+p*4.2;
-      var rr=scale*(0.08+p*0.98);
-      var wob=Math.sin(p*8+t*0.5+arm)*scale*0.03;
+    ctx.save();
+    ctx.beginPath();
+    var steps=46;
+    for(var i=0;i<=steps;i++){
+      var p=i/steps;
+      var ang=arm*Math.PI+p*4.4;
+      var rr=scale*(0.06+p*1.02);
+      var wob=Math.sin(p*7+t*0.35+arm)*scale*0.025;
       var px=Math.cos(ang)*rr+Math.cos(ang+1.2)*wob;
-      var py=Math.sin(ang)*rr*0.52+Math.sin(ang+1.2)*wob*0.5;
-      var sz=(1.4-p*0.9)*(0.7+0.3*Math.sin(i+t));
-      var al=0.15+0.55*(1-p);
+      var py=(Math.sin(ang)*rr+Math.sin(ang+1.2)*wob)*0.52;
+      if(i===0)ctx.moveTo(px,py); else ctx.lineTo(px,py);
+    }
+    var armGrad=ctx.createLinearGradient(0,0,Math.cos(arm*Math.PI+2.2)*scale,Math.sin(arm*Math.PI+2.2)*scale*0.5);
+    if(kind===2){
+      armGrad.addColorStop(0,'rgba(255,225,190,0.42)');
+      armGrad.addColorStop(0.5,'rgba(255,165,110,0.22)');
+      armGrad.addColorStop(1,'rgba(180,70,40,0)');
+    }else{
+      armGrad.addColorStop(0,'rgba(220,230,255,0.42)');
+      armGrad.addColorStop(0.5,'rgba(160,185,255,0.2)');
+      armGrad.addColorStop(1,'rgba(70,90,180,0)');
+    }
+    ctx.strokeStyle=armGrad;
+    ctx.lineWidth=scale*0.15;
+    ctx.lineCap='round';
+    ctx.lineJoin='round';
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // мелкая звёздная пыль вдоль рукавов — позиции детерминированы (без
+  // Math.random в рендере), поэтому никаких скачков между кадрами
+  for(var arm2=0;arm2<2;arm2++){
+    for(var j=0;j<64;j++){
+      var pj=j/64;
+      var angj=arm2*Math.PI+pj*4.4;
+      var rrj=scale*(0.06+pj*1.02);
+      var wobj=Math.sin(pj*7+t*0.35+arm2)*scale*0.025;
+      var seed=Math.sin(j*12.9898+arm2*3.7+1.3)*43758.5453;
+      seed=seed-Math.floor(seed);
+      var offA=(seed-0.5)*0.45;
+      var pxj=Math.cos(angj+offA)*rrj+Math.cos(angj+1.2)*wobj;
+      var pyj=(Math.sin(angj+offA)*rrj+Math.sin(angj+1.2)*wobj)*0.52;
+      var szj=(1.05-pj*0.65)*(0.6+0.4*Math.sin(j*1.7+t*0.7));
+      var alj=(0.1+0.34*(1-pj))*(0.5+0.5*seed);
       ctx.beginPath();
       if(kind===2){
-        ctx.fillStyle='rgba(255,'+Math.floor(200-p*40)+','+Math.floor(160-p*40)+','+al+')';
+        ctx.fillStyle='rgba(255,'+Math.floor(210-pj*40)+','+Math.floor(175-pj*50)+','+alj+')';
       }else{
-        ctx.fillStyle='rgba('+(180+Math.floor(p*40))+','+(200+Math.floor(p*20))+',255,'+al+')';
+        ctx.fillStyle='rgba('+(190+Math.floor(pj*35))+','+(205+Math.floor(pj*20))+',255,'+alj+')';
       }
-      ctx.arc(px,py,sz,0,Math.PI*2);ctx.fill();
+      ctx.arc(pxj,pyj,Math.max(0.4,szj),0,Math.PI*2);ctx.fill();
     }
   }
-  // bright core
-  var cg=ctx.createRadialGradient(0,0,0,0,0,scale*0.28);
-  cg.addColorStop(0,'rgba(255,252,245,0.95)');
-  cg.addColorStop(0.25,'rgba(255,220,170,0.45)');
-  cg.addColorStop(0.6,kind===2?'rgba(220,120,70,0.12)':'rgba(120,150,220,0.12)');
+
+  // яркое ядро
+  var cg=ctx.createRadialGradient(0,0,0,0,0,scale*0.3);
+  cg.addColorStop(0,'rgba(255,253,248,0.96)');
+  cg.addColorStop(0.22,'rgba(255,225,180,0.5)');
+  cg.addColorStop(0.6,kind===2?'rgba(225,130,80,0.14)':'rgba(130,155,225,0.14)');
   cg.addColorStop(1,'rgba(0,0,0,0)');
   ctx.fillStyle=cg;
-  ctx.beginPath();ctx.arc(0,0,scale*0.28,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(0,0,scale*0.3,0,Math.PI*2);ctx.fill();
+
   ctx.restore();
 }
 
