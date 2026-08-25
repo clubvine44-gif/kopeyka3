@@ -771,13 +771,15 @@ function startFinnFallSmooth(){
   var tx0=W*0.5, ty0=H*0.58;
   finn.state='fall';
   finn.fallT=0;
-  finn.fallDur=1.15;
+  finn.fallDur=1.55;
   finn.sx=sx0; finn.sy=sy0;
   finn.tx=tx0; finn.ty=ty0;
-  finn.cx=sx0+(tx0-sx0)*0.45;
-  finn.cy=sy0+(ty0-sy0)*0.2;
+  // лёгкая дуга без «зависания» посередине
+  finn.cx=sx0+(tx0-sx0)*0.5;
+  finn.cy=sy0+(ty0-sy0)*0.35;
   finn.trail=[];finn.sparks=[];finn.flash=0;
-  finn._tourFall=true; // лёгкий взрыв без роя искр
+  finn.morph=0;
+  finn._tourFall=true;
   finn.emotion='happy';
 }
 
@@ -1911,61 +1913,59 @@ function drawBlackHole(dt){
 
 function drawGalaxy(ctx, gx, gy, scale, rot, t, kind){
   ctx.save();
-  ctx.translate(gx,gy);
-  ctx.rotate(rot+t*0.015);
-  // soft outer halo
-  var hg=ctx.createRadialGradient(0,0,0,0,0,scale*1.6);
-  hg.addColorStop(0,kind===2?'rgba(255,210,170,0.12)':'rgba(170,195,255,0.14)');
-  hg.addColorStop(0.45,kind===2?'rgba(180,100,80,0.05)':'rgba(80,100,180,0.05)');
-  hg.addColorStop(1,'rgba(0,0,0,0)');
-  ctx.fillStyle=hg;
-  ctx.beginPath();ctx.arc(0,0,scale*1.6,0,Math.PI*2);ctx.fill();
+  ctx.translate(gx, gy);
+  ctx.rotate(rot + t * 0.008);
+  var warm = kind === 2;
+  // внешнее гало
+  var hg = ctx.createRadialGradient(0, 0, 0, 0, 0, scale * 1.55);
+  hg.addColorStop(0, warm ? 'rgba(255,210,170,0.11)' : 'rgba(170,195,255,0.13)');
+  hg.addColorStop(0.55, warm ? 'rgba(160,80,50,0.04)' : 'rgba(70,90,170,0.045)');
+  hg.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = hg;
+  ctx.beginPath(); ctx.arc(0, 0, scale * 1.55, 0, Math.PI * 2); ctx.fill();
 
-  // dust disk (ellipse)
+  // наклонённый диск
   ctx.save();
-  ctx.scale(1,0.55);
-  var disk=ctx.createRadialGradient(0,0,scale*0.08,0,0,scale*1.05);
-  disk.addColorStop(0,'rgba(255,245,230,0.2)');
-  disk.addColorStop(0.3,kind===2?'rgba(220,140,90,0.12)':'rgba(140,160,220,0.12)');
-  disk.addColorStop(0.7,'rgba(40,50,90,0.04)');
-  disk.addColorStop(1,'rgba(0,0,0,0)');
-  ctx.fillStyle=disk;
-  ctx.beginPath();ctx.arc(0,0,scale*1.05,0,Math.PI*2);ctx.fill();
+  ctx.scale(1, 0.42);
+  var disk = ctx.createRadialGradient(0, 0, scale * 0.05, 0, 0, scale * 1.05);
+  disk.addColorStop(0, 'rgba(255,250,240,0.22)');
+  disk.addColorStop(0.25, warm ? 'rgba(220,150,100,0.12)' : 'rgba(140,165,230,0.12)');
+  disk.addColorStop(0.7, warm ? 'rgba(90,40,30,0.04)' : 'rgba(40,50,100,0.045)');
+  disk.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = disk;
+  ctx.beginPath(); ctx.arc(0, 0, scale * 1.05, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 
-  // spiral arms — denser, smoother
-  for(var arm=0;arm<2;arm++){
-    for(var i=0;i<90;i++){
-      var p=i/90;
-      var ang=arm*Math.PI+p*4.2;
-      var rr=scale*(0.08+p*0.98);
-      var wob=Math.sin(p*8+t*0.5+arm)*scale*0.03;
-      var px=Math.cos(ang)*rr+Math.cos(ang+1.2)*wob;
-      var py=Math.sin(ang)*rr*0.52+Math.sin(ang+1.2)*wob*0.5;
-      var sz=(1.4-p*0.9)*(0.7+0.3*Math.sin(i+t));
-      var al=0.15+0.55*(1-p);
-      ctx.beginPath();
-      if(kind===2){
-        ctx.fillStyle='rgba(255,'+Math.floor(200-p*40)+','+Math.floor(160-p*40)+','+al+')';
-      }else{
-        ctx.fillStyle='rgba('+(180+Math.floor(p*40))+','+(200+Math.floor(p*20))+',255,'+al+')';
-      }
-      ctx.arc(px,py,sz,0,Math.PI*2);ctx.fill();
+  // 2 спиральных рукава — сплошные ленты
+  for (var arm = 0; arm < 2; arm++) {
+    ctx.beginPath();
+    for (var i = 0; i <= 40; i++) {
+      var p = i / 40;
+      var ang = arm * Math.PI + p * 4.5 + t * 0.02;
+      var rr = scale * (0.08 + p * 0.95);
+      var px = Math.cos(ang) * rr;
+      var py = Math.sin(ang) * rr * 0.42;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
     }
+    ctx.strokeStyle = warm
+      ? ('rgba(255,' + Math.floor(200 - arm * 20) + ',150,' + (0.35 - arm * 0.05) + ')')
+      : ('rgba(200,215,255,' + (0.38 - arm * 0.05) + ')');
+    ctx.lineWidth = scale * (0.12 - arm * 0.02);
+    ctx.lineCap = 'round';
+    ctx.stroke();
   }
-  // bright core
-  var cg=ctx.createRadialGradient(0,0,0,0,0,scale*0.28);
-  cg.addColorStop(0,'rgba(255,252,245,0.95)');
-  cg.addColorStop(0.25,'rgba(255,220,170,0.45)');
-  cg.addColorStop(0.6,kind===2?'rgba(220,120,70,0.12)':'rgba(120,150,220,0.12)');
-  cg.addColorStop(1,'rgba(0,0,0,0)');
-  ctx.fillStyle=cg;
-  ctx.beginPath();ctx.arc(0,0,scale*0.28,0,Math.PI*2);ctx.fill();
+
+  // ядро
+  var core = ctx.createRadialGradient(0, 0, 0, 0, 0, scale * 0.22);
+  core.addColorStop(0, 'rgba(255,252,245,0.95)');
+  core.addColorStop(0.4, warm ? 'rgba(255,200,140,0.45)' : 'rgba(220,230,255,0.4)');
+  core.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = core;
+  ctx.beginPath(); ctx.arc(0, 0, scale * 0.22, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 }
 
 
-/* ---------- фоновый звездопад (далеко, мелко, с хвостом) ---------- */
 function spawnMeteor(){
   var fromLeft=Math.random()<0.55;
   var x=fromLeft ? (-30+Math.random()*W*0.5) : (W*0.5+Math.random()*W*0.5);
@@ -2265,15 +2265,18 @@ function drawSpace(dt,t){
     drawCosmicDust(t);
   }
   var inTour=!!(tourLock||startMatterTour._running);
-  // объекты всегда видны; во время тура чуть проще, но узнаваемы
+  var nebTrack=inTour&&tourHL&&tourHL.kind==='nebulae';
   if(!inTour){
     drawNebulae(t);
     updateNebulaBirth(dt);
     updateTitleDust(dt);
+  }else if(nebTrack){
+    // на дорожке про туманности — только они (упрощённо), без галактик
+    drawNebulae(t);
   }else{
-    drawNebulae(t); // сами туманности на месте + подсветка сверху
+    drawNebulae(t);
   }
-  if(galaxies&&galaxies.length){
+  if(galaxies&&galaxies.length && !nebTrack){
     galaxies.forEach(function(G){
       drawGalaxy(ctx, G.x, G.y, G.r, G.rot, t, G.kind);
     });
@@ -2333,7 +2336,7 @@ function drawSpace(dt,t){
     var dx=door.x, dy=door.y;
     var R=door.r*(1+door.open*0.5);
 
-    door.swirl=(door.swirl||0)+dt*((tourLock||startMatterTour._running)?0.6:(1.6+door.open*2.2));
+    door.swirl=(door.swirl||0)+dt*((tourLock||startMatterTour._running)?0.35:(1.6+door.open*2.2));
     // рассеянное свечение — не шар, а мягкий размытый ореол (слабее)
     for(var gi=0;gi<5;gi++){
       var ox=(gi-2)*R*0.35;
@@ -2387,6 +2390,7 @@ function drawSpace(dt,t){
   if(finn){
     updateFinn(dt,t);
     if(finn.state==='star'||finn.state==='fall'){
+      var morph=(finn.state==='fall')?(finn.morph||0):0;
       // хвост настоящей падающей звезды — сплошная сглаженная полоса с
       // градиентом от раскалённого белого ядра к огненно-оранжевому краю
       if(finn.trail&&finn.trail.length>2){
@@ -2415,7 +2419,18 @@ function drawSpace(dt,t){
         }
         ctx.stroke();
       }
-      drawFinnStar(ctx, finn.x, finn.y, t);
+      if(morph<0.92){
+        ctx.save();
+        ctx.globalAlpha=1-morph*0.85;
+        drawFinnStar(ctx, finn.x, finn.y, t);
+        ctx.restore();
+      }
+      if(morph>0.25){
+        ctx.save();
+        ctx.globalAlpha=Math.min(1,(morph-0.25)/0.6);
+        drawFinnFace(ctx, finn.x, finn.y, finn.size*(0.75+0.25*morph), t);
+        ctx.restore();
+      }
     }else if(finn.state!=='enter' && finn.state!=='room'){
       // импульс взрыва: вспышка + лучи + осколки, БЕЗ колец-границ
       if(finn.flash&&finn.flash>0){
@@ -2507,53 +2522,50 @@ function updateFinn(dt,t){
   if(finn.blink>0)finn.blink-=dt;
 
   if(finn.state==='fall'){
-    // настоящий пролёт метеора: дуга Безье, ускорение к финалу, длинный
-    // светящийся хвост с градиентом от белого ядра к огненному краю
     var prevFX=finn.x, prevFY=finn.y;
     finn.fallT+=dt;
-    var p=Math.min(1,finn.fallT/(finn.fallDur||1.3));
-    // плавное торможение к концу — без рывка в точке посадки
-    var ep=1-Math.pow(1-p,2.4);
+    var p=Math.min(1,finn.fallT/(finn.fallDur||1.5));
+    // smoothstep — без зависания и без рывка в конце
+    var ep=p*p*(3-2*p);
     var omp=1-ep;
-    finn.x=omp*omp*finn.sx+2*omp*ep*finn.cx+ep*ep*finn.tx;
-    finn.y=omp*omp*finn.sy+2*omp*ep*finn.cy+ep*ep*finn.ty;
-    // плотная подвыборка — без этого на быстрых участках дуги хвост
-    // выглядит прерывистыми точками, а не сплошной полосой
+    finn.x=omp*omp*finn.sx+2*omp*ep*(finn.cx||finn.sx)+ep*ep*finn.tx;
+    finn.y=omp*omp*finn.sy+2*omp*ep*(finn.cy||finn.sy)+ep*ep*finn.ty;
+    finn.morph=ep; // 0=звезда → 1=солнце, непрерывно
     var fdist=Math.hypot(finn.x-prevFX,finn.y-prevFY);
-    if(fdist>2){
+    if(fdist>3){
       finn.trail.push({x:finn.x,y:finn.y});
-      if(finn.trail.length>36)finn.trail.splice(0,finn.trail.length-36);
+      if(finn.trail.length>28)finn.trail.splice(0,finn.trail.length-28);
     }
-    finn.scale=1;
+    finn.scale=0.85+0.2*ep;
     if(p>=1){
       finn.x=finn.tx; finn.y=finn.ty;
-      finn.state='birth';
-      finn.birthT=0;
-      finn.scale=1; // без рывка масштаба
-      finn.emotion='happy';
-      var tourFall=!!finn._tourFall;
-      finn.flash=tourFall?0.7:1.2;
+      finn.morph=1;
+      finn.state='idle';
+      finn.scale=1;
+      finn.alpha=1;
+      finn.flash=finn._tourFall?0.45:0.85;
       finn.trail=[];
       finn.sparks=[];
-      var bn=tourFall?5:14;
+      var bn=finn._tourFall?4:10;
       for(var bi=0;bi<bn;bi++){
         var ang=Math.random()*Math.PI*2;
-        var spd=40+Math.random()*(tourFall?80:140);
-        finn.sparks.push({x:finn.x,y:finn.y,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd-15,a:0.9,r:1.2+Math.random()*2});
+        var spd=30+Math.random()*90;
+        finn.sparks.push({x:finn.x,y:finn.y,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd-12,a:0.85,r:1+Math.random()*1.8});
       }
       finn._tourFall=false;
       if(!tourLock && !startMatterTour._running){
-        setTimeout(function(){finnSay('Эй! Я с тобой.');},280);
+        setTimeout(function(){finnSay('Эй! Я с тобой.');},300);
       }
     }
   }else if(finn.state==='birth'){
-    // плавное проявление солнца без подпрыгивания
-    finn.birthT+=dt;
-    var bp=Math.min(1,finn.birthT/0.55);
-    var ease=1-Math.pow(1-bp,2.5);
-    finn.scale=0.92+0.08*ease;
+    // legacy morph path
+    finn.birthT=(finn.birthT||0)+dt;
+    var bp=Math.min(1,finn.birthT/0.4);
+    finn.morph=bp;
+    finn.scale=1;
     if(bp>=1){
       finn.state='idle';
+      finn.morph=1;
       finn.scale=1; finn.alpha=1;
       finn.flash=0;
     }
