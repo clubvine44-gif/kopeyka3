@@ -267,7 +267,7 @@ function ensureRoot(){
   document.body.appendChild(root);
   canvas=document.getElementById('matterCanvas');
   ctx=canvas.getContext('2d');
-  document.getElementById('matterExit').onclick=function(){exitMatter();};
+  document.getElementById('matterExit').onclick=function(){if(tourLock||startMatterTour._running)return;exitMatter();};
   document.getElementById('mPanelClose').onclick=function(){hidePanel();};
   document.getElementById('matterPanel').addEventListener('click',function(e){
     if(e.target&&e.target.id==='matterPanel')hidePanel();
@@ -393,6 +393,9 @@ var meteorSpawnT=0;
 var nebulae=[];
 var titleDust=[];
 var nebulaBirth=null;
+var tourLock=false;
+var tourHL=null;
+var tourAudio=null;
 
 /* ---------- constellation + diagonal door ---------- */
 function buildStars(){
@@ -707,53 +710,172 @@ function enterConstellation(){
   if(hud)hud.hidden=false;
   if(!MS.firstEnter){MS.firstEnter=new Date().toISOString();saveState();}
   try{history.pushState({matter:'space'},'','#matter');}catch(e){}
-  try{showMatterTitle();}catch(e){}
-  // тур: по приглашению или первый раз
   var needTour=!!window.__matterTourPending || !MS.matterTourDone;
   window.__matterTourPending=false;
   if(needTour){
-    // после титра, чтобы не грузить кадр одновременно
-    setTimeout(function(){startMatterTour();},2800);
+    // титр короткий, без пыли — потом сразу аудиотур
+    try{
+      var title=document.querySelector('#matterHud .m-title');
+      if(title){
+        title.classList.remove('dissolve');
+        title.style.display='block';
+        title.style.opacity='1';
+        setTimeout(function(){ if(title){title.classList.add('dissolve');} },1600);
+        setTimeout(function(){ if(title){title.style.display='none';title.classList.remove('dissolve');} },3200);
+      }
+    }catch(e){}
+    setTimeout(function(){startMatterTour();},3400);
+  }else{
+    try{showMatterTitle();}catch(e){}
   }
+}
+
+function stopTourAudio(){
+  try{if(tourAudio){tourAudio.pause();tourAudio.src='';tourAudio=null;}}catch(e){}
+}
+
+function playTourTrack(src, onEnd){
+  stopTourAudio();
+  try{
+    var a=new Audio(src);
+    a.preload='auto';
+    tourAudio=a;
+    a.onended=function(){ if(onEnd)onEnd(); };
+    a.onerror=function(){ if(onEnd)setTimeout(onEnd,400); };
+    var p=a.play();
+    if(p&&p.catch)p.catch(function(){ if(onEnd)setTimeout(onEnd,400); });
+  }catch(e){ if(onEnd)setTimeout(onEnd,400); }
+}
+
+function startFinnFallSmooth(){
+  if(!finn||finn.state!=='star')return;
+  var sx0=finn.x, sy0=finn.y;
+  var tx0=W*0.5, ty0=H*0.58;
+  finn.state='fall';
+  finn.fallT=0;
+  finn.fallDur=1.35;
+  finn.sx=sx0; finn.sy=sy0;
+  finn.tx=tx0; finn.ty=ty0;
+  finn.cx=sx0+(tx0-sx0)*0.5;
+  finn.cy=sy0+(ty0-sy0)*0.18-H*0.03;
+  finn.trail=[];finn.sparks=[];finn.flash=0;
+  finn.emotion='happy';
 }
 
 function startMatterTour(){
   if(phase!=='space'||!finn)return;
   if(startMatterTour._running)return;
   startMatterTour._running=true;
-  // сразу роняем солнце
-  if(finn.state==='star'){
-    var sx0=finn.x, sy0=finn.y;
-    var tx0=W*0.5, ty0=H*0.58;
-    finn.state='fall';
-    finn.fallT=0;
-    finn.fallDur=1.2;
-    finn.sx=sx0; finn.sy=sy0;
-    finn.tx=tx0; finn.ty=ty0;
-    finn.cx=sx0+(tx0-sx0)*0.5;
-    finn.cy=sy0+(ty0-sy0)*0.12-H*0.04;
-    finn.trail=[];finn.sparks=[];
-    finn.emotion='happy';
-  }
-  var steps=[
-    {delay:1600, text:'Это Материя — твоё пространство целей и тишины.'},
-    {delay:5200, text:'Созвездия — это твои цели. Нажми на звезду, чтобы увидеть прогресс.'},
-    {delay:9200, text:'Я — солнце. Нажми на меня, чтобы говорить. В пустое небо — чтобы свернуть.'},
-    {delay:13200, text:'Галактики ведут к другим созвездиям. Чёрная дыра справа — вход в комнату.'},
-    {delay:17200, text:'Туманности — колыбели звёзд. Закрой все цели — одна станет новой звездой-целью.'},
-    {delay:21200, text:'Исследуй. Я рядом.'}
-  ];
-  steps.forEach(function(s){
+  tourLock=true;
+  tourHL=null;
+  // спрятать диалоги/текст
+  try{
+    var d=document.getElementById('matterDialog');
+    if(d)d.classList.remove('show');
+    hidePanel();
+  }catch(e){}
+  // солнце остаётся звездой сверху до дорожки 2
+  if(finn){finn.state='star';finn.x=W*0.5;finn.y=H*0.12;finn.scale=1;finn.trail=[];finn.sparks=[];finn.flash=0;}
+
+  // Дорожка 1 (~6.4с): приветствие, общий план
+  tourHL={kind:'space', until:performance.now()+6400};
+  playTourTrack('matter-tour-1.mp3', function(){
+    if(phase!=='space'||!startMatterTour._running)return;
+    // Дорожка 2 (~7.4с): «смотри наверх… сейчас спущусь»
+    tourHL={kind:'sun', until:performance.now()+7400};
+    // падение на фразе «сейчас я спущусь» (~3.8с)
     setTimeout(function(){
-      if(phase!=='space')return;
-      finnSay(s.text);
-    }, s.delay);
+      if(phase!=='space'||!startMatterTour._running)return;
+      startFinnFallSmooth();
+    },3800);
+    playTourTrack('matter-tour-2.mp3', function(){
+      if(phase!=='space'||!startMatterTour._running)return;
+      // Дорожка 3 (~7.6с): созвездия
+      tourHL={kind:'ursa', until:performance.now()+7600};
+      playTourTrack('matter-tour-3.mp3', function(){
+        if(phase!=='space'||!startMatterTour._running)return;
+        // Дорожка 4 (~7.5с): галактики + дыра
+        tourHL={kind:'galaxies', t0:performance.now(), until:performance.now()+7500};
+        playTourTrack('matter-tour-4.mp3', function(){
+          if(phase!=='space'||!startMatterTour._running)return;
+          // Дорожка 5 (~12с): туманности
+          tourHL={kind:'nebulae', until:performance.now()+12000};
+          playTourTrack('matter-tour-5.mp3', function(){
+            tourHL=null;
+            tourLock=false;
+            startMatterTour._running=false;
+            stopTourAudio();
+            try{MS.matterTourDone=true;saveState();}catch(e){}
+          });
+        });
+      });
+    });
   });
-  setTimeout(function(){
-    startMatterTour._running=false;
-    try{MS.matterTourDone=true;saveState();}catch(e){}
-  }, 24500);
 }
+
+function drawTourHighlight(t){
+  if(!tourHL||!ctx)return;
+  var now=performance.now();
+  if(tourHL.until && now>tourHL.until){ tourHL=null; return; }
+  var pulse=0.5+0.5*Math.sin(t*3.2);
+  ctx.save();
+  if(tourHL.kind==='sun' && finn){
+    var rg=ctx.createRadialGradient(finn.x,finn.y,0,finn.x,finn.y,70);
+    rg.addColorStop(0,'rgba(255,220,120,'+(0.12+0.1*pulse)+')');
+    rg.addColorStop(1,'rgba(255,180,60,0)');
+    ctx.fillStyle=rg;
+    ctx.beginPath();ctx.arc(finn.x,finn.y,70,0,Math.PI*2);ctx.fill();
+  }else if(tourHL.kind==='ursa'){
+    // подсветка звёзд Большой Медведицы
+    stars.forEach(function(s){
+      if(s.bg||s.group!=='maj')return;
+      var g=ctx.createRadialGradient(s.x,s.y,0,s.x,s.y,22);
+      g.addColorStop(0,'rgba(160,210,255,'+(0.35+0.2*pulse)+')');
+      g.addColorStop(1,'rgba(100,160,255,0)');
+      ctx.fillStyle=g;
+      ctx.beginPath();ctx.arc(s.x,s.y,22,0,Math.PI*2);ctx.fill();
+    });
+    // линии
+    if(window.__matterLinks){
+      ctx.strokeStyle='rgba(180,220,255,'+(0.35+0.2*pulse)+')';
+      ctx.lineWidth=1.6;
+      window.__matterLinks.forEach(function(pair){
+        if(!pair[0]||!pair[1])return;
+        if(pair[0].group!=='maj'&&pair[1].group!=='maj')return;
+        ctx.beginPath();ctx.moveTo(pair[0].x,pair[0].y);ctx.lineTo(pair[1].x,pair[1].y);ctx.stroke();
+      });
+    }
+  }else if(tourHL.kind==='galaxies'){
+    var elapsed=(now-(tourHL.t0||now))/1000;
+    // первые ~3.5с галактики, потом дыра
+    if(elapsed<3.8 && galaxies){
+      galaxies.forEach(function(G){
+        var g=ctx.createRadialGradient(G.x,G.y,0,G.x,G.y,G.r*1.8);
+        g.addColorStop(0,'rgba(200,180,255,'+(0.2+0.15*pulse)+')');
+        g.addColorStop(1,'rgba(120,100,200,0)');
+        ctx.fillStyle=g;
+        ctx.beginPath();ctx.arc(G.x,G.y,G.r*1.8,0,Math.PI*2);ctx.fill();
+      });
+    }else if(door){
+      var g=ctx.createRadialGradient(door.x,door.y,0,door.x,door.y,door.r*2.2);
+      g.addColorStop(0,'rgba(180,210,255,'+(0.25+0.15*pulse)+')');
+      g.addColorStop(1,'rgba(80,120,200,0)');
+      ctx.fillStyle=g;
+      ctx.beginPath();ctx.arc(door.x,door.y,door.r*2.2,0,Math.PI*2);ctx.fill();
+    }
+  }else if(tourHL.kind==='nebulae' && nebulae){
+    nebulae.forEach(function(n){
+      if(n.born)return;
+      var g=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,n.s*1.6);
+      g.addColorStop(0,'hsla('+n.hue+',80%,70%,'+(0.18+0.12*pulse)+')');
+      g.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=g;
+      ctx.beginPath();ctx.arc(n.x,n.y,n.s*1.6,0,Math.PI*2);ctx.fill();
+    });
+  }
+  ctx.restore();
+}
+
 
 function openDoorAnim(){
   if(!door||door.opening)return;
@@ -819,6 +941,7 @@ function findGoalStarAt(x,y){
 
 function onCanvasTap(e){
   if(phase!=='space')return;
+  if(tourLock||startMatterTour._running)return; // обучение — тапы закрыты
   // антидребезг: один тап = одно действие
   var now=Date.now();
   if(onCanvasTap._lock && now-onCanvasTap._lock<320)return;
@@ -2294,6 +2417,7 @@ function drawSpace(dt,t){
     }
   }
 
+  drawTourHighlight(t);
   // vignette
   var vg=ctx.createRadialGradient(W/2,H/2,H*0.2,W/2,H/2,H*0.75);
   vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,0.55)');
@@ -2348,11 +2472,10 @@ function updateFinn(dt,t){
     // плотная подвыборка — без этого на быстрых участках дуги хвост
     // выглядит прерывистыми точками, а не сплошной полосой
     var fdist=Math.hypot(finn.x-prevFX,finn.y-prevFY);
-    var fsteps=Math.max(1,Math.ceil(fdist/5));
-    for(var fsi=1;fsi<=fsteps;fsi++){
-      finn.trail.push({x:prevFX+(finn.x-prevFX)*(fsi/fsteps),y:prevFY+(finn.y-prevFY)*(fsi/fsteps)});
+    if(fdist>2){
+      finn.trail.push({x:finn.x,y:finn.y});
+      if(finn.trail.length>36)finn.trail.splice(0,finn.trail.length-36);
     }
-    if(finn.trail.length>70)finn.trail.splice(0,finn.trail.length-70);
     finn.scale=1;
     if(p>=1){
       finn.x=finn.tx; finn.y=finn.ty;
@@ -2362,10 +2485,10 @@ function updateFinn(dt,t){
       finn.emotion='happy';
       finn.flash=1.85;
       // осколки взрыва
-      for(var bi=0;bi<28;bi++){
+      for(var bi=0;bi<12;bi++){
         var ba=Math.random()*Math.PI*2;
-        var bsp=80+Math.random()*220;
-        finn.sparks.push({x:finn.x,y:finn.y,r:1.5+Math.random()*3.5,a:0.95,vx:Math.cos(ba)*bsp,vy:Math.sin(ba)*bsp});
+        var bsp=60+Math.random()*160;
+        finn.sparks.push({x:finn.x,y:finn.y,r:1.2+Math.random()*2.5,a:0.9,vx:Math.cos(ba)*bsp,vy:Math.sin(ba)*bsp});
       }
       finn.trail=[];
       // радиальный взрыв искр — настоящее рождение, а не тихая подмена картинки
@@ -2450,6 +2573,7 @@ function enterMatter(){
 }
 
 function exitMatter(){
+  tourLock=false;startMatterTour._running=false;tourHL=null;stopTourAudio();
   phase='idle';
   if(raf){cancelAnimationFrame(raf);raf=0;}
   stopAmbient();
