@@ -385,6 +385,9 @@ function resize(){
 
 var skyMode='home';
 var galaxies=[];
+var meteors=[];
+var meteorSpawnT=0;
+
 /* ---------- constellation + diagonal door ---------- */
 function buildStars(){
   stars=[];
@@ -1744,10 +1747,81 @@ function drawGalaxy(ctx, gx, gy, scale, rot, t, kind){
   ctx.restore();
 }
 
+
+/* ---------- фоновый звездопад (далеко, мелко, с хвостом) ---------- */
+function spawnMeteor(){
+  // появляются сверху/сбоку, летят по диагонали вниз
+  var fromLeft=Math.random()<0.55;
+  var x=fromLeft ? (-20+Math.random()*W*0.55) : (W*0.45+Math.random()*W*0.55);
+  var y=-10-Math.random()*H*0.15;
+  var speed=140+Math.random()*180; // px/s — неторопливо
+  var ang=fromLeft ? (0.55+Math.random()*0.45) : (Math.PI-0.55-Math.random()*0.45);
+  meteors.push({
+    x:x, y:y,
+    vx:Math.cos(ang)*speed,
+    vy:Math.sin(ang)*speed,
+    len:28+Math.random()*36, // длина хвоста
+    w:0.6+Math.random()*0.9,
+    a:0.35+Math.random()*0.35,
+    life:1.2+Math.random()*1.4
+  });
+}
+
+function updateMeteors(dt){
+  meteorSpawnT-=dt;
+  // редко: ~1 метеор каждые 2.5–5.5 сек, максимум 3 одновременно
+  if(meteorSpawnT<=0 && meteors.length<3){
+    spawnMeteor();
+    meteorSpawnT=2.5+Math.random()*3;
+  }
+  for(var i=meteors.length-1;i>=0;i--){
+    var m=meteors[i];
+    m.x+=m.vx*dt;
+    m.y+=m.vy*dt;
+    m.life-=dt;
+    if(m.life<=0 || m.x<-80 || m.x>W+80 || m.y>H+40){
+      meteors.splice(i,1);
+    }
+  }
+}
+
+function drawMeteors(){
+  if(!ctx||!meteors.length)return;
+  ctx.save();
+  ctx.lineCap='round';
+  meteors.forEach(function(m){
+    var spd=Math.sqrt(m.vx*m.vx+m.vy*m.vy)||1;
+    var ux=m.vx/spd, uy=m.vy/spd;
+    // хвост — назад по траектории
+    var tx=m.x-ux*m.len;
+    var ty=m.y-uy*m.len;
+    var fade=Math.max(0,Math.min(1,m.life));
+    var g=ctx.createLinearGradient(tx,ty,m.x,m.y);
+    g.addColorStop(0,'rgba(180,200,255,0)');
+    g.addColorStop(0.45,'rgba(200,220,255,'+(0.12*m.a*fade)+')');
+    g.addColorStop(0.85,'rgba(230,240,255,'+(0.35*m.a*fade)+')');
+    g.addColorStop(1,'rgba(255,255,255,'+(0.55*m.a*fade)+')');
+    ctx.beginPath();
+    ctx.strokeStyle=g;
+    ctx.lineWidth=m.w;
+    ctx.moveTo(tx,ty);
+    ctx.lineTo(m.x,m.y);
+    ctx.stroke();
+    // крошечная головка
+    ctx.beginPath();
+    ctx.fillStyle='rgba(255,255,255,'+(0.7*m.a*fade)+')';
+    ctx.arc(m.x,m.y,m.w*0.9,0,Math.PI*2);
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
 function drawSpace(dt,t){
   var g=ctx.createRadialGradient(W*0.5,H*0.4,0,W*0.5,H*0.5,Math.max(W,H)*0.7);
   g.addColorStop(0,'#0a1020');g.addColorStop(0.5,'#05080f');g.addColorStop(1,'#000');
   ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  updateMeteors(dt);
+  drawMeteors();
   // галактики — порталы к другим созвездиям
   if(galaxies&&galaxies.length){
     galaxies.forEach(function(G){
