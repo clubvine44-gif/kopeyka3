@@ -189,7 +189,7 @@ function ensureRoot(){
       '<div class="m-room-scene" id="matterRoomScene">'+
         '<div class="m-room-bg"></div>'+
         /* Hotspots: размер зоны ≈ размер объекта; дневник точно на книге-дневнике */
-        '<button type="button" class="m-hot m-hot-sm" data-obj="diary"  style="left:16%;top:88%" title="Дневник"></button>'+
+        '<button type="button" class="m-hot m-hot-sm" data-obj="diary"  style="left:14%;top:86%;width:88px;height:72px" title="Дневник"></button>'+
         '<button type="button" class="m-hot m-hot-md" data-obj="book"   style="left:50%;top:71%" title="Книга"></button>'+
         '<button type="button" class="m-hot m-hot-md" data-obj="plant"  style="left:73%;top:55%" title="Растение"></button>'+
         '<button type="button" class="m-hot m-hot-sm" data-obj="piggy"  style="left:77%;top:40%" title="Копилка"></button>'+
@@ -325,21 +325,32 @@ function buildStars(){
   var goals=getGoals();
   // Реальные относительные координаты Большой Медведицы (7) и Малой (7)
   // Нормализованы 0..1 внутри bounding box созвездия
+  // Большая Медведица (Ковш): порядок Dubhe, Merak, Phecda, Megrez, Alioth, Mizar, Alkaid
+  // ковш слева, ручка вправо-вверх; Dubhe-Merak — указатели на Полярную
   var ursaMajor=[
-    [0.12,0.42],[0.28,0.38],[0.42,0.40],[0.55,0.44], // ковш дно+бок
-    [0.62,0.28],[0.48,0.18],[0.32,0.22]               // ручка
+    [0.18,0.30], // 0 Dubhe  (верх ковша, указатель)
+    [0.18,0.48], // 1 Merak  (низ ковша, указатель)
+    [0.34,0.52], // 2 Phecda (низ ковша у ручки)
+    [0.34,0.34], // 3 Megrez (верх ковша у ручки)
+    [0.50,0.30], // 4 Alioth
+    [0.64,0.24], // 5 Mizar
+    [0.80,0.14]  // 6 Alkaid
   ];
+  // Малая Медведица: Полярная на конце ручки; ковш «смотрит» примерно к Большой
+  // указатели Большой → Полярная (~5× расстояние Dubhe-Merak вверх)
   var ursaMinor=[
-    [0.78,0.22], // Полярная
-    [0.74,0.32],[0.70,0.42],[0.68,0.52], // ручка
-    [0.62,0.58],[0.72,0.62],[0.80,0.56]  // ковш
+    [0.18,0.02], // 0 Polaris (над указателями)
+    [0.28,0.10], // 1
+    [0.36,0.18], // 2
+    [0.44,0.24], // 3 стык ручки/ковша
+    [0.40,0.34], // 4 ковш
+    [0.50,0.36], // 5 Kochab-ish
+    [0.52,0.26]  // 6 Pherkad-ish
   ];
-  // связи для линий (индексы внутри своей группы)
-  var majLinks=[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,2]];
+  var majLinks=[[0,1],[1,2],[2,3],[3,0],[3,4],[4,5],[5,6]]; // ковш + ручка
   var minLinks=[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,3]];
-  var scale=Math.min(W,H);
-  var ox=W*0.08, oy=H*0.22;
-  var bw=W*0.84, bh=H*0.48;
+  var ox=W*0.10, oy=H*0.18;
+  var bw=W*0.78, bh=H*0.52;
   function place(pts, links, list, group){
     var placed=[];
     pts.forEach(function(p,i){
@@ -760,42 +771,63 @@ function onObject(id){
     if(id==='book'){
     var books=MS.books||{};
     var keys=Object.keys(books);
-    var html='<p style="margin:0 0 12px;opacity:.85;line-height:1.4">Полка. Можно открыть сохранённую книгу или загрузить FB2.</p>';
+    var html='<p style="margin:0 0 12px;line-height:1.45;opacity:.9">Полка. Открой сохранённую книгу или вставь текст.</p>';
     if(keys.length){
-      keys.slice(0,8).forEach(function(k){
+      keys.slice(0,6).forEach(function(k){
         var b=books[k]||{};
         html+='<button type="button" class="m-act" data-open-book="'+k+'" style="margin-top:8px">'+(b.title||'Книга')+'</button>';
       });
-    }else{
-      html+='<p style="opacity:.6;font-size:13px">Пока пусто.</p>';
     }
-    html+='<button type="button" class="m-act" id="mAddBook" style="margin-top:14px">+ Загрузить FB2</button>';
+    html+='<button type="button" class="m-act" id="mPasteBook" style="margin-top:12px">Вставить текст книги</button>';
+    html+='<button type="button" class="m-act" id="mDemoBook" style="margin-top:8px;background:rgba(255,255,255,.08);color:#E8F0FF">Открыть демо-страницу</button>';
     showPanel('Книги', html);
     setTimeout(function(){
-      var add=document.getElementById('mAddBook');
-      if(add){
-        add.onclick=function(ev){
-          if(ev){ev.preventDefault();ev.stopPropagation();}
-          pickFb2File();
+      var body=document.getElementById('mPanelBody');
+      if(!body)return;
+      var demo=document.getElementById('mDemoBook');
+      if(demo)demo.onclick=function(e){
+        e.preventDefault();e.stopPropagation();
+        hidePanel();
+        openReader('Тихая полка.\n\nЭто демо-страница. Здесь позже — твои книги.\n\nСвайп влево — следующая страница.\nСвайп вправо — назад.');
+      };
+      var paste=document.getElementById('mPasteBook');
+      if(paste)paste.onclick=function(e){
+        e.preventDefault();e.stopPropagation();
+        var ta=document.createElement('textarea');
+        ta.placeholder='Вставь текст книги сюда…';
+        ta.style.cssText='width:100%;min-height:140px;border-radius:14px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.14);color:#F5E6C8;padding:10px;margin-top:8px';
+        var save=document.createElement('button');
+        save.type='button';save.className='m-act';save.textContent='Открыть';
+        save.style.marginTop='10px';
+        body.innerHTML='';
+        body.appendChild(ta);body.appendChild(save);
+        save.onclick=function(ev){
+          ev.preventDefault();ev.stopPropagation();
+          var raw=String(ta.value||'').trim();
+          if(!raw){toast('Пусто');return;}
+          if(raw.length>120000)raw=raw.slice(0,120000);
+          var id='b_'+Date.now();
+          MS.books=MS.books||{};
+          MS.books[id]={title:'Заметка',raw:raw,pages:1};
+          MS.pageByBook[id]=0;
+          try{saveState();}catch(err){}
+          hidePanel();
+          reader.bookId=id;
+          openReader(raw);
         };
-      }
-      var panel=document.getElementById('mPanelBody');
-      if(panel){
-        panel.querySelectorAll('[data-open-book]').forEach(function(btn){
-          btn.onclick=function(ev){
-            if(ev){ev.preventDefault();ev.stopPropagation();}
-            var id=btn.getAttribute('data-open-book');
-            var b=(MS.books||{})[id];
-            if(!b||!b.raw){toast('Нет текста книги');return;}
-            reader.bookId=id;
-            hidePanel();
-            openReader(b.raw);
-            var rt=document.getElementById('mReaderTitle');
-            if(rt)rt.textContent=b.title||'Книга';
-          };
-        });
-      }
-    },30);
+      };
+      body.querySelectorAll('[data-open-book]').forEach(function(btn){
+        btn.onclick=function(e){
+          e.preventDefault();e.stopPropagation();
+          var id=btn.getAttribute('data-open-book');
+          var b=(MS.books||{})[id];
+          if(!b||!b.raw){toast('Нет текста');return;}
+          reader.bookId=id;
+          hidePanel();
+          openReader(b.raw);
+        };
+      });
+    },20);
     return;
   }
   if(id==='diary'||id==='desk'){
@@ -894,60 +926,6 @@ function paginate(text){
 }
 
 
-function pickFb2File(){
-  // отдельный input — не внутри панели, чтобы WebView не зависал
-  var old=document.getElementById('mBookFile');
-  if(old&&old.parentNode)old.parentNode.removeChild(old);
-  var file=document.createElement('input');
-  file.type='file';
-  file.id='mBookFile';
-  file.accept='.fb2,text/xml,application/xml,application/x-fictionbook+xml,*/*';
-  file.style.cssText='position:fixed;left:0;top:0;width:1px;height:1px;opacity:0.01;z-index:99999';
-  document.body.appendChild(file);
-  file.addEventListener('change',function(){
-    var f=file.files&&file.files[0];
-    try{if(file.parentNode)file.parentNode.removeChild(file);}catch(e){}
-    if(!f)return;
-    toast('Читаю файл…');
-    var fr=new FileReader();
-    fr.onerror=function(){toast('Не удалось прочитать файл');};
-    fr.onload=function(){
-      try{
-        var raw=String(fr.result||'');
-        if(raw.length>800000) raw=raw.slice(0,800000); // не вешаем UI
-        var id='b_'+Date.now();
-        var title=(f.name||'Книга').replace(/\.fb2$/i,'');
-        // лёгкая пагинация
-        var text=/<FictionBook|<body/i.test(raw)?parseFb2(raw):raw;
-        if(text.length>400000) text=text.slice(0,400000);
-        var pages=paginate(text);
-        MS.books=MS.books||{};
-        // в storage — урезанный raw
-        MS.books[id]={title:title,raw:text.slice(0,300000),pages:pages.length};
-        MS.pageByBook[id]=0;
-        try{saveState();}catch(e){}
-        hidePanel();
-        reader.bookId=id;
-        reader.pages=pages;
-        reader.idx=0;
-        var r=document.getElementById('matterReader');
-        if(r){r.hidden=false;r.style.display='';}
-        renderPage();
-        var rt=document.getElementById('mReaderTitle');
-        if(rt)rt.textContent=title;
-        toast('Книга открыта');
-      }catch(err){
-        toast('Ошибка книги');
-      }
-    };
-    fr.readAsText(f);
-  },{once:true});
-  // клик только после добавления в DOM
-  setTimeout(function(){
-    try{file.click();}catch(e){toast('Не удалось открыть выбор файла');}
-  },80);
-}
-
 function openReader(raw){
   if(window.__matterReaderBookId){reader.bookId=window.__matterReaderBookId;window.__matterReaderBookId=null;}
   var sample=raw||(
@@ -960,6 +938,7 @@ function openReader(raw){
     'Назад — свайп вправо. Без кнопок, только жест.'
   );
   var text=/<FictionBook|<body/i.test(sample)?parseFb2(sample):sample;
+  if(text.length>150000)text=text.slice(0,150000);
   reader.pages=paginate(text);
   reader.idx=MS.pageByBook[reader.bookId]|0;
   if(reader.idx>=reader.pages.length)reader.idx=0;
@@ -1081,6 +1060,7 @@ function handleCommand(text){
 /* ---------- draw loop ---------- */
 function loop(t){
   if(phase==='idle')return;
+  if(document.hidden&&phase==='room'){pauseRoomAudio();}
   raf=requestAnimationFrame(loop);
   t=t||performance.now();
   var dt=Math.min(0.05,(t-lastT)/1000);lastT=t;
@@ -1225,58 +1205,55 @@ function drawSpace(dt,t){
     ctx.arc(s.x,s.y,r,0,Math.PI*2);ctx.fill();
   });
 
-  // дверь = чёрная дыра
+  // дверь = чистая чёрная дыра + только вихрь (без «колец Сатурна»)
   if(door){
     if(door.opening){
-      door.open=Math.min(1,door.open+dt*0.85);
+      door.open=Math.min(1,door.open+dt*0.9);
       if(door.open>=1 && !door.entered){
         door.entered=true;
-        setTimeout(function(){enterRoom();},160);
+        setTimeout(function(){enterRoom();},150);
       }
     }
-    door.swirl=(door.swirl||0)+dt*(2.2+door.open*3);
+    door.swirl=(door.swirl||0)+dt*(2.8+door.open*4);
     var dx=door.x, dy=door.y;
-    var sc=1+door.open*0.55;
-    var R=door.r*sc;
+    var R=door.r*(1+door.open*0.5);
 
-    // вихрь частиц
+    // спиральный вихрь — частицы затягиваются внутрь
     if(door.vortex){
       door.vortex.forEach(function(p){
-        p.a+=dt*p.sp*(1+door.open);
-        var rr=p.r*(0.7+0.5*sc);
+        p.a+=dt*p.sp*(1.3+door.open);
+        p.r=Math.max(4, p.r - dt*(6+door.open*14));
+        if(p.r<6){ p.r=22+Math.random()*38; p.a=Math.random()*Math.PI*2; }
+        var rr=p.r*(0.85+0.25*door.open);
+        // лёгкая эллиптичность вихря
         var px=dx+Math.cos(p.a+door.swirl)*rr;
-        var py=dy+Math.sin(p.a+door.swirl)*rr*0.55;
+        var py=dy+Math.sin(p.a+door.swirl)*rr*0.72;
+        var al=0.15+0.55*(1-p.r/60);
         ctx.beginPath();
-        ctx.fillStyle='rgba(160,200,255,'+(0.25+0.35*door.open)+')';
-        ctx.arc(px,py,p.s,0,Math.PI*2);ctx.fill();
+        ctx.fillStyle='rgba(200,220,255,'+al+')';
+        ctx.arc(px,py,p.s*0.9,0,Math.PI*2);ctx.fill();
       });
     }
-    // диск аккреции
-    for(var di=0;di<12;di++){
-      var rr=R*(0.35+di*0.07);
-      ctx.beginPath();
-      ctx.strokeStyle='rgba(120,170,255,'+(0.05+di*0.012+door.open*0.04)+')';
-      ctx.lineWidth=1.4;
-      ctx.ellipse(dx,dy,rr,rr*0.38,door.swirl*0.15,0,Math.PI*2);
-      ctx.stroke();
-    }
-    // фотонное кольцо
-    ctx.beginPath();
-    ctx.strokeStyle='rgba(255,220,180,'+(0.35+0.3*Math.sin((t||0)*4))+')';
-    ctx.lineWidth=2;
-    ctx.ellipse(dx,dy,R*0.55,R*0.2,door.swirl*0.1,0,Math.PI*2);
-    ctx.stroke();
-    // горизонт
-    var hg=ctx.createRadialGradient(dx,dy,0,dx,dy,R*0.5);
-    hg.addColorStop(0,'#000');
-    hg.addColorStop(0.55,'#050510');
-    hg.addColorStop(0.85,'rgba(40,60,120,0.45)');
-    hg.addColorStop(1,'rgba(0,0,0,0)');
-    ctx.beginPath();ctx.fillStyle=hg;ctx.arc(dx,dy,R*0.5,0,Math.PI*2);ctx.fill();
 
-    if(door.open>0.15){
-      ctx.fillStyle='rgba(0,0,0,'+Math.min(0.85,door.open)+')';
-      ctx.beginPath();ctx.arc(dx,dy,R*0.35+door.open*30,0,Math.PI*2);ctx.fill();
+    // мягкое свечение края (не кольцо планет)
+    var eg=ctx.createRadialGradient(dx,dy,R*0.35,dx,dy,R*1.15);
+    eg.addColorStop(0,'rgba(0,0,0,0)');
+    eg.addColorStop(0.55,'rgba(30,50,90,0.12)');
+    eg.addColorStop(0.85,'rgba(120,160,220,0.18)');
+    eg.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.beginPath();ctx.fillStyle=eg;ctx.arc(dx,dy,R*1.15,0,Math.PI*2);ctx.fill();
+
+    // абсолютно чёрный горизонт
+    var hg=ctx.createRadialGradient(dx,dy,0,dx,dy,R*0.55);
+    hg.addColorStop(0,'#000');
+    hg.addColorStop(0.7,'#000');
+    hg.addColorStop(0.92,'rgba(10,14,28,0.9)');
+    hg.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.beginPath();ctx.fillStyle=hg;ctx.arc(dx,dy,R*0.55,0,Math.PI*2);ctx.fill();
+
+    if(door.open>0.12){
+      ctx.fillStyle='rgba(0,0,0,'+Math.min(0.92,door.open)+')';
+      ctx.beginPath();ctx.arc(dx,dy,R*0.4+door.open*40,0,Math.PI*2);ctx.fill();
     }
   }
 
@@ -1285,20 +1262,17 @@ function drawSpace(dt,t){
     updateFinn(dt,t);
     if(finn.state==='star'||finn.state==='fall'){
       // хвост падающей звезды
-      if(finn.trail&&finn.trail.length){
-        for(var ti=0;ti<finn.trail.length;ti++){
-          var tp=finn.trail[ti];
-          var ta=(ti+1)/finn.trail.length;
+      if(finn.trail&&finn.trail.length>1){
+        ctx.lineCap='round';
+        for(var ti=1;ti<finn.trail.length;ti++){
+          var a0=finn.trail[ti-1], a1=finn.trail[ti];
+          var ta=ti/finn.trail.length;
           ctx.beginPath();
-          ctx.fillStyle='rgba(255,220,160,'+(0.15+0.55*ta)+')';
-          ctx.arc(tp.x,tp.y,2+3*ta,0,Math.PI*2);ctx.fill();
+          ctx.strokeStyle='rgba(255,230,180,'+(0.1+0.7*ta)+')';
+          ctx.lineWidth=1+5*ta;
+          ctx.moveTo(a0.x,a0.y);ctx.lineTo(a1.x,a1.y);ctx.stroke();
         }
       }
-      finn.sparks.forEach(function(sp){
-        ctx.beginPath();
-        ctx.fillStyle='rgba(255,240,200,'+Math.max(0,sp.a)+')';
-        ctx.arc(sp.x,sp.y,sp.r,0,Math.PI*2);ctx.fill();
-      });
       drawFinnStar(ctx, finn.x, finn.y, t);
     }else if(finn.state!=='enter' && finn.state!=='room'){
       // вспышка рождения
@@ -1362,43 +1336,31 @@ function updateFinn(dt,t){
   if(finn.blink>0)finn.blink-=dt;
 
   if(finn.state==='fall'){
-    // падающая звезда: ускорение вниз + яркий хвост
-    finn.fallV=(finn.fallV||0)+dt*2200;
+    // метеор: сильное ускорение, длинный хвост, без мусора после
+    finn.fallV=(finn.fallV||120)+dt*3200;
     finn.y+=finn.fallV*dt;
-    finn.x+=(finn.tx-finn.x)*Math.min(1,dt*1.8);
-    finn.trail.push({x:finn.x,y:finn.y,a:1});
-    if(finn.trail.length>18)finn.trail.shift();
-    if(Math.random()<0.85){
-      finn.sparks.push({
-        x:finn.x+(Math.random()-0.5)*14,
-        y:finn.y+(Math.random()-0.5)*10,
-        r:1.2+Math.random()*2.5,
-        a:0.9,
-        vx:(Math.random()-0.5)*40,
-        vy:20+Math.random()*40
+    finn.x+=(finn.tx-finn.x)*Math.min(1,dt*2.2);
+    // плотный хвост
+    for(var k=0;k<3;k++){
+      finn.trail.push({
+        x:finn.x+(Math.random()-0.5)*6,
+        y:finn.y-k*4,
+        a:1
       });
     }
-    finn.sparks.forEach(function(s){
-      s.a-=dt*1.8; s.x+=(s.vx||0)*dt; s.y+=(s.vy||40)*dt;
-    });
-    finn.sparks=finn.sparks.filter(function(s){return s.a>0;});
-    finn.scale=1; // звезда остаётся звездой до удара
+    if(finn.trail.length>28)finn.trail.splice(0,finn.trail.length-28);
+    finn.sparks.forEach(function(s){s.a-=dt*2.5;s.y+=dt*30;});
+    finn.sparks=finn.sparks.filter(function(s){return s.a>0.05;});
+    finn.scale=1;
     if(finn.y>=finn.ty){
-      // БАХ — вспышка и сразу Фина
       finn.y=finn.ty; finn.x=finn.tx;
       finn.state='idle';
       finn.scale=1; finn.alpha=1;
       finn.emotion='happy';
-      finn.flash=1;
-      finn.trail=[]; // хвост падения убрать сразу
+      finn.flash=1.2;
+      finn.trail=[];
       finn.sparks=[];
-      // короткая вспышка без долгоживущих точек
-      for(var i=0;i<12;i++){
-        var a=Math.random()*Math.PI*2;
-        var sp=60+Math.random()*120;
-        finn.sparks.push({x:finn.x,y:finn.y,r:1.2+Math.random()*2,a:0.85,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp});
-      }
-      setTimeout(function(){finnSay('Эй! Я с тобой.');},220);
+      setTimeout(function(){finnSay('Эй! Я с тобой.');},200);
     }
   }else if(finn.state==='toDoor'){
     finn.x+=(finn.tx-finn.x)*Math.min(1,dt*2.4);
@@ -1485,17 +1447,42 @@ function exitMatter(){
 // отключаем кривой второй слой matter-finn.js, если он успел загрузиться
 try{if(window.__MatterFinn){try{window.__MatterFinn.hideRoomFinn&&window.__MatterFinn.hideRoomFinn();}catch(e){}window.__MatterFinn={finn:{mode:'off'},startFall:function(){},startListen:function(){},showRoomFinn:function(){},hideRoomFinn:function(){}};}}catch(e){}
 
-document.addEventListener('visibilitychange',function(){
-  if(document.hidden){
-    try{if(roomAudio)roomAudio.pause();}catch(e){}
-    try{if(ambient&&ambient.type==='synth'&&ambient.master)ambient.master.gain.value=0;}catch(e){}
-  }else if(phase==='room'){
-    try{
-      if(roomAudio){var p=roomAudio.play();if(p&&p.catch)p.catch(function(){});}
-      else if(ambient&&ambient.type==='synth'&&ambient.master)ambient.master.gain.value=0.03;
-    }catch(e){}
-  }
-},false);
+
+
+function pauseRoomAudio(){
+  try{if(roomAudio){roomAudio.pause();}}catch(e){}
+  try{if(ambient&&ambient.type==='synth'&&ambient.master)ambient.master.gain.value=0;}catch(e){}
+}
+function resumeRoomAudio(){
+  if(phase!=='room')return;
+  try{
+    if(roomAudio){
+      var pr=roomAudio.play();
+      if(pr&&pr.catch)pr.catch(function(){});
+    }else if(ambient&&ambient.type==='synth'&&ambient.master){
+      ambient.master.gain.value=0.03;
+    }
+  }catch(e){}
+}
+function bindAudioLifecycle(){
+  if(bindAudioLifecycle._done)return;
+  bindAudioLifecycle._done=true;
+  document.addEventListener('visibilitychange',function(){
+    if(document.hidden)pauseRoomAudio();
+    else resumeRoomAudio();
+  },false);
+  window.addEventListener('pagehide',pauseRoomAudio,false);
+  window.addEventListener('blur',function(){
+    // WebView часто не шлёт visibilitychange при сворачивании
+    setTimeout(function(){
+      if(document.hidden||!document.hasFocus())pauseRoomAudio();
+    },80);
+  },false);
+  window.addEventListener('focus',function(){
+    if(!document.hidden)resumeRoomAudio();
+  },false);
+}
+bindAudioLifecycle();
 
 window.FinMatter={
   enter:enterMatter,
