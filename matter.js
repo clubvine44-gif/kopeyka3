@@ -2549,11 +2549,15 @@ function updateFinn(dt,t){
     var omp=1-ep;
     finn.x=omp*omp*finn.sx+2*omp*ep*(finn.cx||finn.sx)+ep*ep*finn.tx;
     finn.y=omp*omp*finn.sy+2*omp*ep*(finn.cy||finn.sy)+ep*ep*finn.ty;
-    finn.morph=ep; // 0=звезда → 1=солнце, непрерывно
+    // морф в солнце сжат в последние ~22% полёта — большую часть пути это
+    // яркая маленькая звезда с длинным хвостом (эпичный пролёт), и только
+    // перед самой посадкой она резко превращается в солнце
+    var morphT=Math.max(0,(p-0.78)/0.22);
+    finn.morph=morphT*morphT*(3-2*morphT);
     var fdist=Math.hypot(finn.x-prevFX,finn.y-prevFY);
     if(fdist>3){
       finn.trail.push({x:finn.x,y:finn.y});
-      if(finn.trail.length>28)finn.trail.splice(0,finn.trail.length-28);
+      if(finn.trail.length>44)finn.trail.splice(0,finn.trail.length-44);
     }
     finn.scale=0.85+0.2*ep;
     if(p>=1){
