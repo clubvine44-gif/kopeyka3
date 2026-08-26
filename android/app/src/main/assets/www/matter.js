@@ -359,6 +359,29 @@ function injectCSS(){
 '.m-reader-head button{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:#E8F0FF}'+
 '.m-reader.chrome-hide .m-reader-head,.m-reader.chrome-hide .m-reader-foot{opacity:0;pointer-events:none;transform:translateY(-6px)}'+
 '.m-reader.chrome-hide .m-reader-foot{transform:translateY(6px)}'+
+'.m-cosmos-menu{display:flex;flex-direction:column;gap:12px;padding:4px 0 8px}'+
+'.m-cosmos-lead{margin:0 0 6px;font-size:13px;letter-spacing:.04em;color:rgba(200,215,240,.55);font-weight:500}'+
+'.m-cosmos-btn{display:flex;align-items:center;gap:14px;width:100%;text-align:left;padding:16px 14px;border-radius:16px;'+
+'border:1px solid rgba(140,170,220,.2);background:linear-gradient(145deg,rgba(30,40,70,.85),rgba(12,16,28,.95));color:#E8F0FF;cursor:pointer}'+
+'.m-cosmos-btn:active{transform:scale(.98);border-color:rgba(180,210,255,.4)}'+
+'.m-cosmos-ico{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;'+
+'background:rgba(100,140,220,.15);border:1px solid rgba(160,190,255,.25);font-size:16px;color:#C8D8FF;flex-shrink:0}'+
+'.m-cosmos-txt{display:flex;flex-direction:column;gap:3px}'+
+'.m-cosmos-txt b{font-size:16px;font-weight:700;letter-spacing:.03em}'+
+'.m-cosmos-txt i{font-style:normal;font-size:12px;color:rgba(180,200,230,.55)}'+
+'.m-diary-wrap{display:flex;flex-direction:column;gap:12px}'+
+'.m-diary-top{display:flex;align-items:center;justify-content:space-between;gap:10px}'+
+'.m-diary-date{font-size:15px;font-weight:700;letter-spacing:.04em;color:#E8F0FF}'+
+'.m-diary-nav{display:flex;gap:6px}'+
+'.m-diary-nav button{width:36px;height:36px;border-radius:10px;border:1px solid rgba(140,170,220,.25);background:rgba(255,255,255,.05);color:#E8F0FF;font-size:16px}'+
+'.m-diary-rates{display:flex;gap:8px}'+
+'.m-diary-rates button{flex:1;padding:10px 6px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#B8C8E0;font-size:12px;font-weight:600}'+
+'.m-diary-rates button.on-bad{background:rgba(220,80,80,.25);border-color:rgba(240,100,100,.45);color:#F8B0B0}'+
+'.m-diary-rates button.on-ok{background:rgba(220,150,60,.22);border-color:rgba(240,180,80,.4);color:#F8D0A0}'+
+'.m-diary-rates button.on-good{background:rgba(60,180,100,.22);border-color:rgba(100,220,140,.4);color:#B0F0C0}'+
+'.m-diary-ta{width:100%;min-height:180px;max-height:42vh;resize:vertical;padding:14px;border-radius:14px;border:1px solid rgba(140,170,220,.18);'+
+'background:rgba(8,12,22,.75);color:#E8F0FF;font-size:15px;line-height:1.55;font-family:Georgia,serif;box-sizing:border-box}'+
+
 '.m-reader-page{flex:1;overflow:hidden;padding:16px 22px 28px;color:#EDE4D4;font-size:16px;line-height:1.65;'+
   'font-family:Georgia,"Times New Roman",serif;white-space:pre-wrap;user-select:none;'+
   '-webkit-user-select:none;touch-action:pan-y}'+
@@ -500,11 +523,7 @@ function buildStars(){
   }
   } // end home sky
   // Дверь = чёрная дыра справа снизу (не на созвездиях)
-  door={
-    x:W*0.86, y:H*0.76, r:Math.min(W,H)*0.068,
-    open:0,opening:false,entered:false,
-    swirl:0
-  };
+  door=null; // комната и чёрная дыра убраны
   // галактики — слева-верх и правее-центр, без пересечений
   galaxies=[
     {id:'cass', x:W*0.18, y:H*0.22, r:Math.min(W,H)*0.08, rot:-0.4, kind:1, label:'Кассиопея'},
@@ -681,23 +700,39 @@ function drawFinnStar(c, x, y, t){
 /* ---------- phases ---------- */
 var bh={r:2,max:0,swirl:0,fall:0,done:false};
 
+var fadeIn={t:0,dur:1.35};
 function startEnter(){
   setTimeout(bindMuteBtn,50);
-  phase='blackhole';
-  bh={r:1.5,max:Math.max(W,H)*1.05,swirl:0,fall:0,done:false,t:0,bgStars:null};
-  particles=[];
-  for(var i=0;i<110;i++){
-    particles.push({
-      a:Math.random()*Math.PI*2,
-      r:12+Math.random()*Math.min(W,H)*0.35,
-      sp:0.7+Math.random()*2.2,
-      s:0.8+Math.random()*2.2
+  phase='fadein';
+  fadeIn={t:0,dur:1.35};
+  // заранее собрать звёзды, чтобы небо проявилось плавно
+  try{buildStars();}catch(e){}
+  resetFinn();
+  if(finn){finn.state='star';finn.x=W*0.5;finn.y=H*0.12;}
+  lastT=performance.now();
+  loop();
+}
+function drawFadeIn(dt){
+  fadeIn.t+=dt;
+  var p=Math.min(1,fadeIn.t/fadeIn.dur);
+  // плавное затемнение + проявление звёзд
+  var g=ctx.createRadialGradient(W*0.5,H*0.45,0,W*0.5,H*0.5,Math.max(W,H)*0.75);
+  g.addColorStop(0,'#0a1020');g.addColorStop(0.55,'#05080f');g.addColorStop(1,'#000');
+  ctx.globalAlpha=p;
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  ctx.globalAlpha=p*p;
+  // простые звёзды фона
+  if(stars&&stars.length){
+    stars.forEach(function(s){
+      if(!s.bg)return;
+      var a=(s.bright||0.5)*p;
+      ctx.beginPath();
+      ctx.fillStyle='rgba(230,240,255,'+a+')';
+      ctx.arc(s.x,s.y,s.baseR||1.2,0,Math.PI*2);ctx.fill();
     });
   }
-  resetFinn();
-  lastT=performance.now();
-  // не прячем chrome мгновенно — первые кадры BH поверх приложения (полупрозрачно)
-  loop();
+  ctx.globalAlpha=1;
+  if(p>=1)enterConstellation();
 }
 
 function enterConstellation(){
@@ -708,28 +743,14 @@ function enterConstellation(){
   finn.x=W*0.5; finn.y=H*0.12;
   var hud=document.getElementById('matterHud');
   if(hud)hud.hidden=false;
+  // комната и дверь отключены
+  door=null;
   if(!MS.firstEnter){MS.firstEnter=new Date().toISOString();saveState();}
   try{history.pushState({matter:'space'},'','#matter');}catch(e){}
-  // разово переиграть аудио-тур после фикса голоса
-  if(!MS.tourAudioV3){ MS.matterTourDone=false; MS.tourAudioV3=1; try{saveState();}catch(e){} }
-  var needTour=!!window.__matterTourPending || !MS.matterTourDone;
   window.__matterTourPending=false;
-  if(needTour){
-    try{
-      var title=document.querySelector('#matterHud .m-title');
-      if(title){
-        title.classList.remove('dissolve');
-        title.style.display='block';
-        title.style.opacity='1';
-        title.style.transition='opacity 0.8s linear';
-        setTimeout(function(){ if(title) title.style.opacity='0'; },1400);
-        setTimeout(function(){ if(title){title.style.display='none';title.style.opacity='1';title.style.transition='';} },2300);
-      }
-    }catch(e){}
-    setTimeout(function(){startMatterTour();},2500);
-  }else{
-    try{showMatterTitle();}catch(e){}
-  }
+  MS.matterTourDone=true;
+  try{saveState();}catch(e){}
+  try{showMatterTitle();}catch(e){}
 }
 
 var tourTracks=[
@@ -768,7 +789,7 @@ function ensureTourAudio(){
 function startFinnFallSmooth(){
   if(!finn||finn.state!=='star')return;
   var sx0=finn.x, sy0=finn.y;
-  var tx0=W*0.5, ty0=H*0.58;
+  var tx0=W*0.5, ty0=H*0.88;
   finn.state='fall';
   finn.fallT=0;
   finn.fallDur=1.55;
@@ -829,6 +850,7 @@ function runTourStep(i){
 }
 
 function startMatterTour(){
+  return; // обучение отключено
   if(phase!=='space'||!finn)return;
   if(startMatterTour._running)return;
   startMatterTour._running=true;
@@ -959,7 +981,7 @@ function handleBack(){
   var reader=document.getElementById('matterReader');
   if(reader&&!reader.hidden){closeReader();return true;}
   if(phase==='room'){leaveRoom();return true;}
-  if(phase==='space'||phase==='blackhole'){exitMatter();return true;}
+  if(phase==='space'||phase==='blackhole'||phase==='fadein'){exitMatter();return true;}
   return false;
 }
 
@@ -1004,7 +1026,7 @@ function onCanvasTap(e){
     var dx=x-finn.x, dy=y-finn.y;
     if(dx*dx+dy*dy < 64*64){
       var sx0=finn.x, sy0=finn.y;
-      var tx0=W*0.5, ty0=H*0.58;
+      var tx0=W*0.5, ty0=H*0.88;
       finn.state='fall';
       finn.fallT=0;
       finn.fallDur=1.15;
@@ -1021,14 +1043,12 @@ function onCanvasTap(e){
   }
   if(finn && (finn.state==='fall'||finn.state==='birth'))return;
 
-  // 2) Фина idle — голос
+  // 2) Фина idle — космическое меню
   if(finn && finn.state==='idle'){
     var dxf=x-finn.x, dyf=y-finn.y;
-    var hitR=(finn.size||58)*1.1;
+    var hitR=(finn.size||58)*1.15;
     if(dxf*dxf+dyf*dyf < hitR*hitR){
-      finn.emotion='listening';
-      finnSay('Слушаю…');
-      startListen();
+      openSpaceMenu();
       return;
     }
   }
@@ -1050,20 +1070,7 @@ function onCanvasTap(e){
     }
   }
 
-  // 4) Дверь
-  if(door){
-    var dx2=x-door.x, dy2=y-door.y;
-    if(dx2*dx2+dy2*dy2 < (door.r+24)*(door.r+24)){
-      if(finn && finn.state==='idle'){
-        finn.state='toDoor';
-        finn.tx=door.x; finn.ty=door.y;
-        finnSay('Идём в комнату.');
-      }else{
-        openDoorAnim();
-      }
-      return;
-    }
-  }
+  // 4) Дверь отключена
 
   // 5) Звёзды целей
   var best=findGoalStarAt(x,y);
@@ -1283,97 +1290,93 @@ function diaryKey(d){
   var x=d instanceof Date?d:new Date(d);
   return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');
 }
+function escapeHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function openDiaryApp(dateStr){
   MS.diaryDays=MS.diaryDays||{};
-  // migrate old string diary
   if(typeof MS.diary==='string'&&MS.diary&&!MS.diaryDays._migrated){
     MS.diaryDays[diaryKey(new Date())]={text:MS.diary,rating:0};
     MS.diaryDays._migrated=1;
   }
-  var cur=dateStr?new Date(dateStr+'T12:00:00'):new Date();
-  if(isNaN(cur.getTime()))cur=new Date();
-  var key=diaryKey(cur);
+  var key=dateStr||diaryKey(new Date());
   var entry=MS.diaryDays[key]||{text:'',rating:0};
-  var months=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
-  var html='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">';
-  html+='<div style="font-size:13px;opacity:.75">'+months[cur.getMonth()]+' '+cur.getFullYear()+'</div>';
-  html+='<button type="button" id="mDiaryCal" style="width:36px;height:36px;border-radius:10px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.06);color:#E8F0FF;font-size:16px">📅</button>';
-  html+='</div>';
-  html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">';
-  html+='<button type="button" id="mDiaryPrev" style="width:36px;height:36px;border-radius:10px;border:0;background:rgba(255,255,255,.08);color:#E8F0FF">‹</button>';
-  html+='<div style="flex:1;text-align:center;font-weight:700;color:#F5E6C8;font-size:16px">'+cur.getDate()+' '+months[cur.getMonth()].toLowerCase()+'</div>';
-  html+='<button type="button" id="mDiaryNext" style="width:36px;height:36px;border-radius:10px;border:0;background:rgba(255,255,255,.08);color:#E8F0FF">›</button>';
-  html+='</div>';
-  // rating
-  html+='<div style="display:flex;gap:8px;justify-content:center;margin-bottom:10px">';
-  var labels=[[1,'Плохо','#e85a5a'],[2,'Так себе','#e8a04a'],[3,'Отлично','#5ad47a']];
-  labels.forEach(function(L){
-    var on=entry.rating===L[0];
-    html+='<button type="button" class="m-rate" data-rate="'+L[0]+'" style="flex:1;padding:8px 4px;border-radius:10px;border:1px solid '+(on?L[2]:'rgba(255,255,255,.1)')+';background:'+(on?L[2]+'33':'rgba(0,0,0,.25)')+';color:'+(on?L[2]:'#ccc')+';font-size:12px">'+L[1]+'</button>';
-  });
-  html+='</div>';
-  html+='<textarea id="mDiaryText" placeholder="Запись дня…" style="width:100%;min-height:180px;max-height:40vh;border-radius:14px;background:rgba(8,6,12,.55);border:1px solid rgba(255,255,255,.1);color:#EDE4D4;padding:14px;font-size:15px;line-height:1.5;resize:vertical;outline:none">'+escapeHtml(entry.text||'')+'</textarea>';
-  html+='<button type="button" class="m-act" id="mDiarySave" style="margin-top:10px">Сохранить день</button>';
-  html+='<div id="mDiaryCalPop" style="display:none;margin-top:10px;padding:10px;border-radius:14px;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.1)"></div>';
+  var d=new Date(key+'T12:00:00');
+  var months=['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+  var dateLabel=d.getDate()+' '+months[d.getMonth()]+' '+d.getFullYear();
+  var rate=num(entry.rating)||0;
+  var html='<div class="m-diary-wrap">'+
+    '<div class="m-diary-top">'+
+      '<div class="m-diary-date">'+dateLabel+'</div>'+
+      '<div class="m-diary-nav">'+
+        '<button type="button" id="mDiaryPrev" aria-label="Назад">‹</button>'+
+        '<button type="button" id="mDiaryCal" aria-label="Календарь">▦</button>'+
+        '<button type="button" id="mDiaryNext" aria-label="Вперёд">›</button>'+
+      '</div>'+
+    '</div>'+
+    '<div class="m-diary-rates">'+
+      '<button type="button" data-r="1" class="'+(rate===1?'on-bad':'')+'">Плохо</button>'+
+      '<button type="button" data-r="2" class="'+(rate===2?'on-ok':'')+'">Норм</button>'+
+      '<button type="button" data-r="3" class="'+(rate===3?'on-good':'')+'">Отлично</button>'+
+    '</div>'+
+    '<textarea class="m-diary-ta" id="mDiaryText" placeholder="Что было важным сегодня…">'+escapeHtml(entry.text||'')+'</textarea>'+
+    '<button type="button" class="m-act" id="mDiarySave">Сохранить</button>'+
+    '<div id="mDiaryCalPop" style="display:none;margin-top:8px"></div>'+
+  '</div>';
   showPanel('Дневник', html);
   setTimeout(function(){
-    function shift(days){
-      // save current text before leave
-      var ta=document.getElementById('mDiaryText');
-      var text=ta?String(ta.value||''):'';
+    var ta=document.getElementById('mDiaryText');
+    function saveCur(){
       MS.diaryDays[key]=MS.diaryDays[key]||{text:'',rating:0};
-      MS.diaryDays[key].text=text.slice(0,10000);
-      saveState();
-      var n=new Date(cur);n.setDate(n.getDate()+days);
-      openDiaryApp(diaryKey(n));
+      if(ta)MS.diaryDays[key].text=String(ta.value||'').slice(0,12000);
+      try{saveState();}catch(e){}
     }
-    var prev=document.getElementById('mDiaryPrev');
-    var next=document.getElementById('mDiaryNext');
-    if(prev)prev.onclick=function(e){e.preventDefault();shift(-1);};
-    if(next)next.onclick=function(e){e.preventDefault();shift(1);};
-    document.querySelectorAll('.m-rate').forEach(function(btn){
-      btn.onclick=function(e){
+    var sv=document.getElementById('mDiarySave');
+    if(sv)sv.onclick=function(e){e.preventDefault();saveCur();toast('Сохранено');};
+    document.querySelectorAll('.m-diary-rates [data-r]').forEach(function(b){
+      b.onclick=function(e){
         e.preventDefault();
-        var r=Number(btn.getAttribute('data-rate'))||0;
+        var r=num(b.getAttribute('data-r'));
         MS.diaryDays[key]=MS.diaryDays[key]||{text:'',rating:0};
         MS.diaryDays[key].rating=r;
-        var ta=document.getElementById('mDiaryText');
-        if(ta)MS.diaryDays[key].text=String(ta.value||'').slice(0,10000);
+        if(ta)MS.diaryDays[key].text=String(ta.value||'').slice(0,12000);
         saveState();
         openDiaryApp(key);
       };
     });
-    var save=document.getElementById('mDiarySave');
-    if(save)save.onclick=function(e){
-      e.preventDefault();
-      var ta=document.getElementById('mDiaryText');
-      MS.diaryDays[key]=MS.diaryDays[key]||{text:'',rating:0};
-      MS.diaryDays[key].text=ta?String(ta.value||'').slice(0,10000):'';
-      saveState();toast('День сохранён');
+    var prev=document.getElementById('mDiaryPrev');
+    var next=document.getElementById('mDiaryNext');
+    if(prev)prev.onclick=function(e){
+      e.preventDefault();saveCur();
+      var n=new Date(key+'T12:00:00');n.setDate(n.getDate()-1);
+      openDiaryApp(diaryKey(n));
+    };
+    if(next)next.onclick=function(e){
+      e.preventDefault();saveCur();
+      var n=new Date(key+'T12:00:00');n.setDate(n.getDate()+1);
+      openDiaryApp(diaryKey(n));
     };
     var cal=document.getElementById('mDiaryCal');
-    var pop=document.getElementById('mDiaryCalPop');
-    if(cal&&pop)cal.onclick=function(e){
+    if(cal)cal.onclick=function(e){
       e.preventDefault();
+      var pop=document.getElementById('mDiaryCalPop');
+      if(!pop)return;
       if(pop.style.display==='block'){pop.style.display='none';return;}
-      // mini calendar current month
-      var y=cur.getFullYear(), m=cur.getMonth();
+      var y=d.getFullYear(),m=d.getMonth();
       var first=new Date(y,m,1);
-      var start=(first.getDay()+6)%7; // mon=0
+      var start=(first.getDay()+6)%7;
       var daysIn=new Date(y,m+1,0).getDate();
-      var h='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;font-size:11px;text-align:center">';
-      ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].forEach(function(d){h+='<div style="opacity:.5">'+d+'</div>';});
+      var h='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;font-size:12px">';
+      ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].forEach(function(x){h+='<div style="opacity:.45;padding:4px 0">'+x+'</div>';});
       for(var i=0;i<start;i++)h+='<div></div>';
-      for(var d=1;d<=daysIn;d++){
-        var ds=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+      for(var day=1;day<=daysIn;day++){
+        var ds=y+'-'+String(m+1).padStart(2,'0')+'-'+String(day).padStart(2,'0');
         var en=MS.diaryDays[ds];
-        var col='#888';
+        var col='#8899aa';
         if(en&&en.rating===1)col='#e85a5a';
         else if(en&&en.rating===2)col='#e8a04a';
         else if(en&&en.rating===3)col='#5ad47a';
-        else if(en&&en.text)col='#aaa';
-        var sel=ds===key?'box-shadow:0 0 0 1px #F5E6C8;':'';
-        h+='<button type="button" data-d="'+ds+'" style="padding:6px 0;border-radius:8px;border:0;background:rgba(255,255,255,.06);color:'+col+';'+sel+'">'+d+'</button>';
+        else if(en&&en.text)col='#c8d0e0';
+        var sel=ds===key?'box-shadow:0 0 0 1px rgba(200,220,255,.5);':'';
+        h+='<button type="button" data-d="'+ds+'" style="padding:7px 0;border-radius:8px;border:0;background:rgba(255,255,255,.05);color:'+col+';'+sel+'">'+day+'</button>';
       }
       h+='</div>';
       pop.innerHTML=h;
@@ -1381,20 +1384,49 @@ function openDiaryApp(dateStr){
       pop.querySelectorAll('[data-d]').forEach(function(b){
         b.onclick=function(ev){
           ev.preventDefault();
-          var ta=document.getElementById('mDiaryText');
-          MS.diaryDays[key]=MS.diaryDays[key]||{text:'',rating:0};
-          if(ta)MS.diaryDays[key].text=String(ta.value||'').slice(0,10000);
-          saveState();
+          saveCur();
           openDiaryApp(b.getAttribute('data-d'));
         };
       });
     };
+    // автосохранение при вводе
+    if(ta){
+      var st=null;
+      ta.addEventListener('input',function(){
+        if(st)clearTimeout(st);
+        st=setTimeout(saveCur,400);
+      });
+    }
   },20);
 }
 
 
 /* ---------- Book library + swipe reader ---------- */
-var reader={pages:[],idx:0,bookId:null,title:''};
+var reader={pages:[],idx:0,bookId:null,title:'',sessionStart:0,accumSec:0};
+
+
+function openSpaceMenu(){
+  hidePanel();
+  var html=''+
+    '<div class="m-cosmos-menu">'+
+      '<p class="m-cosmos-lead">Пространство рядом с тобой</p>'+
+      '<button type="button" class="m-cosmos-btn" id="mMenuBook">'+
+        '<span class="m-cosmos-ico">◇</span>'+
+        '<span class="m-cosmos-txt"><b>Книги</b><i>Полка и читалка FB2</i></span>'+
+      '</button>'+
+      '<button type="button" class="m-cosmos-btn" id="mMenuDiary">'+
+        '<span class="m-cosmos-ico">✦</span>'+
+        '<span class="m-cosmos-txt"><b>Дневник</b><i>Записи и оценка дня</i></span>'+
+      '</button>'+
+    '</div>';
+  showPanel('Материя', html);
+  setTimeout(function(){
+    var b=document.getElementById('mMenuBook');
+    var d=document.getElementById('mMenuDiary');
+    if(b)b.onclick=function(e){e.preventDefault();e.stopPropagation();openBookLibrary();};
+    if(d)d.onclick=function(e){e.preventDefault();e.stopPropagation();openDiaryApp();};
+  },20);
+}
 
 function openBookLibrary(){
   MS.books=MS.books||{};
@@ -1448,10 +1480,6 @@ function openBookLibrary(){
       pickBookFile();
     };
   },20);
-}
-
-function escapeHtml(s){
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function setLibStatus(msg){
@@ -1541,6 +1569,8 @@ function importBookText(raw, filename){
 }
 
 function openSavedBook(id){
+  reader.sessionStart=Date.now();
+
   var b=(MS.books||{})[id];
   if(!b||!b.raw){toast('Нет текста книги');return;}
   hidePanel();
@@ -1605,7 +1635,7 @@ function openReader(raw){
   if(!sample){toast('Пусто');return;}
   // показать оболочку сразу
   var r=document.getElementById('matterReader');
-  if(r){r.hidden=false;r.style.display='';r.classList.remove('chrome-hide');}
+  if(r){r.hidden=false;r.style.display='';r.classList.add('chrome-hide');}
   var rt=document.getElementById('mReaderTitle');
   if(rt)rt.textContent=reader.title||'Книга';
   var pageEl=document.getElementById('mReaderPage');
@@ -1647,17 +1677,46 @@ function renderPage(){
   var page=document.getElementById('mReaderPage');
   var prog=document.getElementById('mReaderProg');
   if(!page)return;
-  var total=Math.max(1, reader.pages.length);
-  reader.idx=Math.min(total-1, Math.max(0, reader.idx));
-  page.textContent=reader.pages[reader.idx]||'';
-  if(prog){
-    var pct=Math.round((reader.idx+1)/total*100);
-    prog.textContent=(reader.idx+1)+' / '+total+' · '+pct+'%';
+  var txt=reader.pages[reader.idx]||'';
+  page.textContent=txt;
+  page.scrollTop=0;
+  var total=Math.max(1,reader.pages.length);
+  var cur=reader.idx+1;
+  var pct=Math.round(cur/total*100);
+  // накопить время чтения
+  MS.readTimeByBook=MS.readTimeByBook||{};
+  if(reader.bookId&&reader.sessionStart){
+    var add=Math.floor((Date.now()-reader.sessionStart)/1000);
+    if(add>0){
+      MS.readTimeByBook[reader.bookId]=(MS.readTimeByBook[reader.bookId]|0)+add;
+      reader.sessionStart=Date.now();
+    }
   }
-  persistReaderProgress();
+  var sec=reader.bookId?(MS.readTimeByBook[reader.bookId]|0):0;
+  var mm=Math.floor(sec/60), ss=sec%60;
+  var timeStr=mm+':'+(ss<10?'0':'')+ss;
+  var head=document.getElementById('mReaderTitle');
+  if(head)head.textContent=(reader.title||'Книга')+' · '+timeStr;
+  if(prog)prog.textContent=cur+' / '+total+' · '+pct+'%';
+  if(reader.bookId){
+    MS.pageByBook=MS.pageByBook||{};
+    MS.pageByBook[reader.bookId]=reader.idx;
+    try{saveState();}catch(e){}
+  }
 }
 
 function closeReader(){
+  try{
+    if(reader.bookId&&reader.sessionStart){
+      MS.readTimeByBook=MS.readTimeByBook||{};
+      var add=Math.floor((Date.now()-reader.sessionStart)/1000);
+      if(add>0)MS.readTimeByBook[reader.bookId]=(MS.readTimeByBook[reader.bookId]|0)+add;
+      reader.sessionStart=0;
+      if(reader.bookId!=null){MS.pageByBook=MS.pageByBook||{};MS.pageByBook[reader.bookId]=reader.idx;}
+      saveState();
+    }
+  }catch(e){}
+
   persistReaderProgress();
   var r=document.getElementById('matterReader');
   if(r){r.hidden=true;r.style.display='none';}
@@ -1747,7 +1806,7 @@ function handleCommand(text){
   var raw=String(text||'').trim();
   var t=raw.toLowerCase();
   if(!raw)return;
-  if(/комнат|двер|войд|зайд|пошл|идём|идем/.test(t)){
+  if(false&&/комнат|двер|войд|зайд|пошл|идём|идем/.test(t)){
     if(phase==='space'){
       if(finn&&(finn.state==='star'||finn.state==='idle'||finn.state==='morph')){
         finn.state='toDoor';
@@ -1811,9 +1870,10 @@ function loop(t){
   t=t||performance.now();
   var dt=Math.min(0.05,(t-lastT)/1000);lastT=t;
   resize();
-  if(phase==='blackhole')drawBlackHole(dt);
+  if(phase==='fadein')drawFadeIn(dt);
+  else if(phase==='blackhole')drawBlackHole(dt); // legacy
   else if(phase==='space')drawSpace(dt,t/1000);
-  else if(phase==='room'){ /* room DOM only */ }
+  else if(phase==='room'){ leaveRoom(); phase='space'; }
 }
 
 function drawBlackHole(dt){
@@ -2549,11 +2609,15 @@ function updateFinn(dt,t){
     var omp=1-ep;
     finn.x=omp*omp*finn.sx+2*omp*ep*(finn.cx||finn.sx)+ep*ep*finn.tx;
     finn.y=omp*omp*finn.sy+2*omp*ep*(finn.cy||finn.sy)+ep*ep*finn.ty;
-    finn.morph=ep; // 0=звезда → 1=солнце, непрерывно
+    // морф в солнце сжат в последние ~22% полёта — большую часть пути это
+    // яркая маленькая звезда с длинным хвостом (эпичный пролёт), и только
+    // перед самой посадкой она резко превращается в солнце
+    var morphT=Math.max(0,(p-0.78)/0.22);
+    finn.morph=morphT*morphT*(3-2*morphT);
     var fdist=Math.hypot(finn.x-prevFX,finn.y-prevFY);
     if(fdist>3){
       finn.trail.push({x:finn.x,y:finn.y});
-      if(finn.trail.length>28)finn.trail.splice(0,finn.trail.length-28);
+      if(finn.trail.length>44)finn.trail.splice(0,finn.trail.length-44);
     }
     finn.scale=0.85+0.2*ep;
     if(p>=1){
@@ -2615,7 +2679,7 @@ function updateFinn(dt,t){
     finn.scale=Math.max(0.05,finn.scale-dt*2.5);
     finn.alpha=finn.scale;
   }else if(finn.state==='idle'){
-    var bx=W*0.5, by=H*0.58;
+    var bx=W*0.5, by=H*0.88;
     finn.x=bx+Math.sin(t*1.1)*3;
     finn.y=by+Math.cos(t*0.9)*2;
   }
