@@ -348,14 +348,31 @@ function injectCSS(){
 '.m-book-row .m-book-meta{font-size:12px;color:rgba(200,190,170,.65);margin-top:3px}'+
 '.m-book-row .m-book-del{width:36px;height:36px;border-radius:10px;border:0;background:rgba(220,80,80,.2);color:#f8a0a0;font-size:16px;flex-shrink:0}'+
 '.m-book-row .m-book-open{padding:8px 12px;border-radius:10px;border:0;background:rgba(255,200,100,.18);color:#F5E6C8;font-size:13px;font-weight:700;flex-shrink:0}'+
+'.m-lib{display:flex;flex-direction:column;gap:12px}'+
+'.m-lib-load{width:100%;padding:14px 16px;border-radius:14px;border:1px solid rgba(140,180,255,.28);'+
+'background:linear-gradient(145deg,rgba(40,55,90,.9),rgba(18,24,40,.95));color:#E8F0FF;font-size:15px;font-weight:700}'+
+'.m-lib-empty{padding:28px 12px;text-align:center;color:rgba(180,200,230,.55);font-size:14px;line-height:1.5}'+
+'.m-lib-list{display:flex;flex-direction:column;gap:8px;max-height:52vh;overflow:auto;-webkit-overflow-scrolling:touch}'+
+'.m-lib-item{display:flex;align-items:stretch;gap:8px;padding:12px;border-radius:14px;'+
+'border:1px solid rgba(140,170,220,.16);background:rgba(16,22,38,.85);cursor:pointer}'+
+'.m-lib-item-main{flex:1;min-width:0}'+
+'.m-lib-item-title{font-size:15px;font-weight:700;color:#EEF2FF;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
+'.m-lib-item-meta{font-size:12px;color:rgba(170,190,220,.6);margin-top:4px}'+
+'.m-lib-bar{height:3px;border-radius:99px;background:rgba(255,255,255,.06);margin-top:8px;overflow:hidden}'+
+'.m-lib-bar i{display:block;height:100%;background:linear-gradient(90deg,#6a9cff,#c4a0ff);border-radius:99px}'+
+'.m-lib-del{width:40px;flex-shrink:0;border:0;border-radius:12px;background:rgba(220,70,70,.15);color:#f0a0a0;font-size:15px}'+
+'.m-lib-status{font-size:12px;color:rgba(180,200,230,.55);min-height:16px}'+
+'.m-panel-body{max-height:62vh;overflow:auto;-webkit-overflow-scrolling:touch}'+
+
 '.m-lib-status{font-size:12px;opacity:.7;margin:8px 0}'+
   'background:linear-gradient(135deg,#F0C384,#E5A75E);color:#1A1208;font-weight:700;border:0}'+
 '.m-panel-close{width:100%;padding:12px;border-radius:12px;background:rgba(255,255,255,.07);'+
   'border:1px solid rgba(255,255,255,.12);color:#E8F0FF;font-weight:600}'+
 /* reader — single page, swipe only */
-'.m-reader{position:absolute;inset:0;z-index:30;background:#0c0a0e;display:flex;flex-direction:column;'+
-  'padding:calc(10px + env(safe-area-inset-top,0px)) 0 calc(10px + env(safe-area-inset-bottom,0px))}'+
-'.m-reader-head{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;padding-top:calc(10px + env(safe-area-inset-top,0px));color:#E8DCC8;font-size:13px;transition:opacity .25s,transform .25s;background:linear-gradient(180deg,rgba(0,0,0,.55),transparent)}'+
+'.m-reader{position:absolute;inset:0;z-index:30;background:#0c0a0e;display:flex;flex-direction:column;padding:0}'+
+'.m-reader-head{position:absolute;left:0;right:0;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;'+
+'padding:10px 16px;padding-top:calc(8px + env(safe-area-inset-top,0px));color:#E8DCC8;font-size:13px;'+
+'transition:opacity .25s,transform .25s;background:linear-gradient(180deg,rgba(0,0,0,.7),transparent);pointer-events:auto}'+
 '.m-reader-head button{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:#E8F0FF}'+
 '.m-reader.chrome-hide .m-reader-head,.m-reader.chrome-hide .m-reader-foot{opacity:0;pointer-events:none;transform:translateY(-6px)}'+
 '.m-reader.chrome-hide .m-reader-foot{transform:translateY(6px)}'+
@@ -382,9 +399,10 @@ function injectCSS(){
 '.m-diary-ta{width:100%;min-height:180px;max-height:42vh;resize:vertical;padding:14px;border-radius:14px;border:1px solid rgba(140,170,220,.18);'+
 'background:rgba(8,12,22,.75);color:#E8F0FF;font-size:15px;line-height:1.55;font-family:Georgia,serif;box-sizing:border-box}'+
 
-'.m-reader-page{flex:1;overflow:hidden;padding:16px 22px 28px;color:#EDE4D4;font-size:16px;line-height:1.65;'+
-  'font-family:Georgia,"Times New Roman",serif;white-space:pre-wrap;user-select:none;'+
-  '-webkit-user-select:none;touch-action:pan-y}'+
+'.m-reader-page{flex:1;overflow:hidden;padding:8px 18px 20px;color:#EDE4D4;font-size:17px;line-height:1.65;'+
+  'font-family:Georgia,"Times New Roman",serif;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;'+
+  'user-select:none;-webkit-user-select:none;touch-action:pan-y;box-sizing:border-box}'+
+'.m-reader.chrome-hide .m-reader-page{padding-top:6px;padding-bottom:12px}'+
 '.m-reader-foot{position:absolute;left:0;right:0;bottom:0;text-align:center;padding:8px;padding-bottom:calc(8px + env(safe-area-inset-bottom,0px));font-size:11px;color:rgba(200,190,170,.55);transition:opacity .25s,transform .25s;background:linear-gradient(0deg,rgba(12,10,14,.92),rgba(12,10,14,0));pointer-events:none;height:36px;box-sizing:content-box}'+
 /* HTML hidden must beat display:flex — иначе при входе виден пустой «Книга» */
 '.m-reader[hidden],.m-panel[hidden],.m-hud[hidden],.m-room[hidden],.m-room-finn[hidden]{display:none!important}'+
@@ -512,7 +530,7 @@ function buildStars(){
       });
     });
   }
-  for(var i=0;i<90;i++){
+  for(var i=0;i<48;i++){
     stars.push({
       id:'bg'+i,g:null,
       x:Math.random()*W,y:Math.random()*H,
@@ -704,9 +722,8 @@ var fadeIn={t:0,dur:1.35};
 function startEnter(){
   setTimeout(bindMuteBtn,50);
   phase='fadein';
-  fadeIn={t:0,dur:1.35};
-  // заранее собрать звёзды, чтобы небо проявилось плавно
-  try{buildStars();}catch(e){}
+  fadeIn={t:0,dur:0.85};
+  if(!stars.length){try{buildStars();}catch(e){}}
   resetFinn();
   if(finn){finn.state='star';finn.x=W*0.5;finn.y=H*0.12;}
   lastT=performance.now();
@@ -715,43 +732,40 @@ function startEnter(){
 function drawFadeIn(dt){
   fadeIn.t+=dt;
   var p=Math.min(1,fadeIn.t/fadeIn.dur);
-  // плавное затемнение + проявление звёзд
-  var g=ctx.createRadialGradient(W*0.5,H*0.45,0,W*0.5,H*0.5,Math.max(W,H)*0.75);
-  g.addColorStop(0,'#0a1020');g.addColorStop(0.55,'#05080f');g.addColorStop(1,'#000');
-  ctx.globalAlpha=p;
-  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
-  ctx.globalAlpha=p*p;
-  // простые звёзды фона
+  ctx.fillStyle='rgb('+Math.round(4*p)+','+Math.round(6*p)+','+Math.round(12*p)+')';
+  ctx.fillRect(0,0,W,H);
   if(stars&&stars.length){
-    stars.forEach(function(s){
-      if(!s.bg)return;
-      var a=(s.bright||0.5)*p;
+    var n=Math.min(stars.length, 70);
+    for(var si=0;si<n;si++){
+      var s=stars[si];
+      var a=(s.bright||0.4)*p*0.9;
+      if(a<0.05)continue;
       ctx.beginPath();
       ctx.fillStyle='rgba(230,240,255,'+a+')';
-      ctx.arc(s.x,s.y,s.baseR||1.2,0,Math.PI*2);ctx.fill();
-    });
+      ctx.arc(s.x,s.y,(s.baseR||1)*(s.bg?1:0.7),0,Math.PI*2);ctx.fill();
+    }
   }
-  ctx.globalAlpha=1;
   if(p>=1)enterConstellation();
 }
 
 function enterConstellation(){
   phase='space';
-  buildStars();
-  resetFinn();
-  finn.state='star';
-  finn.x=W*0.5; finn.y=H*0.12;
+  if(!stars.length)buildStars();
+  door=null;
+  if(!finn||finn.state==='star'){
+    resetFinn();
+    finn.state='star';
+    finn.x=W*0.5; finn.y=H*0.12;
+  }
   var hud=document.getElementById('matterHud');
   if(hud)hud.hidden=false;
-  // комната и дверь отключены
-  door=null;
   if(!MS.firstEnter){MS.firstEnter=new Date().toISOString();saveState();}
   try{history.pushState({matter:'space'},'','#matter');}catch(e){}
   window.__matterTourPending=false;
   MS.matterTourDone=true;
-  try{saveState();}catch(e){}
   try{showMatterTitle();}catch(e){}
 }
+
 
 var tourTracks=[
   {src:'matter-tour-1.mp3', dur:6500, hl:'space'},
@@ -1431,35 +1445,51 @@ function openSpaceMenu(){
 function openBookLibrary(){
   MS.books=MS.books||{};
   MS.pageByBook=MS.pageByBook||{};
-  var keys=Object.keys(MS.books);
-  var html='<p style="margin:0 0 10px;opacity:.8;font-size:13px;line-height:1.4">Полка. Загрузи FB2 или TXT — прогресс сохранится.</p>';
+  MS.readTimeByBook=MS.readTimeByBook||{};
+  var keys=Object.keys(MS.books).sort(function(a,b){
+    return (MS.books[b].addedAt||0)-(MS.books[a].addedAt||0);
+  });
+  var html='<div class="m-lib">';
+  html+='<button type="button" class="m-lib-load" id="mLoadBook">＋  Загрузить FB2 / TXT</button>';
   if(!keys.length){
-    html+='<p class="m-lib-status">Пока пусто. Загрузи первую книгу.</p>';
+    html+='<div class="m-lib-empty">Полка пуста.<br>Загрузи первую книгу — прогресс сохранится.</div>';
   }else{
+    html+='<div class="m-lib-list">';
     keys.forEach(function(k){
       var b=MS.books[k]||{};
       var pages=Math.max(1, Number(b.pages)||1);
       var cur=Math.min(pages-1, Math.max(0, Number(MS.pageByBook[k])||0));
-      var pct=Math.round((cur+1)/pages*100);
-      if(cur===0 && !(b.openedOnce)) pct=0;
+      var pct=0;
+      if(b.openedOnce){
+        if(cur>=pages-1) pct=100;
+        else pct=Math.round(((cur+1)/pages)*100);
+      }
       var title=escapeHtml(b.title||'Без названия');
-      html+='<div class="m-book-row" data-book="'+k+'">'+
-        '<div class="m-book-info"><div class="m-book-title">'+title+'</div>'+
-        '<div class="m-book-meta">'+pct+'% · стр. '+(cur+1)+' / '+pages+'</div></div>'+
-        '<button type="button" class="m-book-open" data-open="'+k+'">Читать</button>'+
-        '<button type="button" class="m-book-del" data-del="'+k+'" title="Удалить">✕</button></div>';
+      var sec=MS.readTimeByBook[k]|0;
+      var mm=Math.floor(sec/60);
+      var timeStr=mm>0?(mm+' мин'):'новая';
+      html+='<div class="m-lib-item" data-open="'+k+'">'+
+        '<div class="m-lib-item-main">'+
+          '<div class="m-lib-item-title">'+title+'</div>'+
+          '<div class="m-lib-item-meta">'+pct+'% · стр. '+(cur+1)+'/'+pages+' · '+timeStr+'</div>'+
+          '<div class="m-lib-bar"><i style="width:'+pct+'%"></i></div>'+
+        '</div>'+
+        '<button type="button" class="m-lib-del" data-del="'+k+'" aria-label="Удалить">✕</button>'+
+      '</div>';
     });
+    html+='</div>';
   }
-  html+='<button type="button" class="m-act" id="mLoadBook" style="margin-top:14px">Загрузить книгу (FB2 / TXT)</button>';
   html+='<div class="m-lib-status" id="mLibStatus"></div>';
+  html+='</div>';
   showPanel('Книги', html);
   setTimeout(function(){
     var body=document.getElementById('mPanelBody');
     if(!body)return;
-    body.querySelectorAll('[data-open]').forEach(function(btn){
-      btn.onclick=function(e){
+    body.querySelectorAll('[data-open]').forEach(function(row){
+      row.onclick=function(e){
+        if(e.target&&e.target.closest&&e.target.closest('[data-del]'))return;
         e.preventDefault();e.stopPropagation();
-        openSavedBook(btn.getAttribute('data-open'));
+        openSavedBook(row.getAttribute('data-open'));
       };
     });
     body.querySelectorAll('[data-del]').forEach(function(btn){
@@ -1469,6 +1499,7 @@ function openBookLibrary(){
         if(!id)return;
         delete MS.books[id];
         if(MS.pageByBook) delete MS.pageByBook[id];
+        if(MS.readTimeByBook) delete MS.readTimeByBook[id];
         try{saveState();}catch(err){}
         toast('Книга удалена');
         openBookLibrary();
@@ -1597,32 +1628,39 @@ function parseFb2(xml){
 
 function paginate(text){
   var pageEl=document.getElementById('mReaderPage');
-  var maxH=(pageEl&&pageEl.clientHeight)?pageEl.clientHeight:(window.innerHeight*0.78);
-  // запас снизу, чтобы строки не упирались в прогресс
-  maxH=Math.max(120, maxH-48);
-  var width=(pageEl&&pageEl.clientWidth)?pageEl.clientWidth:300;
-  var pages=[], rest=String(text||'');
+  var maxH=(pageEl&&pageEl.clientHeight>40)?pageEl.clientHeight:(window.innerHeight-24);
+  var width=(pageEl&&pageEl.clientWidth>40)?pageEl.clientWidth:Math.min(360, window.innerWidth-32);
+  maxH=Math.max(160, maxH-4);
+  var src=String(text||'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  if(!src)return [''];
+  var pages=[];
   var probe=document.createElement('div');
-  probe.style.cssText='position:absolute;left:-9999px;visibility:hidden;width:'+width+'px;font:16px/1.55 Georgia,"Times New Roman",serif;white-space:pre-wrap;padding:0';
+  probe.style.cssText='position:fixed;left:-9999px;top:0;visibility:hidden;box-sizing:border-box;'+
+    'width:'+width+'px;padding:0;margin:0;'+
+    'font-size:17px;line-height:1.65;font-family:Georgia,"Times New Roman",serif;'+
+    'white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;hyphens:auto;color:#000';
   document.body.appendChild(probe);
+  var pos=0, len=src.length, guard=0;
   try{
-    while(rest.length){
-      var lo=60, hi=Math.min(rest.length, 2800), best=Math.min(rest.length, 400);
+    while(pos<len && guard++<800){
+      while(pos<len && src.charAt(pos)==='\n') pos++;
+      if(pos>=len)break;
+      var lo=1, hi=Math.min(len-pos, 3500), best=1;
       while(lo<=hi){
         var mid=(lo+hi)>>1;
-        probe.textContent=rest.slice(0,mid);
-        if(probe.offsetHeight<=maxH-8){best=mid;lo=mid+1;}
+        probe.textContent=src.slice(pos, pos+mid);
+        if(probe.offsetHeight<=maxH){ best=mid; lo=mid+1; }
         else hi=mid-1;
       }
-      if(best<rest.length){
-        var slice=rest.slice(0,best);
+      if(best<10) best=Math.min(400, len-pos);
+      if(pos+best<len){
+        var slice=src.slice(pos, pos+best);
         var br=Math.max(slice.lastIndexOf('\n\n'), slice.lastIndexOf('\n'), slice.lastIndexOf(' '));
-        if(br>best*0.5) best=br+1;
+        if(br>best*0.55) best=br+1;
       }
-      var page=rest.slice(0,best).trim();
-      if(page)pages.push(page);
-      rest=rest.slice(best).trim();
-      if(pages.length>500)break;
+      var chunk=src.slice(pos, pos+best).replace(/[ \t]+$/,'');
+      if(chunk.length) pages.push(chunk);
+      pos+=best;
     }
   }finally{
     try{document.body.removeChild(probe);}catch(e){}
@@ -1645,22 +1683,24 @@ function openReader(raw){
 
   pauseRoomAudio();
 
-  setTimeout(function(){
-    var text=/<FictionBook|<body/i.test(sample.slice(0,800))?parseFb2(sample):sample;
-    if(text.length>180000)text=text.slice(0,180000);
-    reader.pages=paginate(text);
-    var start=0;
-    if(reader.bookId && MS.pageByBook && MS.pageByBook[reader.bookId]!=null){
-      start=Math.min(reader.pages.length-1, Math.max(0, Number(MS.pageByBook[reader.bookId])||0));
-    }
-    reader.idx=start;
-    if(reader.bookId && MS.books && MS.books[reader.bookId]){
-      MS.books[reader.bookId].pages=reader.pages.length;
-      MS.books[reader.bookId].openedOnce=true;
-    }
-    persistReaderProgress();
-    renderPage();
-  },40);
+  requestAnimationFrame(function(){
+    requestAnimationFrame(function(){
+      var text=/<FictionBook|<body/i.test(sample.slice(0,800))?parseFb2(sample):sample;
+      if(text.length>180000)text=text.slice(0,180000);
+      reader.pages=paginate(text);
+      var start=0;
+      if(reader.bookId && MS.pageByBook && MS.pageByBook[reader.bookId]!=null){
+        start=Math.min(reader.pages.length-1, Math.max(0, Number(MS.pageByBook[reader.bookId])||0));
+      }
+      reader.idx=start;
+      if(reader.bookId && MS.books && MS.books[reader.bookId]){
+        MS.books[reader.bookId].pages=reader.pages.length;
+        MS.books[reader.bookId].openedOnce=true;
+      }
+      persistReaderProgress();
+      renderPage();
+    });
+  });
 }
 
 function persistReaderProgress(){
