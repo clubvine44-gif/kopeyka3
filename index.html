@@ -742,6 +742,17 @@ html.fin-tour-scroll .card{content-visibility:visible!important;contain:none!imp
 .item.item-paid .check-paid{color:#6ddea0;font-size:18px}
 .item.item-deferred{opacity:.72}
 .item.item-deferred b{color:#9ab}
+
+.urgent-res-card{
+  border:1px solid rgba(248,113,113,.35)!important;
+  background:linear-gradient(165deg,rgba(80,30,30,.35),rgba(20,14,18,.92))!important;
+  box-shadow:0 8px 28px rgba(180,40,40,.12);
+}
+.urgent-res-title{color:#F8A0A0!important;letter-spacing:.06em}
+.urgent-res-item.urg-hot b{color:#FECACA}
+.urgent-res-item.urg-mid b{color:#FED7AA}
+.urgent-res-card .limit-bar.urg-bar{margin:2px 0 10px;height:4px;border-radius:99px;background:rgba(255,255,255,.06)}
+.urgent-res-card .item{border-color:rgba(255,120,100,.12)}
 </style></head><body class="has-bnav"><div class="topbar">
   <div class="top-left">
     <div class="finn-avatar status-green" id="finnAvatar" data-emotion="idle" title="Финна">
@@ -817,7 +828,7 @@ html.fin-tour-scroll .card{content-visibility:visible!important;contain:none!imp
     <span>Платежи</span>
   </button>
 </nav>
-<div class="fab-wrap"><div class="radial" id="radial"><button data-act="income"><span class="ic">➕</span> Доход</button><button data-act="expense"><span class="ic">➖</span> Расход</button><button data-act="reserve"><span class="ic">🏦</span> Резерв</button><button data-act="debt"><span class="ic">📉</span> Долг</button><button data-act="oblig"><span class="ic">📅</span> Обязательный</button></div><button class="fab" id="fab" aria-label="Добавить"><span aria-hidden="true">+</span></button></div><div class="modal-bg" id="modalBg"></div><div class="modal-bg" id="dlgLayer"></div><div class="toast" id="toast"></div><script src="finn-char.js?v=2026082419"></script><script src="app.js?v=2026082614"></script><script src="profile.js?v=2026082419"></script><script src="onboard.js?v=2026082419"></script><script src="cloud.js?v=2026082419"></script><script src="products.js?v=2026082419"></script><script src="engine.js?v=2026082419"></script><script src="ai.js?v=2026082419"></script><script src="assistant-v2.js?v=2026082521"></script><script src="voice.js?v=2026082419"></script><script src="finn3d.js?v=2026082419"></script><script src="finn-wake.js?v=2026082419"></script><script src="matter.js?v=2026082602"></script><script>window.__kopeykaBuild='2026082614';window.__FIN_NATIVE=true;</script><script>
+<div class="fab-wrap"><div class="radial" id="radial"><button data-act="income"><span class="ic">➕</span> Доход</button><button data-act="expense"><span class="ic">➖</span> Расход</button><button data-act="reserve"><span class="ic">🏦</span> Резерв</button><button data-act="debt"><span class="ic">📉</span> Долг</button><button data-act="oblig"><span class="ic">📅</span> Обязательный</button></div><button class="fab" id="fab" aria-label="Добавить"><span aria-hidden="true">+</span></button></div><div class="modal-bg" id="modalBg"></div><div class="modal-bg" id="dlgLayer"></div><div class="toast" id="toast"></div><script src="finn-char.js?v=2026082419"></script><script src="app.js?v=2026082615"></script><script src="profile.js?v=2026082419"></script><script src="onboard.js?v=2026082419"></script><script src="cloud.js?v=2026082419"></script><script src="products.js?v=2026082419"></script><script src="engine.js?v=2026082419"></script><script src="ai.js?v=2026082419"></script><script src="assistant-v2.js?v=2026082521"></script><script src="voice.js?v=2026082419"></script><script src="finn3d.js?v=2026082419"></script><script src="finn-wake.js?v=2026082419"></script><script src="matter.js?v=2026082602"></script><script>window.__kopeykaBuild='2026082615';window.__FIN_NATIVE=true;</script><script>
 (function(){
   function tryTestPush(){
     try{

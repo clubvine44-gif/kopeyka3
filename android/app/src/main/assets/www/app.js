@@ -1430,19 +1430,49 @@ if(attention.length){
 homeHtml += '</div>';
 setTimeout(function(){try{refreshFinnTipAI(finnTip,attention);}catch(e){}},100);
 
+// ===== 8b. Срочные резервы — на видном месте =====
+var urgentResList=(STATE.reserves||[]).filter(function(r){return r&&r.urgent&&!r.deleted;}).slice();
+urgentResList.sort(function(a,b){
+  var da=a.urgentDate||'9999-99-99', db=b.urgentDate||'9999-99-99';
+  if(da!==db)return da<db?-1:1;
+  return num(b.target)-num(b.saved)-(num(a.target)-num(a.saved));
+});
+if(urgentResList.length){
+  homeHtml += '<div class="card tight urgent-res-card" id="urgentResCard">';
+  homeHtml += '<div class="sec-title-sm urgent-res-title">СРОЧНЫЕ РЕЗЕРВЫ</div>';
+  urgentResList.forEach(function(r){
+    var need=Math.max(0,num(r.target)-num(r.saved));
+    var pct=r.target>0?Math.min(100,Math.round(num(r.saved)/num(r.target)*100)):0;
+    var left=r.urgentDate?days(t,r.urgentDate):null;
+    var when='';
+    var urgency='mid';
+    if(left==null){ when='без даты'; urgency='mid'; }
+    else if(left<0){ when='просрочен на '+Math.abs(left)+' дн.'; urgency='hot'; }
+    else if(left===0){ when='сегодня'; urgency='hot'; }
+    else if(left===1){ when='завтра'; urgency='hot'; }
+    else if(left<=7){ when='через '+left+' дн.'; urgency='hot'; }
+    else { when='через '+left+' дн.'; urgency='mid'; }
+    var dateLabel=r.urgentDate?(r.urgentDate.slice(8,10)+'.'+r.urgentDate.slice(5,7)):'';
+    homeHtml += '<div class="item urgent-res-item urg-'+urgency+'" data-id="'+r.id+'" data-k="res">';
+    homeHtml += '<div class="left"><b>'+esc(r.name)+'</b>';
+    homeHtml += '<span class="muted">'+when+(dateLabel?' · '+dateLabel:'')+(need?(' · ещё '+fmt(need)):' · цель закрыта')+'</span>';
+    homeHtml += '</div>';
+    homeHtml += '<div class="amt'+(need?' minus':' plus')+'">'+(need?fmt(need):'✓')+'</div>';
+    homeHtml += '</div>';
+    if(r.target>0){
+      homeHtml += '<div class="limit-bar urg-bar"><div class="limit-fill" style="width:'+pct+'%;background:'+(urgency==='hot'?'#F87171':'#F0A060')+'"></div></div>';
+    }
+  });
+  homeHtml += '<button type="button" class="link-more" data-view="res">Все резервы →</button>';
+  homeHtml += '</div>';
+}
+
 // ===== 9. Ближайшие платежи =====
 homeHtml += '<div class="card tight near-card" id="nearCard">';
 homeHtml += '<div class="sec-title-sm">БЛИЖАЙШИЕ ПЛАТЕЖИ</div>';
 var nearItems=[];
 nearestObl.forEach(function(o){nearItems.push({kind:'obl',id:o.id,name:o.name,when:o.overdue?'просрочен':('через '+o.daysUntil+' дн.'),amt:o.amount,days:o.daysUntil});});
-(STATE.reserves||[]).forEach(function(r){
-  if(!r.urgent||!r.urgentDate||r.deleted)return;
-  var left=days(t,r.urgentDate);
-  if(left>14)return;
-  var need=Math.max(0,num(r.target)-num(r.saved));
-  var when=left<0?('просрочен · срочный резерв'):(left===0?'сегодня · срочный резерв':('через '+left+' дн. · срочный'));
-  nearItems.push({kind:'res',id:r.id,name:r.name,when:when,amt:need,days:left});
-});
+/* срочные резервы вынесены в блок #urgentResCard */
 nearItems.sort(function(a,b){return a.days-b.days;});
 if(nearItems.length){
   nearItems.slice(0,5).forEach(function(o){
