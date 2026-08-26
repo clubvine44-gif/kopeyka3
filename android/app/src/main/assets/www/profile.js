@@ -205,15 +205,7 @@ function show(){
     close();
     if(typeof render==='function') render();
     try{ toast('Финна перестроила приложение под тебя'); }catch(e){}
-    // после сценария + имени — приглашение в Материю
-    setTimeout(function(){
-      try{
-        if(sessionStorage.getItem('fin_matter_invite_session'))return;
-        if(typeof getUserName==='function'&&!getUserName())return;
-        sessionStorage.setItem('fin_matter_invite_session','1');
-        if(window.kopeykaAssistant)window.kopeykaAssistant.open({matterInvite:true});
-      }catch(e){}
-    },1000);
+
     return;
   }
   var s=list[idx];
