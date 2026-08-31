@@ -4,6 +4,24 @@ var CATS=['Продукты','Одежда','Карманные расходы',
 var BUDGET_CATS=['Продукты','Одежда','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
 function budgetLimitOf(cat){var bl=(STATE.settings&&STATE.settings.budgetLimits)||{};return Math.max(0,num(bl[cat]));}
 function setBudgetLimit(cat,val){if(!STATE.settings)STATE.settings={};if(!STATE.settings.budgetLimits||typeof STATE.settings.budgetLimits!=='object')STATE.settings.budgetLimits={};STATE.settings.budgetLimits[cat]=Math.max(0,num(val));}
+function sortReservesList(list){
+  return (list||[]).slice().sort(function(a,b){
+    var pa=num(a.priority), pb=num(b.priority);
+    var aP=(pa>=1&&pa<=3)?pa:99;
+    var bP=(pb>=1&&pb<=3)?pb:99;
+    if(aP!==bP)return aP-bP;
+    return num(b.saved)-num(a.saved);
+  });
+}
+function setReservePriority(r,p){
+  p=(p===1||p===2||p===3)?p:0;
+  if(p){
+    (STATE.reserves||[]).forEach(function(x){
+      if(x&&x.id!==r.id&&num(x.priority)===p)x.priority=0;
+    });
+  }
+  r.priority=p;
+}
 function spentInCat(cat,month){var s=0;month=String(month||today().slice(0,7));(STATE.expenses||[]).forEach(function(e){if(!e||e.deleted)return;if(!inMonth(e.date,month))return;if(String(e.category||'Прочее')===String(cat))s+=num(e.amount);});return s;}
 
 var RES_PRESETS=['Подушка безопасности','Права','Отпуск','Ремонт','Налог','Свой вариант'];
@@ -55,7 +73,7 @@ function norm(raw){
   if(!o.settings.month)o.settings.month=today().slice(0,7);
   o.income=(o.income||[]).filter(function(x){return x&&x.id;}).map(function(x){return Object.assign({},x,{amount:sane(x.amount)});});
   o.expenses=(o.expenses||[]).filter(function(x){return x&&x.id;}).map(function(x){return Object.assign({},x,{amount:sane(x.amount)});});
-  o.reserves=(o.reserves||[]).filter(function(x){return x&&x.id;}).map(function(x){var u=!!x.urgent;var ud=x.urgentDate&&/^\d{4}-\d{2}-\d{2}$/.test(String(x.urgentDate))?String(x.urgentDate):'';return Object.assign({},x,{name:String(x.name||'Резерв'),category:String(x.category||x.name||'Свой вариант'),saved:sane(x.saved),target:sane(x.target),urgent:u,urgentDate:ud});});
+  o.reserves=(o.reserves||[]).filter(function(x){return x&&x.id;}).map(function(x){var u=!!x.urgent;var ud=x.urgentDate&&/^\d{4}-\d{2}-\d{2}$/.test(String(x.urgentDate))?String(x.urgentDate):'';var pr=num(x.priority);if(pr!==1&&pr!==2&&pr!==3)pr=0;return Object.assign({},x,{name:String(x.name||'Резерв'),category:String(x.category||x.name||'Свой вариант'),saved:sane(x.saved),target:sane(x.target),urgent:u,urgentDate:ud,priority:pr});});
   o.debts=(o.debts||[]).filter(function(x){return x&&x.id;}).map(function(x){return Object.assign({},x,{name:String(x.name||'Долг'),total:sane(x.total),paid:sane(x.paid),deferUntil:x.deferUntil?String(x.deferUntil):null});});
   o.reserveOps=(o.reserveOps||[]).filter(function(x){return x&&x.id;}).map(function(x){return Object.assign({},x,{amount:sane(x.amount),type:x.type==='withdraw'?'withdraw':'deposit'});});
   o.obligations=(o.obligations||[]).filter(function(x){return x&&x.id;}).map(function(x){var day=num(x.day);if(day<1)day=1;if(day>31)day=31;return Object.assign({},x,{name:String(x.name||'Платёж'),amount:sane(x.amount),day:day,active:x.active!==false});});
@@ -1150,7 +1168,7 @@ function render(){
   }
 }
 function _renderNow(){try{updateNotifBadge();}catch(e){}ensureMonth();var t=today(),month=getViewMonth(),isCurrent=(month===t.slice(0,7)),c=compute(),sh=shift(t,STATE.shiftsOverride),sl=SHIFT_LABEL[sh]||'День',app=document.getElementById('app');if(!app)return;var ym=month.split('-').map(Number),first=new Date(ym[0],ym[1]-1,1),sw=(first.getDay()+6)%7,dim=new Date(ym[0],ym[1],0).getDate();var cal='<div class="cal">';['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].forEach(function(d){cal+='<div class="cal-h">'+d+'</div>';});for(var i=0;i<sw;i++)cal+='<div class="cal-d other"></div>';var nextShiftDs=null;for(var nd=0;nd<21;nd++){var ndt=new Date(ym[0],ym[1]-1,Number(t.slice(8))+nd),nds=ndt.getFullYear()+'-'+String(ndt.getMonth()+1).padStart(2,'0')+'-'+String(ndt.getDate()).padStart(2,'0'),ns=shift(nds,STATE.shiftsOverride);if(ns==='day'||ns==='night'){nextShiftDs=nds;break;}}for(var d=1;d<=dim;d++){var ds=month+'-'+String(d).padStart(2,'0'),s=shift(ds,STATE.shiftsOverride),hasObl=STATE.obligations.some(function(ob){return ob.active!==false&&num(ob.day)===d;}),isNext=(ds===nextShiftDs);cal+='<div class="cal-d '+s+(ds===t&&isCurrent?' today':'')+(hasObl?' has-obl':'')+(isNext?' next-shift':'')+'" data-date="'+ds+'">'+(isNext?'<span class="star">✨</span>':'')+d+'<span class="dot"></span></div>';}cal+='</div>';
-var resH=STATE.reserves.length?STATE.reserves.map(function(r){var pct=r.target>0?Math.min(100,Math.round(num(r.saved)/num(r.target)*100)):0;var urg=(r.urgent&&r.urgentDate)?('<span class="res-urgent">срочный · '+r.urgentDate.slice(8,10)+'.'+r.urgentDate.slice(5,7)+'</span> '):'';return '<div class="item" data-id="'+r.id+'" data-k="res"><div class="left"><b>'+esc(r.name)+'</b> '+urg+'<span class="muted">'+fmt(r.saved)+(r.target?' / '+fmt(r.target)+' · '+pct+'%':'')+'</span></div></div>';}).join(''):'<div class="empty tight">Резервов нет</div>';
+var resH=STATE.reserves.length?sortReservesList(STATE.reserves).map(function(r){var pct=r.target>0?Math.min(100,Math.round(num(r.saved)/num(r.target)*100)):0;var pr=num(r.priority);var prBadge=(pr>=1&&pr<=3)?('<span class="res-priority p'+pr+'">'+pr+'</span> '):'';var urg=(r.urgent&&r.urgentDate)?('<span class="res-urgent">срочный · '+r.urgentDate.slice(8,10)+'.'+r.urgentDate.slice(5,7)+'</span> '):'';return '<div class="item'+(pr>=1&&pr<=3?' item-priority p'+pr:'')+'" data-id="'+r.id+'" data-k="res"><div class="left">'+prBadge+'<b>'+esc(r.name)+'</b> '+urg+'<span class="muted">'+fmt(r.saved)+(r.target?' / '+fmt(r.target)+' · '+pct+'%':'')+'</span></div></div>';}).join(''):'<div class="empty tight">Резервов нет</div>';
 var debH=STATE.debts.length?STATE.debts.map(function(d){var left=Math.max(0,num(d.total)-num(d.paid)),pd=num(d.paid);var active=debtActiveInMonth(d,month);var sub=pd<=0?(fmt(d.total)+' · не погашено'):('осталось '+fmt(left)+' · погашено '+fmt(pd)+' из '+fmt(d.total));if(d.deferUntil&&!active){var du=String(d.deferUntil);sub+=' · перенесён на '+(du.length>=10?(du.slice(8,10)+'.'+du.slice(5,7)+'.'+du.slice(0,4)):du);}else if(d.deferUntil&&active){sub+=' · был перенос';}return '<div class="item'+(active?'':' item-deferred')+'" data-id="'+d.id+'" data-k="debt" data-deferred="'+(active?'0':'1')+'"><div class="left"><b>'+esc(d.name)+'</b><span class="muted">'+sub+'</span></div><div class="amt '+(active?'minus':'muted')+'">'+(active?fmt(left):'→')+'</div></div>';}).join(''):'<div class="empty tight">Долгов нет</div>';
 var oblH=STATE.obligations.length?STATE.obligations.map(function(ob){var paid=0;STATE.obligationPays.forEach(function(p){if(p.obligId===ob.id&&p.month===month)paid+=num(p.amount);});var left=Math.max(0,num(ob.amount)-paid),isPaid=left<=0;return '<div class="item'+(isPaid?' item-paid':'')+'" data-id="'+ob.id+'" data-k="obl" data-paid="'+(isPaid?'1':'0')+'"><div class="left"><b>'+esc(ob.name)+'</b><span class="muted">'+fmt(ob.amount)+' / мес · '+(isPaid?'✓ оплачено':'до '+ob.day+'-го · '+fmt(left))+'</span></div>'+(isPaid?'<div class="amt plus check-paid">✓</div>':'<div class="amt minus">−'+fmt(left)+'</div>')+'</div>';}).join(''):'<div class="empty tight">Нет платежей</div>';
 var ops=[];STATE.income.forEach(function(i){if(inMonth(i.date,month))ops.push({t:i.date,type:'in',a:i.amount,n:i.note||'Доход',id:i.id,deleted:!!i.deleted,edited:!!i.editedAt,at:Number(i.createdAt)||0});});STATE.expenses.forEach(function(e){if(!inMonth(e.date,month))return;var label=e.category||'Расход';if(e.category==='Долг')label='Долг'+(e.note?(' · '+e.note):'');else if(e.category==='Обязательные'&&e.note)label=e.note;else if(e.note&&e.note!==label)label=label+' · '+e.note;ops.push({t:e.date,type:'ex',a:e.amount,n:label,id:e.id,deleted:!!e.deleted,edited:!!e.editedAt,at:Number(e.createdAt)||0});});(STATE.reserveOps||[]).forEach(function(o){if(!inMonth(o.date,month))return;var rr=(STATE.reserves||[]).find(function(x){return x.id===o.reserveId;});var nm=rr?rr.name:'Резерв';ops.push({t:o.date,type:o.type==='deposit'?'res-':'res+',a:o.amount,n:(o.type==='deposit'?'В резерв «':'Из резерва «')+nm+'»',id:o.id});});ops.sort(function(a,b){var ta=Number(a.at)||0,tb=Number(b.at)||0;if(tb!==ta)return tb-ta;return(b.t||'').localeCompare(a.t||'')||String(b.id||'').localeCompare(String(a.id||''));});var opsH=ops.map(function(o){var mark=o.deleted?'<span class="op-mark del">удалено</span>':(o.edited?'<span class="op-mark edit">изменено</span>':'');return '<div class="item'+(o.deleted?' op-deleted':'')+'" data-id="'+o.id+'" data-k="'+o.type+'"><div class="left"><b>'+esc(o.n)+'</b>'+mark+'<span class="muted">'+(o.t||'')+'</span></div><div class="amt '+(o.type==='in'?'plus':'minus')+'">'+(o.type==='in'?'+':'−')+fmt(o.a)+'</div></div>';}).join('')||'<div class="empty tight">Нет операций</div>';
@@ -1675,14 +1693,14 @@ if(t.id==='mPrev'){viewMonth=shiftMonth(getViewMonth(),-1);render();return;}if(t
 }var id=t.dataset.id,k=t.dataset.k,month=getViewMonth();if(!id||!k)return;
 if(k==='in'){var inc=STATE.income.find(function(i){return i.id===id;});if(!inc)return;appChoice('Доход · '+fmt(inc.amount),['Изменить','Удалить'],'Доход').then(function(act){if(act===null)return;if(act===1){appConfirm('Удалить доход?','Удалить').then(function(ok){if(!ok)return;pushUndo();softDeleteIn('income',id,'income');if(STATE.lastOp&&STATE.lastOp.id===id)STATE.lastOp=null;save(true);render();toast('Удалено');});}else{appPrompt('Сумма',String(num(inc.amount)),'Изменить доход').then(function(av){if(av===null)return;appPrompt('Комментарий',inc.note||'','Комментарий',{text:true}).then(function(nn){if(nn===null)return;var a=num(av);if(a<=0)return toast('Укажи сумму');pushUndo();inc.amount=a;inc.note=String(nn||'Доход');inc.editedAt=new Date().toISOString();logOpChange('income',id,'edited',inc.note);save(true);render();toast('Доход обновлён');});});}});return;}
 if(k==='ex'){var exp=STATE.expenses.find(function(i){return i.id===id;});if(!exp)return;appChoice('Расход · '+fmt(exp.amount),['Изменить','Удалить'],'Расход').then(function(act){if(act===null)return;if(act===1){appConfirm('Удалить расход?','Удалить').then(function(ok){if(!ok)return;pushUndo();softDeleteIn('expenses',id,'expense');if(STATE.lastOp&&STATE.lastOp.id===id)STATE.lastOp=null;save(true);render();toast('Удалено');});}else{appPrompt('Сумма',String(num(exp.amount)),'Изменить расход').then(function(av){if(av===null)return;appPrompt('Категория / комментарий',exp.note||exp.category||'','Комментарий',{text:true}).then(function(nn){if(nn===null)return;var a=num(av);if(a<=0)return toast('Укажи сумму');pushUndo();exp.amount=a;var label=String(nn||exp.category||'Прочее');if(exp.category==='Долг'||exp.category==='Обязательные'){exp.note=label;}else{exp.category=label;exp.note=label;}exp.editedAt=new Date().toISOString();logOpChange('expense',id,'edited',label);save(true);render();toast('Расход обновлён');});});}});return;}
-if(k==='res'){var r=STATE.reserves.find(function(i){return i.id===id;});if(!r)return;appChoice('Резерв «'+r.name+'»',['Пополнить','Снять','Изменить','Удалить'],'Резерв').then(function(act){
+if(k==='res'){var r=STATE.reserves.find(function(i){return i.id===id;});if(!r)return;appChoice('Резерв «'+r.name+'»',['Пополнить','Снять','Значимость','Изменить','Удалить'],'Резерв').then(function(act){
   if(act===null)return;
-  if(act===3){
+  if(act===4){
     appConfirm('Удалить резерв?','Удалить').then(function(ok){
       if(!ok)return;pushUndo();STATE.reserves=STATE.reserves.filter(function(i){return i.id!==id;});
       STATE.reserveOps=STATE.reserveOps.filter(function(o){return o.reserveId!==id;});save(true);render();toast('Удалено');
     });
-  } else if(act===2){
+  } else if(act===3){
     appForm('Изменить резерв',[
       {name:'name',label:'Название',value:r.name||''},
       {name:'target',label:'Цель (0 — без цели)',value:String(num(r.target)),inputmode:'decimal'},
@@ -1690,6 +1708,17 @@ if(k==='res'){var r=STATE.reserves.find(function(i){return i.id===id;});if(!r)re
     ],'Сохранить').then(function(v){
       if(!v)return;pushUndo();r.name=String(v.name||r.name).trim()||r.name;
       r.target=Math.max(0,num(v.target));r.saved=Math.max(0,num(v.saved));save(true);render();toast('Резерв обновлён');
+    });
+  } else if(act===2){
+    var cur=num(r.priority);
+    var opts=['1 — самая важная','2 — важная','3 — заметная','Убрать значимость'];
+    appChoice('Значимость «'+r.name+'»',opts,'Приоритет').then(function(pi){
+      if(pi===null)return;
+      pushUndo();
+      if(pi===3){setReservePriority(r,0);save(true);render();toast('Значимость снята');return;}
+      setReservePriority(r,pi+1);
+      save(true);render();
+      toast('Значимость: '+(pi+1));
     });
   } else if(act===1){
     appPrompt('Снять','0','Снять с резерва').then(function(av){
