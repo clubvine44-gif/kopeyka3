@@ -1382,6 +1382,16 @@ homeHtml += '<div class="orbit-core"><div class="orbit-val">'+fmt(c.available)+'
 homeHtml += '<div class="orbit-wrap orbit-limit" id="limitRingTap" title="Лимит на сегодня">'+limitRingSvg;
 homeHtml += '<div class="orbit-core"><div class="orbit-val orbit-val-lim">'+fmt(c.daily)+'</div><div class="orbit-sub">Лимит на день</div></div></div>';
 homeHtml += '</div>';
+var hz=c.horizon||'month';
+homeHtml += '<div class="hero-horizon limit-modes horizon" data-limit-kind="horizon">';
+homeHtml += '<span class="mode'+(hz==='payday'?' active':'')+(c.hasPayday?'':' dim')+'" data-horizon="payday">До зарплаты</span>';
+homeHtml += '<span class="mode'+(hz==='month'?' active':'')+'" data-horizon="month">До конца месяца</span>';
+homeHtml += '</div>';
+if(c.hasPayday){
+  homeHtml += '<div class="hero-horizon-sub muted">'+esc((c.horizonLabel||'')+' · '+c.daysLeft+' дн.')+'</div>';
+}else{
+  homeHtml += '<div class="hero-horizon-sub muted">День зарплаты не задан · считаем до конца месяца</div>';
+}
 homeHtml += '<div class="hero-kpis">';
 homeHtml += '<div class="kpi"><span class="kpi-l">Касса</span><b>'+fmt(c.cash)+'</b></div>';
 homeHtml += '<div class="kpi"><span class="kpi-l">Резервы</span><b>'+fmt(c.reservesTotal)+'</b></div>';
@@ -1567,7 +1577,7 @@ app.innerHTML = htmlOut;
 if(currentView==='home'&&prevScroll>0){requestAnimationFrame(function(){window.scrollTo(0,prevScroll);requestAnimationFrame(function(){window.scrollTo(0,prevScroll);});});}
 
 try{if(window.FinBridge){if(window.FinBridge.updateWidgetDataFull){window.FinBridge.updateWidgetDataFull(fmt(c.daily),fmt(c.cash),fmt(c.available),sl,String(c.daysLeft));}else if(window.FinBridge.updateWidgetData){window.FinBridge.updateWidgetData(fmt(c.daily),fmt(c.cash),sl);}}}catch(e){}
-if(!app._bound){app._bound=true;app.addEventListener('click',function(e){var t=e.target.closest('[data-date],.item[data-id],.sec-head,#mPrev,#mNext,#btnShiftPay,.quick-nav,[data-view],#btnAddMain,.qcat,#limitCard,#ringTap,#limitRingTap,#finnTipCard,#btnFullCal,.link-more,.mode,[data-budget-edit],.budget-lim');if(!t||!app.contains(t))return;if(t.classList&&t.classList.contains('quick-nav')||t.dataset.view){goView(t.dataset.view);return;}
+if(!app._bound){app._bound=true;app.addEventListener('click',function(e){var t=e.target.closest('[data-date],.item[data-id],.sec-head,#mPrev,#mNext,#btnShiftPay,.quick-nav,[data-view],#btnAddMain,.qcat,#limitCard,#ringTap,#limitRingTap,#finnTipCard,#btnFullCal,.link-more,.mode,[data-budget-edit],.budget-lim,[data-horizon],.hero-horizon');if(!t||!app.contains(t))return;if(t.classList&&t.classList.contains('quick-nav')||t.dataset.view){goView(t.dataset.view);return;}
 if(t.id==='btnAddMain'||t.classList.contains('qcat')){
   var cat=t.dataset.cat;
   if(typeof openModal==='function'){
@@ -1612,6 +1622,22 @@ if(t.id==='ringTap'||t.closest&&t.closest('#ringTap')){
   var cc=compute();var det='Касса — '+fmt(cc.cash)+'\n− обязательные — '+fmt(cc.obligDue||0)+'\n− долги — '+fmt(cc.debtLeft||0)+'\n\nДоступно — '+fmt(cc.available);
   appAlert(det,'Расшифровка');
   return;
+}
+// горизонт лимита (под кружками)
+var hzBtn=t.closest?t.closest('[data-horizon]'):null;
+if(hzBtn||(t.dataset&&t.dataset.horizon)){
+  var horizon=(hzBtn&&hzBtn.dataset&&hzBtn.dataset.horizon)||(t.dataset&&t.dataset.horizon);
+  if(horizon==='payday'||horizon==='month'){
+    if(horizon==='payday'&&!(STATE.settings&&STATE.settings.paydayDay>=1&&STATE.settings.paydayDay<=31)){
+      toast('Сначала укажи день зарплаты в настройках');
+      return;
+    }
+    if(!STATE.settings)STATE.settings={};
+    STATE.settings.limitHorizon=horizon;
+    save(true);render();
+    toast(horizon==='payday'?'Лимит до зарплаты':'Лимит до конца месяца');
+    return;
+  }
 }
 if(t.id==='limitCard'||t.closest('#limitCard')){
   var hzEl=t.closest('[data-horizon]')||t;
