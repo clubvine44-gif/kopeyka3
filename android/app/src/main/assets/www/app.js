@@ -1420,7 +1420,6 @@ homeHtml += '</div>';
 // ===== 2. Нужные траты (бюджет по категориям) =====
 homeHtml += '<div class="card tight budget-card" id="budgetCard">';
 homeHtml += '<div class="sec-title-sm">НУЖНЫЕ ТРАТЫ</div>';
-homeHtml += '<div class="hint budget-hint">Лимит на категорию за месяц. Расходы из операций учитываются здесь автоматически.</div>';
 BUDGET_CATS.forEach(function(cat){
   var lim=budgetLimitOf(cat);
   var spent=spentInCat(cat, month);
