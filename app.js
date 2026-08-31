@@ -1383,12 +1383,13 @@ if(c.available < c.daily * 3 && c.available > 0){
 var leftLimitShow=Math.max(0,(c.daily||0)-(spentToday||0));
 var limitPctRing = c.daily>0 ? Math.min(100, Math.round( (spentToday||0)/c.daily *100 )) : 0;
 // второе кольцо — прогресс дневного лимита (не красный)
-var limCirc=2*Math.PI*42;
+// то же viewBox/радиус/толщина, что у кольца «Доступно»
+var limR=50, limCirc=2*Math.PI*limR;
 var limDash=(limitPctRing/100)*limCirc;
-var limitRingSvg='<svg class="orbit-svg orbit-svg-limit" viewBox="0 0 100 100">'+
-  '<circle cx="50" cy="50" r="42" fill="none" stroke="rgba(120,200,180,.12)" stroke-width="7"/>'+
-  '<circle cx="50" cy="50" r="42" fill="none" stroke="#5ED9B0" stroke-width="7" stroke-linecap="round" '+
-  'stroke-dasharray="'+limDash.toFixed(1)+' '+(limCirc).toFixed(1)+'" transform="rotate(-90 50 50)" '+
+var limitRingSvg='<svg class="orbit-svg orbit-svg-limit" viewBox="0 0 128 128" width="104" height="104">'+
+  '<circle cx="64" cy="64" r="'+limR+'" fill="none" stroke="rgba(120,200,180,.12)" stroke-width="8"/>'+
+  '<circle cx="64" cy="64" r="'+limR+'" fill="none" stroke="#5ED9B0" stroke-width="8" stroke-linecap="round" '+
+  'stroke-dasharray="'+limDash.toFixed(1)+' '+(limCirc).toFixed(1)+'" transform="rotate(-90 64 64)" '+
   'style="filter:drop-shadow(0 0 6px rgba(94,217,176,.35))"/>'+
   '</svg>';
 
@@ -1398,7 +1399,7 @@ homeHtml += '<div class="hero-dual">';
 homeHtml += '<div class="orbit-wrap" id="ringTap" title="Подробная расшифровка">'+ringSvg;
 homeHtml += '<div class="orbit-core"><div class="orbit-val">'+fmt(c.available)+'</div><div class="orbit-sub">Доступно</div></div></div>';
 homeHtml += '<div class="orbit-wrap orbit-limit" id="limitRingTap" title="Лимит на сегодня">'+limitRingSvg;
-homeHtml += '<div class="orbit-core"><div class="orbit-val orbit-val-lim">'+fmt(c.daily)+'</div><div class="orbit-sub">Лимит на день</div></div></div>';
+homeHtml += '<div class="orbit-core"><div class="orbit-val orbit-val-lim">'+fmt(c.daily)+'</div><div class="orbit-sub">На день</div></div></div>';
 homeHtml += '</div>';
 var hz=c.horizon||'month';
 homeHtml += '<div class="hero-horizon limit-modes horizon" data-limit-kind="horizon">';
