@@ -1,6 +1,11 @@
 (function(){/* v113 */'use strict';
 var KEY='kopeyka3_state_v1',ANCHOR='2026-08-17',CYCLE=['day','day','night','night','off','off'];
-var CATS=['Продукты','Алкоголь','Сигареты','Хозтовары','Бытовая химия','Кафе','Связь','Проезд','Жильё','Здоровье','Красота','Одежда','Развлечения','Подписки','Техника','Дети','Животные','Обязательные','Долг','Прочее'];
+var CATS=['Продукты','Одежда','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье','Прочее'];
+var BUDGET_CATS=['Продукты','Одежда','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
+function budgetLimitOf(cat){var bl=(STATE.settings&&STATE.settings.budgetLimits)||{};return Math.max(0,num(bl[cat]));}
+function setBudgetLimit(cat,val){if(!STATE.settings)STATE.settings={};if(!STATE.settings.budgetLimits||typeof STATE.settings.budgetLimits!=='object')STATE.settings.budgetLimits={};STATE.settings.budgetLimits[cat]=Math.max(0,num(val));}
+function spentInCat(cat,month){var s=0;month=String(month||today().slice(0,7));(STATE.expenses||[]).forEach(function(e){if(!e||e.deleted)return;if(!inMonth(e.date,month))return;if(String(e.category||'Прочее')===String(cat))s+=num(e.amount);});return s;}
+
 var RES_PRESETS=['Подушка безопасности','Права','Отпуск','Ремонт','Налог','Свой вариант'];
 var SHIFT_LABEL={day:'День',night:'Ночь',off:'Выходной'};
 var _renderQueued=false,_rafRender=null;
@@ -1356,79 +1361,55 @@ if(c.available < c.daily * 3 && c.available > 0){
   attention.push('Денег осталось мало. Крупно следи за дневным лимитом.');
 }
 
-// ===== 1. Главный финансовый блок + кольцо =====
+// ===== 1. Сейчас: доступно + лимит на день =====
+var leftLimitShow=Math.max(0,(c.daily||0)-(spentToday||0));
+var limitPctRing = c.daily>0 ? Math.min(100, Math.round( (spentToday||0)/c.daily *100 )) : 0;
+// второе кольцо — прогресс дневного лимита (не красный)
+var limCirc=2*Math.PI*42;
+var limDash=(limitPctRing/100)*limCirc;
+var limitRingSvg='<svg class="orbit-svg orbit-svg-limit" viewBox="0 0 100 100">'+
+  '<circle cx="50" cy="50" r="42" fill="none" stroke="rgba(120,200,180,.12)" stroke-width="7"/>'+
+  '<circle cx="50" cy="50" r="42" fill="none" stroke="#5ED9B0" stroke-width="7" stroke-linecap="round" '+
+  'stroke-dasharray="'+limDash.toFixed(1)+' '+(limCirc).toFixed(1)+'" transform="rotate(-90 50 50)" '+
+  'style="filter:drop-shadow(0 0 6px rgba(94,217,176,.35))"/>'+
+  '</svg>';
+
 homeHtml += '<div class="card hero" id="mainFinance">';
 homeHtml += '<div class="hero-label">Сейчас</div>';
-homeHtml += '<div class="hero-main">';
+homeHtml += '<div class="hero-dual">';
 homeHtml += '<div class="orbit-wrap" id="ringTap" title="Подробная расшифровка">'+ringSvg;
 homeHtml += '<div class="orbit-core"><div class="orbit-val">'+fmt(c.available)+'</div><div class="orbit-sub">Доступно</div></div></div>';
-homeHtml += '<div class="hero-stats">';
-homeHtml += '<div class="hero-avail-hint">можно потратить без нарушения планов</div>';
-homeHtml += '<div class="ring-legend">'+legendHtml+'</div>';
-homeHtml += '</div></div>';
+homeHtml += '<div class="orbit-wrap orbit-limit" id="limitRingTap" title="Лимит на сегодня">'+limitRingSvg;
+homeHtml += '<div class="orbit-core"><div class="orbit-val orbit-val-lim">'+fmt(c.daily)+'</div><div class="orbit-sub">Лимит на день</div></div></div>';
+homeHtml += '</div>';
 homeHtml += '<div class="hero-kpis">';
 homeHtml += '<div class="kpi"><span class="kpi-l">Касса</span><b>'+fmt(c.cash)+'</b></div>';
 homeHtml += '<div class="kpi"><span class="kpi-l">Резервы</span><b>'+fmt(c.reservesTotal)+'</b></div>';
 homeHtml += '<div class="kpi"><span class="kpi-l">Долги</span><b class="'+(c.debtLeft?'neg':'')+'">'+fmt(c.debtLeft||0)+'</b></div>';
 homeHtml += '</div>';
-homeHtml += sparkWrap + whyDaily;
 homeHtml += '</div>';
 
-// ===== 4. Сегодня =====
-var _flagsT={showShifts:true,mode:'shift'};
-try{if(window.FinnaProfile&&window.FinnaProfile.flags)_flagsT=Object.assign(_flagsT,window.FinnaProfile.flags());}catch(e){}
-homeHtml += '<div class="card tight today-card" id="todayCard">';
-if(_flagsT.showShifts){
-  homeHtml += '<div class="sec-title-sm">СЕГОДНЯ</div>';
-  homeHtml += shiftInfo;
-} else {
-  homeHtml += '<div class="sec-title-sm">СЕГОДНЯ · ФИННА</div>';
-  homeHtml += '<div class="today-status" id="todayStatusBody">Загружаю мысль дня…</div>';
-  setTimeout(function(){try{refreshTodayStatus();}catch(e){}},150);
-}
-homeHtml += '</div>';
-
-// ===== 5. Лимит на сегодня =====
-homeHtml += '<div class="card tight limit-card" id="limitCard">';
-homeHtml += '<div class="limit-head"><span>Лимит на сегодня</span><b class="limit-val">'+fmt(c.daily)+'</b></div>';
-var leftLimitShow=Math.max(0,(c.daily||0)-(spentToday||0));
-var hLab=c.horizonLabel||'до конца месяца';
-homeHtml += '<div class="limit-sub">'+esc(hLab.charAt(0).toUpperCase()+hLab.slice(1))+' · '+c.daysLeft+' дн. · осталось сегодня '+fmt(leftLimitShow)+'</div>';
-var limitPct = c.daily>0 ? Math.min(100, Math.round( (spentToday||0)/c.daily *100 )) : 0;
-homeHtml += '<div class="limit-bar"><div class="limit-fill'+(limitPct>=100?' over':'')+'" style="width:'+limitPct+'%"></div></div>';
-var isManual=STATE.settings&&STATE.settings.manualDailyLimit!=null&&STATE.settings.manualDailyLimit!=='';
-var hz=c.horizon||'month';
-homeHtml += '<div class="limit-row">';
-if(c.hasPayday){
-  homeHtml += '<div class="limit-modes horizon" data-limit-kind="horizon">';
-  homeHtml += '<span class="mode'+(hz==='payday'?' active':'')+'" data-horizon="payday">До зарплаты</span>';
-  homeHtml += '<span class="mode'+(hz==='month'?' active':'')+'" data-horizon="month">До конца месяца</span>';
+// ===== 2. Нужные траты (бюджет по категориям) =====
+homeHtml += '<div class="card tight budget-card" id="budgetCard">';
+homeHtml += '<div class="sec-title-sm">НУЖНЫЕ ТРАТЫ</div>';
+homeHtml += '<div class="hint budget-hint">Лимит на категорию за месяц. Расходы из операций учитываются здесь автоматически.</div>';
+BUDGET_CATS.forEach(function(cat){
+  var lim=budgetLimitOf(cat);
+  var spent=spentInCat(cat, month);
+  var pct=lim>0?Math.min(100, Math.round(spent/lim*100)):0;
+  var over=lim>0&&spent>lim;
+  var barCol=over?'#F87171':(pct>=85?'#F0A060':'#5ED9B0');
+  homeHtml += '<div class="budget-row" data-budget-cat="'+esc(cat)+'">';
+  homeHtml += '<div class="budget-row-top"><b>'+esc(cat)+'</b>';
+  homeHtml += '<button type="button" class="budget-lim" data-budget-edit="'+esc(cat)+'">'+fmt(lim)+'</button></div>';
+  homeHtml += '<div class="budget-row-sub"><span class="'+(over?'neg':'')+'">'+fmt(spent)+' из '+fmt(lim)+'</span>';
+  homeHtml += '<span class="muted">'+(lim>0?(pct+'%'):'лимит не задан')+'</span></div>';
+  homeHtml += '<div class="limit-bar"><div class="limit-fill" style="width:'+pct+'%;background:'+barCol+'"></div></div>';
   homeHtml += '</div>';
-}
-homeHtml += '<div class="limit-modes" data-limit-kind="mode">';
-homeHtml += '<span class="mode'+(isManual?'':' active')+'" data-mode="auto">Авто</span>';
-homeHtml += '<span class="mode'+(isManual?' active':'')+'" data-mode="manual">Ручной</span>';
-homeHtml += '</div></div>';
+});
 homeHtml += '</div>';
-
-// ===== 6. Главная кнопка добавить =====
-// ===== 7. Быстрые расходы =====
-// ===== 15. Обрати внимание =====
-/* attention folded into Finn card */
-
-
-// ===== Finn tip (верхняя зона) =====
-homeHtml += '<div class="card finn-tip-card" id="finnTipCard">';
-homeHtml += '<div class="finn-tip-head"><span class="finn-mini finn-mini-face">'+(window.FinnChar?window.FinnChar.svgMarkup('','M'):'')+'</span> Финна · совет</div>';
-homeHtml += '<div class="finn-tip-body" id="finnTipBody">'+esc(finnTip)+'</div>';
-homeHtml += '<div class="finn-tip-hint">Зажми кнопку <b>+</b> внизу справа — откроется Финна</div>';
-if(attention.length){
-  homeHtml += '<div class="finn-att">';
-  attention.slice(0,2).forEach(function(a){ homeHtml += '<div class="att-item">'+esc(a)+'</div>'; });
-  homeHtml += '</div>';
-}
-homeHtml += '</div>';
-setTimeout(function(){try{refreshFinnTipAI(finnTip,attention);}catch(e){}},100);
+window.__finnTipText=finnTip;
+window.__finnAttention=attention;
 
 // ===== 8b. Срочные резервы — на видном месте =====
 var urgentResList=(STATE.reserves||[]).filter(function(r){return r&&r.urgent&&!r.deleted;}).slice();
@@ -1486,20 +1467,6 @@ homeHtml += '<button type="button" class="link-more" data-view="obl">Все пл
 homeHtml += '</div>';
 
 
-// ===== 10. Последние операции =====
-homeHtml += '<div class="card tight">';
-homeHtml += '<div class="sec-title-sm">ПОСЛЕДНИЕ ОПЕРАЦИИ</div>';
-if(recentOps.length){
-  recentOps.forEach(function(o){
-    var cls = o.type==='in'||o.type==='res+' ? 'plus' : 'minus';
-    var sign = o.type==='in'||o.type==='res+' ? '+' : '−';
-    homeHtml += '<div class="item" data-id="'+o.id+'" data-k="'+o.k+'"><div class="left"><b>'+esc(o.n)+'</b><span class="muted">'+(o.t||'')+'</span></div><div class="amt '+cls+'">'+sign+fmt(o.a)+'</div></div>';
-  });
-}else{
-  homeHtml += '<div class="empty tight">Пока нет операций</div>';
-}
-homeHtml += '<button type="button" class="link-more" data-view="ops">Все операции →</button>';
-homeHtml += '</div>';
 
 // ===== 11. Прогноз =====
 homeHtml += '<div class="card tight forecast-card" id="forecastCard">';
@@ -1517,12 +1484,6 @@ homeHtml += '<div class="card tight">';
 homeHtml += '<div class="sec-title-sm">РЕЗЕРВЫ</div>';
 homeHtml += '<div class="res-total">'+fmt(c.reservesTotal)+(resTargetTotal?' / '+fmt(resTargetTotal):'')+'</div>';
 homeHtml += '<div class="limit-bar"><div class="limit-fill" style="width:'+resPct+'%;background:var(--green)"></div></div>';
-var topRes = (STATE.reserves||[]).slice().sort(function(a,b){return num(b.saved)-num(a.saved);}).slice(0,2);
-topRes.forEach(function(r){
-  var pct=r.target>0?Math.min(100,Math.round(num(r.saved)/num(r.target)*100)):0;
-  var urg=(r.urgent&&r.urgentDate)?('<span class="res-urgent">срочный · '+r.urgentDate.slice(8,10)+'.'+r.urgentDate.slice(5,7)+'</span> '):'';
-  homeHtml += '<div class="item" data-id="'+r.id+'" data-k="res"><div class="left"><b>'+esc(r.name)+'</b> '+urg+'<span class="muted">'+fmt(r.saved)+(r.target?' / '+fmt(r.target):'')+'</span></div><div class="amt">'+pct+'%</div></div>';
-});
 homeHtml += '<button type="button" class="link-more" data-view="res">Все резервы →</button>';
 homeHtml += '</div>';
 
@@ -1606,7 +1567,7 @@ app.innerHTML = htmlOut;
 if(currentView==='home'&&prevScroll>0){requestAnimationFrame(function(){window.scrollTo(0,prevScroll);requestAnimationFrame(function(){window.scrollTo(0,prevScroll);});});}
 
 try{if(window.FinBridge){if(window.FinBridge.updateWidgetDataFull){window.FinBridge.updateWidgetDataFull(fmt(c.daily),fmt(c.cash),fmt(c.available),sl,String(c.daysLeft));}else if(window.FinBridge.updateWidgetData){window.FinBridge.updateWidgetData(fmt(c.daily),fmt(c.cash),sl);}}}catch(e){}
-if(!app._bound){app._bound=true;app.addEventListener('click',function(e){var t=e.target.closest('[data-date],.item[data-id],.sec-head,#mPrev,#mNext,#btnShiftPay,.quick-nav,[data-view],#btnAddMain,.qcat,#limitCard,#ringTap,#finnTipCard,#btnFullCal,.link-more,.mode');if(!t||!app.contains(t))return;if(t.classList&&t.classList.contains('quick-nav')||t.dataset.view){goView(t.dataset.view);return;}
+if(!app._bound){app._bound=true;app.addEventListener('click',function(e){var t=e.target.closest('[data-date],.item[data-id],.sec-head,#mPrev,#mNext,#btnShiftPay,.quick-nav,[data-view],#btnAddMain,.qcat,#limitCard,#ringTap,#limitRingTap,#finnTipCard,#btnFullCal,.link-more,.mode,[data-budget-edit],.budget-lim');if(!t||!app.contains(t))return;if(t.classList&&t.classList.contains('quick-nav')||t.dataset.view){goView(t.dataset.view);return;}
 if(t.id==='btnAddMain'||t.classList.contains('qcat')){
   var cat=t.dataset.cat;
   if(typeof openModal==='function'){
@@ -1617,6 +1578,34 @@ if(t.id==='btnAddMain'||t.classList.contains('qcat')){
     if(fab) fab.click();
     else if(typeof addExpense==='function'){ /* fallback */ }
   }
+  return;
+}
+var bedEl=t.closest?t.closest('[data-budget-edit]'):null;
+if(bedEl||(t.getAttribute&&t.getAttribute('data-budget-edit'))){
+  var bed=(bedEl&&bedEl.getAttribute('data-budget-edit'))||t.getAttribute('data-budget-edit');
+  if(bed){
+    appPrompt('Лимит на «'+bed+'» (₽ / мес)',String(budgetLimitOf(bed)),'Лимит категории').then(function(v){
+      if(v===null)return;
+      pushUndo();setBudgetLimit(bed,num(v));save(true);render();toast('Лимит «'+bed+'»: '+fmt(num(v)));
+    });
+    return;
+  }
+}
+if(t.id==='limitRingTap'||t.closest&&t.closest('#limitRingTap')){
+  var isMan=STATE.settings&&STATE.settings.manualDailyLimit!=null&&STATE.settings.manualDailyLimit!=='';
+  appChoice('Лимит на день',['Авто','Задать вручную','Расшифровка'],'Лимит').then(function(act){
+    if(act===null)return;
+    if(act===0){pushUndo();if(!STATE.settings)STATE.settings={};STATE.settings.manualDailyLimit=null;save(true);render();toast('Авто-лимит');return;}
+    if(act===1){
+      appPrompt('Лимит на день (₽)',String(isMan?STATE.settings.manualDailyLimit:compute().daily),'Ручной лимит').then(function(v){
+        if(v===null)return;pushUndo();if(!STATE.settings)STATE.settings={};STATE.settings.manualDailyLimit=num(v);save(true);render();toast('Ручной лимит: '+fmt(num(v)));
+      });
+      return;
+    }
+    var ccL=compute();
+    var st=0;(STATE.expenses||[]).forEach(function(e){if(!e.deleted&&e.date===today())st+=num(e.amount);});
+    appAlert('Лимит — '+fmt(ccL.daily)+'\nПотрачено сегодня — '+fmt(st)+'\nОсталось сегодня — '+fmt(Math.max(0,(ccL.daily||0)-st)),'Лимит на день');
+  });
   return;
 }
 if(t.id==='ringTap'||t.closest&&t.closest('#ringTap')){
@@ -1953,11 +1942,59 @@ function setup(){
   var bf=document.getElementById('btnFaq');
   if(bf)bf.onclick=function(){showFaq();};
   var bn=document.getElementById('btnNotif');
-  if(bn)bn.onclick=function(){showNotifications();};
+  if(bn)bn.onclick=function(){showFinnTipPopup();};
   try{updateNotifBadge();}catch(e){}
 }
 
-function boot(){if(!window.__scrollSaveBound){window.__scrollSaveBound=true;var st=null;window.addEventListener('scroll',function(){if((window.__finView||currentView||'home')!=='home')return;if(st)return;st=setTimeout(function(){st=null;window.__homeScroll=window.scrollY||document.documentElement.scrollTop||0;},120);},{passive:true});}try{STATE=norm(STATE);ensureMonth();var c=compute();if(STATE.income.length===0&&STATE.expenses.length===0&&c.cash<0&&!STATE.obligations.length&&!STATE.reserves.length){STATE=def();save(true);}}catch(e){STATE=def();}setup();render();syncReminders();setTimeout(bindFabHold,300);setTimeout(bindFabHold,1200);setTimeout(function(){try{if(!getUserName())showNameIntro(false);}catch(e){}},700);/* автооткрытие Материи убрано — приглашение только из чата Финны */
+function showFinnTipPopup(){
+  var old=document.getElementById('finnTipPop');
+  if(old)old.remove();
+  var tip=window.__finnTipText||'Пока тихо — когда появятся траты и платежи, здесь будет совет.';
+  var att=window.__finnAttention||[];
+  var pop=document.createElement('div');
+  pop.id='finnTipPop';
+  pop.className='finn-tip-pop';
+  var html='<div class="finn-tip-pop-card">';
+  html+='<div class="finn-tip-pop-head"><span>Финна</span><button type="button" id="finnTipPopClose">✕</button></div>';
+  html+='<div class="finn-tip-pop-body">'+esc(tip)+'</div>';
+  if(att.length){
+    html+='<div class="finn-tip-pop-att">';
+    att.slice(0,3).forEach(function(a){html+='<div class="att-item">'+esc(a)+'</div>';});
+    html+='</div>';
+  }
+  html+='</div>';
+  pop.innerHTML=html;
+  document.body.appendChild(pop);
+  requestAnimationFrame(function(){pop.classList.add('show');});
+  function close(){pop.classList.remove('show');setTimeout(function(){try{pop.remove();}catch(e){}},220);}
+  pop.addEventListener('click',function(e){if(e.target===pop)close();});
+  var cl=document.getElementById('finnTipPopClose');
+  if(cl)cl.onclick=function(e){e.stopPropagation();close();};
+  try{refreshFinnTipAI(tip,att);}catch(e){}
+}
+
+function showShiftBannerOnce(){
+  try{
+    if(sessionStorage.getItem('fin_shift_banner'))return;
+    sessionStorage.setItem('fin_shift_banner','1');
+  }catch(e){}
+  var t=today();
+  var sh=typeof shift==='function'?shift(t,STATE.shiftsOverride):'off';
+  var text='';
+  if(sh==='day')text='Сегодня дневная смена';
+  else if(sh==='night')text='Сегодня ночная смена';
+  else text='Сегодня выходной';
+  var rate=(STATE.settings&&(sh==='day'?STATE.settings.dayRate:STATE.settings.nightRate))||0;
+  if(sh!=='off'&&num(rate)>0)text+=' · '+fmt(rate);
+  var el=document.createElement('div');
+  el.className='shift-banner';
+  el.textContent=text;
+  document.body.appendChild(el);
+  requestAnimationFrame(function(){el.classList.add('show');});
+  setTimeout(function(){el.classList.remove('show');setTimeout(function(){try{el.remove();}catch(e){}},300);},3200);
+}
+
+function boot(){if(!window.__scrollSaveBound){window.__scrollSaveBound=true;var st=null;window.addEventListener('scroll',function(){if((window.__finView||currentView||'home')!=='home')return;if(st)return;st=setTimeout(function(){st=null;window.__homeScroll=window.scrollY||document.documentElement.scrollTop||0;},120);},{passive:true});}try{STATE=norm(STATE);ensureMonth();var c=compute();if(STATE.income.length===0&&STATE.expenses.length===0&&c.cash<0&&!STATE.obligations.length&&!STATE.reserves.length){STATE=def();save(true);}}catch(e){STATE=def();}setup();render();syncReminders();setTimeout(function(){try{showShiftBannerOnce();}catch(e){}},600);setTimeout(bindFabHold,300);setTimeout(bindFabHold,1200);setTimeout(function(){try{if(!getUserName())showNameIntro(false);}catch(e){}},700);/* автооткрытие Материи убрано — приглашение только из чата Финны */
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
 window.goView=goView;window.goHome=goHome;window.render=render;window.compute=compute;window.syncReminders=typeof syncReminders==="function"?syncReminders:function(){};
