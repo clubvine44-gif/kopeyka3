@@ -30,7 +30,55 @@ function orbitValCls(n){
   if(len>=6)return ' orbit-val-md';
   return '';
 }
-function spentInCat(cat,month){var s=0;month=String(month||today().slice(0,7));(STATE.expenses||[]).forEach(function(e){if(!e||e.deleted)return;if(!inMonth(e.date,month))return;if(String(e.category||'Прочее')===String(cat))s+=num(e.amount);});return s;}
+function pad2(n){return String(n).padStart(2,'0');}
+function daysInMonthNum(y,m){return new Date(y,m,0).getDate();}
+/** Период «нужных трат»: до зарплаты или календарный месяц */
+function budgetPeriodRange(){
+  var t=today();
+  var y=+t.slice(0,4), mo=+t.slice(5,7), d=+t.slice(8,10);
+  var horizon=(STATE.settings&&STATE.settings.limitHorizon==='month')?'month':'payday';
+  var payday=STATE.settings&&STATE.settings.paydayDay!=null?num(STATE.settings.paydayDay):0;
+  if(horizon==='payday'&&payday>=1&&payday<=31){
+    var sy,sm,sd,ey,em,ed;
+    if(d>=payday){
+      sy=y;sm=mo;sd=Math.min(payday,daysInMonthNum(y,mo));
+      if(mo===12){ey=y+1;em=1;}else{ey=y;em=mo+1;}
+      ed=Math.min(payday,daysInMonthNum(ey,em))-1;
+      if(ed<1){ey=sy;em=sm;ed=daysInMonthNum(sy,sm);}
+    }else{
+      if(mo===1){sy=y-1;sm=12;}else{sy=y;sm=mo-1;}
+      sd=Math.min(payday,daysInMonthNum(sy,sm));
+      ey=y;em=mo;ed=Math.min(payday,daysInMonthNum(y,mo))-1;
+      if(ed<1){ey=sy;em=sm;ed=daysInMonthNum(sy,sm);}
+    }
+    return{
+      start:sy+'-'+pad2(sm)+'-'+pad2(sd),
+      end:ey+'-'+pad2(em)+'-'+pad2(ed),
+      label:pad2(sd)+'.'+pad2(sm)+'–'+pad2(ed)+'.'+pad2(em),
+      mode:'payday'
+    };
+  }
+  var last=daysInMonthNum(y,mo);
+  return{
+    start:y+'-'+pad2(mo)+'-01',
+    end:y+'-'+pad2(mo)+'-'+pad2(last),
+    label:'01.'+pad2(mo)+'–'+pad2(last)+'.'+pad2(mo),
+    mode:'month'
+  };
+}
+function spentInCat(cat,month){
+  // month аргумент оставлен для совместимости; счёт идёт по текущему горизонту
+  var range=budgetPeriodRange();
+  var s=0;
+  (STATE.expenses||[]).forEach(function(e){
+    if(!e||e.deleted)return;
+    var ds=String(e.date||'').slice(0,10);
+    if(!ds||ds<range.start||ds>range.end)return;
+    if(String(e.category||'Прочее')===String(cat))s+=num(e.amount);
+  });
+  return s;
+}
+
 
 var RES_PRESETS=['Подушка безопасности','Права','Отпуск','Ремонт','Налог','Свой вариант'];
 var SHIFT_LABEL={day:'День',night:'Ночь',off:'Выходной'};
@@ -1429,6 +1477,8 @@ homeHtml += '</div>';
 // ===== 2. Нужные траты (бюджет по категориям) =====
 homeHtml += '<div class="card tight budget-card" id="budgetCard">';
 homeHtml += '<div class="sec-title-sm">НУЖНЫЕ ТРАТЫ</div>';
+var bPeriod=budgetPeriodRange();
+homeHtml += '<div class="budget-period">'+esc(bPeriod.mode==='payday'?'До зарплаты':'До конца месяца')+' · '+esc(bPeriod.label)+'</div>';
 BUDGET_CATS.forEach(function(cat){
   var lim=budgetLimitOf(cat);
   var spent=spentInCat(cat, month);
@@ -1645,25 +1695,15 @@ if(t.id==='limitRingTap'||t.closest&&t.closest('#limitRingTap')){
   return;
 }
 if(t.id==='ringTap'||t.closest&&t.closest('#ringTap')){
-  var cc=compute();var det='Касса — '+fmt(cc.cash)+'\n− обязательные — '+fmt(cc.obligDue||0)+'\n− долги — '+fmt(cc.debtLeft||0)+'\n\nДоступно — '+fmt(cc.available);
+  var cc=compute();
+  var det='Касса — остаток по операциям (доходы − расходы − в резервы).\n\n'
+    +'Касса — '+fmt(cc.cash)+'\n'
+    +'− обязательные (ещё не оплачены) — '+fmt(cc.obligDue||0)+'\n'
+    +'− долги (остаток) — '+fmt(cc.debtLeft||0)+'\n\n'
+    +'Доступно — '+fmt(cc.available)+'\n\n'
+    +'Доступно = касса − долги − обязательные.';
   appAlert(det,'Расшифровка');
   return;
-}
-// горизонт лимита (под кружками)
-var hzBtn=t.closest?t.closest('[data-horizon]'):null;
-if(hzBtn||(t.dataset&&t.dataset.horizon)){
-  var horizon=(hzBtn&&hzBtn.dataset&&hzBtn.dataset.horizon)||(t.dataset&&t.dataset.horizon);
-  if(horizon==='payday'||horizon==='month'){
-    if(horizon==='payday'&&!(STATE.settings&&STATE.settings.paydayDay>=1&&STATE.settings.paydayDay<=31)){
-      toast('Сначала укажи день зарплаты в настройках');
-      return;
-    }
-    if(!STATE.settings)STATE.settings={};
-    STATE.settings.limitHorizon=horizon;
-    save(true);render();
-    toast(horizon==='payday'?'Лимит до зарплаты':'Лимит до конца месяца');
-    return;
-  }
 }
 if(t.id==='limitCard'||t.closest('#limitCard')){
   var hzEl=t.closest('[data-horizon]')||t;
