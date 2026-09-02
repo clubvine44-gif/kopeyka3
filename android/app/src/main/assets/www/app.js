@@ -22,6 +22,14 @@ function setReservePriority(r,p){
   }
   r.priority=p;
 }
+function orbitValCls(n){
+  var s=String(fmt(n)||'').replace(/\s/g,'').replace(/₽/g,'');
+  var len=s.length;
+  if(len>=10)return ' orbit-val-xs';
+  if(len>=8)return ' orbit-val-sm';
+  if(len>=6)return ' orbit-val-md';
+  return '';
+}
 function spentInCat(cat,month){var s=0;month=String(month||today().slice(0,7));(STATE.expenses||[]).forEach(function(e){if(!e||e.deleted)return;if(!inMonth(e.date,month))return;if(String(e.category||'Прочее')===String(cat))s+=num(e.amount);});return s;}
 
 var RES_PRESETS=['Подушка безопасности','Права','Отпуск','Ремонт','Налог','Свой вариант'];
@@ -1199,7 +1207,7 @@ if(c.cash<0){
   if(!segs.length)legendHtml='<div class="ring-leg-item"><span class="leg-name">Вся касса свободна</span><b>'+fmt(c.cash)+'</b></div>';
   if(sumParts>c.cash)legendHtml+='<div class="ring-leg-item"><span class="leg-name">Не хватает в кассе</span><b class="neg">'+fmt(sumParts-c.cash)+'</b></div>';
 }
-var ringSvg='<svg class="orbit-svg" viewBox="0 0 128 128" width="104" height="104">'+ringArcs+'</svg>';
+var ringSvg='<svg class="orbit-svg" viewBox="0 0 128 128" width="124" height="124">'+ringArcs+'</svg>';
 
 var sparkWrap='';
 if(c.available>0&&c.daysLeft>1){
@@ -1386,7 +1394,7 @@ var limitPctRing = c.daily>0 ? Math.min(100, Math.round( (spentToday||0)/c.daily
 // то же viewBox/радиус/толщина, что у кольца «Доступно»
 var limR=50, limCirc=2*Math.PI*limR;
 var limDash=(limitPctRing/100)*limCirc;
-var limitRingSvg='<svg class="orbit-svg orbit-svg-limit" viewBox="0 0 128 128" width="104" height="104">'+
+var limitRingSvg='<svg class="orbit-svg orbit-svg-limit" viewBox="0 0 128 128" width="124" height="124">'+
   '<circle cx="64" cy="64" r="'+limR+'" fill="none" stroke="rgba(120,200,180,.12)" stroke-width="8"/>'+
   '<circle cx="64" cy="64" r="'+limR+'" fill="none" stroke="#5ED9B0" stroke-width="8" stroke-linecap="round" '+
   'stroke-dasharray="'+limDash.toFixed(1)+' '+(limCirc).toFixed(1)+'" transform="rotate(-90 64 64)" '+
@@ -1397,9 +1405,9 @@ homeHtml += '<div class="card hero" id="mainFinance">';
 homeHtml += '<div class="hero-label">Сейчас</div>';
 homeHtml += '<div class="hero-dual">';
 homeHtml += '<div class="orbit-wrap" id="ringTap" title="Подробная расшифровка">'+ringSvg;
-homeHtml += '<div class="orbit-core"><div class="orbit-val">'+fmt(c.available)+'</div><div class="orbit-sub">Доступно</div></div></div>';
+homeHtml += '<div class="orbit-core"><div class="orbit-val'+orbitValCls(c.available)+'">'+fmt(c.available)+'</div><div class="orbit-sub">Доступно</div></div></div>';
 homeHtml += '<div class="orbit-wrap orbit-limit" id="limitRingTap" title="Лимит на сегодня">'+limitRingSvg;
-homeHtml += '<div class="orbit-core"><div class="orbit-val orbit-val-lim">'+fmt(c.daily)+'</div><div class="orbit-sub">На день</div></div></div>';
+homeHtml += '<div class="orbit-core"><div class="orbit-val orbit-val-lim'+orbitValCls(c.daily)+'">'+fmt(c.daily)+'</div><div class="orbit-sub">На день</div></div></div>';
 homeHtml += '</div>';
 var hz=c.horizon||'month';
 homeHtml += '<div class="hero-horizon limit-modes horizon" data-limit-kind="horizon">';
