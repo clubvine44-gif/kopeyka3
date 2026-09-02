@@ -66,15 +66,37 @@ function budgetPeriodRange(){
     mode:'month'
   };
 }
-function spentInCat(cat,month){
-  // month аргумент оставлен для совместимости; счёт идёт по текущему горизонту
+function ensureBudgetPeriodTrack(forceToday){
+  if(!STATE.settings)STATE.settings={};
   var range=budgetPeriodRange();
+  var key=range.mode+'_'+range.start+'_'+range.end;
+  var prev=STATE.settings.budgetPeriodKey||'';
+  if(forceToday){
+    STATE.settings.budgetPeriodKey=key;
+    STATE.settings.budgetTrackFrom=today();
+    return range;
+  }
+  if(prev!==key){
+    // новый период (смена горизонта или наступление зарплаты/месяца)
+    STATE.settings.budgetPeriodKey=key;
+    STATE.settings.budgetTrackFrom=range.start;
+  }
+  if(!STATE.settings.budgetTrackFrom)STATE.settings.budgetTrackFrom=range.start;
+  return range;
+}
+function spentInCat(cat,month){
+  var range=ensureBudgetPeriodTrack(false);
+  var from=String(STATE.settings.budgetTrackFrom||range.start).slice(0,10);
+  if(from<range.start)from=range.start;
   var s=0;
   (STATE.expenses||[]).forEach(function(e){
     if(!e||e.deleted)return;
+    var cat0=String(e.category||'Прочее');
+    if(cat0==='Долг'||cat0==='Обязательные')return;
+    if(cat0!==String(cat))return;
     var ds=String(e.date||'').slice(0,10);
-    if(!ds||ds<range.start||ds>range.end)return;
-    if(String(e.category||'Прочее')===String(cat))s+=num(e.amount);
+    if(!ds||ds<from||ds>range.end)return;
+    s+=num(e.amount);
   });
   return s;
 }
@@ -1458,9 +1480,9 @@ homeHtml += '<div class="orbit-wrap orbit-limit" id="limitRingTap" title="Лим
 homeHtml += '<div class="orbit-core"><div class="orbit-val orbit-val-lim'+orbitValCls(c.daily)+'">'+fmt(c.daily)+'</div><div class="orbit-sub">На день</div></div></div>';
 homeHtml += '</div>';
 var hz=c.horizon||'month';
-homeHtml += '<div class="hero-horizon limit-modes horizon" data-limit-kind="horizon">';
-homeHtml += '<span class="mode'+(hz==='payday'?' active':'')+(c.hasPayday?'':' dim')+'" data-horizon="payday">До зарплаты</span>';
-homeHtml += '<span class="mode'+(hz==='month'?' active':'')+'" data-horizon="month">До конца месяца</span>';
+homeHtml += '<div class="hero-horizon limit-modes horizon" data-limit-kind="horizon" id="heroHorizon">';
+homeHtml += '<button type="button" class="mode'+(hz==='payday'?' active':'')+(c.hasPayday?'':' dim')+'" data-horizon="payday">До зарплаты</button>';
+homeHtml += '<button type="button" class="mode'+(hz==='month'?' active':'')+'" data-horizon="month">До конца месяца</button>';
 homeHtml += '</div>';
 if(c.hasPayday){
   homeHtml += '<div class="hero-horizon-sub muted">'+esc((c.horizonLabel||'')+' · '+c.daysLeft+' дн.')+'</div>';
@@ -1477,7 +1499,7 @@ homeHtml += '</div>';
 // ===== 2. Нужные траты (бюджет по категориям) =====
 homeHtml += '<div class="card tight budget-card" id="budgetCard">';
 homeHtml += '<div class="sec-title-sm">НУЖНЫЕ ТРАТЫ</div>';
-var bPeriod=budgetPeriodRange();
+var bPeriod=ensureBudgetPeriodTrack(false);
 homeHtml += '<div class="budget-period">'+esc(bPeriod.mode==='payday'?'До зарплаты':'До конца месяца')+' · '+esc(bPeriod.label)+'</div>';
 BUDGET_CATS.forEach(function(cat){
   var lim=budgetLimitOf(cat);
@@ -1693,6 +1715,34 @@ if(t.id==='limitRingTap'||t.closest&&t.closest('#limitRingTap')){
     appAlert('Лимит — '+fmt(ccL.daily)+'\nПотрачено сегодня — '+fmt(st)+'\nОсталось сегодня — '+fmt(Math.max(0,(ccL.daily||0)-st)),'Лимит на день');
   });
   return;
+}
+// переключатели «До зарплаты / До конца месяца»
+var hzNode=null;
+if(t&&t.getAttribute&&t.getAttribute('data-horizon'))hzNode=t;
+else if(t&&t.closest)hzNode=t.closest('[data-horizon]');
+if(hzNode){
+  var horizon=hzNode.getAttribute('data-horizon');
+  if(horizon==='payday'||horizon==='month'){
+    if(horizon==='payday'){
+      var pd=STATE.settings&&STATE.settings.paydayDay!=null?num(STATE.settings.paydayDay):0;
+      if(!(pd>=1&&pd<=31)){
+        toast('Сначала укажи день зарплаты в настройках');
+        return;
+      }
+    }
+    if(!STATE.settings)STATE.settings={};
+    var prevH=STATE.settings.limitHorizon||'payday';
+    STATE.settings.limitHorizon=horizon;
+    // при смене горизонта — новый отсчёт «потрачено» с сегодня
+    if(prevH!==horizon){
+      ensureBudgetPeriodTrack(true);
+    }else{
+      ensureBudgetPeriodTrack(false);
+    }
+    save(true);render();
+    toast(horizon==='payday'?'До зарплаты · траты с сегодня':'До конца месяца · траты с сегодня');
+    return;
+  }
 }
 if(t.id==='ringTap'||t.closest&&t.closest('#ringTap')){
   var cc=compute();
