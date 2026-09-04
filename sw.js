@@ -1,4 +1,4 @@
-const CACHE='kopeyka3-v64';
+const CACHE='kopeyka3-v65';
 const APP_SHELL=['./','./index.html','./finn-char.js?v=20260904','./app.js?v=20260904','./cloud.js?v=20260904','./onboard.js?v=20260904','./products.js?v=20260904','./voice.js?v=20260904','./engine.js?v=20260904','./ai.js?v=20260904','./assistant-v2.js?v=20260904','./finn3d.js?v=20260904','./finn-wake.js?v=20260904','./matter.js?v=20260904','./matter-finn.js?v=20260904','./widget.html','./manifest.json','./icon.svg'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(APP_SHELL)).then(()=>self.skipWaiting()));});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim()));});
