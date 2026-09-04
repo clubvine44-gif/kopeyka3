@@ -4,11 +4,11 @@
 (function (g) {
   'use strict';
   var api = g.FinApp || {};
-  api.version = '4.9.5';
+  api.version = '4.9.6';
   api.build = function () { try { return g.__kopeykaBuild || ''; } catch (e) { return ''; } };
   api.hasSecureStore = function () { return !!(g.FinSecureStore && g.FinSecureStore.saveState); };
   api.compute = function () { try { if (typeof g.compute === 'function') return g.compute(); } catch (e) {} return null; };
-  api.render = function () { try { if (typeof g.render === 'function') g.render(); } catch (e) {} };
+  api.render = function () { try { if (typeof g.render === 'function') g.render(); } catch (e) {} try { if (g.finPlan && g.finPlan.refresh) g.finPlan.refresh(); } catch (e) {} };
   api.toast = function (msg) { try { if (typeof g.toast === 'function') g.toast(msg); } catch (e) {} };
   api.getState = function () { try { return g.STATE || null; } catch (e) { return null; } };
   api.getFinancialPlan = function () { try { return g.finPlan && g.finPlan.get ? g.finPlan.get() : null; } catch (e) { return null; } };
@@ -16,7 +16,7 @@
   g.FinApp = api;
   function loadPlanner(){
     if(typeof document==='undefined'||document.querySelector('script[data-fin-plan]'))return;
-    var s=document.createElement('script');s.src='fin-plan.js?v=2026090423';s.async=true;s.setAttribute('data-fin-plan','1');
+    var s=document.createElement('script');s.src='fin-plan.js?v=2026090425';s.async=true;s.setAttribute('data-fin-plan','1');
     (document.head||document.documentElement).appendChild(s);
   }
   if(typeof document!=='undefined'){
