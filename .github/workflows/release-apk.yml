@@ -66,7 +66,7 @@ jobs:
           set -euo pipefail
           WWW="android/app/src/main/assets/www"
           mkdir -p "$WWW"
-          for f in index.html app.js ai.js assistant-v2.js assistant.js cloud.js engine.js fin-core.js fin-plan.js finn-char.js finn3d.js finn-wake.js matter.js matter-finn.js matter-room.jpg matter-room.mp3 matter-tour-1.mp3 matter-tour-2.mp3 matter-tour-3.mp3 matter-tour-4.mp3 matter-tour-5.mp3 voice.js onboard.js profile.js products.js sw.js manifest.json icon.svg widget.html ai-bootstrap.js; do
+          for f in index.html app.js ai.js assistant-v2.js assistant.js cloud.js engine.js fin-core.js fin-plan.js finn-char.js finn3d.js finn-wake.js matter.js matter-finn.js matter-room.jpg matter-room.mp3 matter-tour-1.mp3 matter-tour-2.mp3 matter-tour-3.mp3 matter-tour-4.mp3 voice.js onboard.js profile.js products.js sw.js manifest.json icon.svg widget.html ai-bootstrap.js; do
             if [ -f "$f" ]; then cp -f "$f" "$WWW/"; fi
           done
           for f in matter.js matter-tour-1.mp3 matter-tour-2.mp3 matter-tour-3.mp3 matter-tour-4.mp3 matter-tour-5.mp3 fin-plan.js; do
@@ -131,6 +131,13 @@ jobs:
           test -n "$BUILD_TOOLS" || { echo "build-tools 34.0.0 not found"; exit 1; }
           "$BUILD_TOOLS/zipalign" -c -p -v 4 Fin.apk
           "$BUILD_TOOLS/apksigner" verify --verbose Fin.apk
+          unzip -l Fin.apk | grep -E 'assets/www/(fin-plan|fin-core|engine)\.js' | tee packaged-fin-assets.txt
+          test "$(grep -c 'assets/www/fin-plan.js' packaged-fin-assets.txt)" -eq 1
+          test "$(grep -c 'assets/www/fin-core.js' packaged-fin-assets.txt)" -eq 1
+          test "$(grep -c 'assets/www/engine.js' packaged-fin-assets.txt)" -eq 1
+          node --check fin-plan.js
+          node --check fin-core.js
+          node --check engine.js
           sha256sum Fin.apk | tee Fin.apk.sha256
           ls -lh Fin.apk Fin.apk.sha256
 
