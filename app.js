@@ -66,28 +66,10 @@ function budgetPeriodRange(){
     mode:'month'
   };
 }
-function ensureBudgetPeriodTrack(forceToday){
-  if(!STATE.settings)STATE.settings={};
-  var range=budgetPeriodRange();
-  var key=range.mode+'_'+range.start+'_'+range.end;
-  var prev=STATE.settings.budgetPeriodKey||'';
-  if(forceToday){
-    STATE.settings.budgetPeriodKey=key;
-    STATE.settings.budgetTrackFrom=today();
-    return range;
-  }
-  if(prev!==key){
-    // новый период (смена горизонта или наступление зарплаты/месяца)
-    STATE.settings.budgetPeriodKey=key;
-    STATE.settings.budgetTrackFrom=range.start;
-  }
-  if(!STATE.settings.budgetTrackFrom)STATE.settings.budgetTrackFrom=range.start;
-  return range;
-}
-function spentInCat(cat,month){
-  var range=ensureBudgetPeriodTrack(false);
-  var from=String(STATE.settings.budgetTrackFrom||range.start).slice(0,10);
-  if(from<range.start)from=range.start;
+function spentInCatRange(cat,from,end){
+  from=String(from||'').slice(0,10);
+  end=String(end||'').slice(0,10);
+  if(!from||!end)return 0;
   var s=0;
   (STATE.expenses||[]).forEach(function(e){
     if(!e||e.deleted)return;
@@ -95,10 +77,95 @@ function spentInCat(cat,month){
     if(cat0==='Долг'||cat0==='Обязательные')return;
     if(cat0!==String(cat))return;
     var ds=String(e.date||'').slice(0,10);
-    if(!ds||ds<from||ds>range.end)return;
+    if(!ds||ds<from||ds>end)return;
     s+=num(e.amount);
   });
   return s;
+}
+/** Остатки лимитов нужных трат → резерв «Накопление из бюджета», затем период сбрасывается. */
+function rolloverBudgetLeftovers(){
+  if(!STATE.settings)return 0;
+  var from=String(STATE.settings.budgetTrackFrom||STATE.settings.budgetPeriodStart||'').slice(0,10);
+  var end=String(STATE.settings.budgetPeriodEnd||'').slice(0,10);
+  if(!from||!end)return 0;
+  var total=0;
+  var parts=[];
+  BUDGET_CATS.forEach(function(cat){
+    var lim=budgetLimitOf(cat);
+    if(lim<=0)return;
+    var spent=spentInCatRange(cat,from,end);
+    var left=Math.max(0,lim-spent);
+    if(left>0){
+      total+=left;
+      parts.push(cat+': '+fmt(left));
+    }
+  });
+  if(total<=0)return 0;
+  if(!STATE.reserves)STATE.reserves=[];
+  var name='Накопление из бюджета';
+  var r=null;
+  for(var i=0;i<STATE.reserves.length;i++){
+    if(STATE.reserves[i]&&!STATE.reserves[i].deleted&&STATE.reserves[i].name===name){r=STATE.reserves[i];break;}
+  }
+  if(!r){
+    r={id:uid(),name:name,category:name,saved:0,target:0,urgent:false,urgentDate:'',priority:0};
+    STATE.reserves.push(r);
+  }
+  r.saved=num(r.saved)+total;
+  if(!STATE.reserveOps)STATE.reserveOps=[];
+  STATE.reserveOps.push({
+    id:uid(),
+    reserveId:r.id,
+    type:'deposit',
+    amount:total,
+    date:today(),
+    note:'Остаток нужных трат '+from+'…'+end
+  });
+  STATE.settings.lastBudgetRollover={amount:total,at:today(),from:from,end:end,parts:parts.slice(0,8)};
+  return total;
+}
+function ensureBudgetPeriodTrack(forceToday){
+  if(!STATE.settings)STATE.settings={};
+  var range=budgetPeriodRange();
+  var key=range.mode+'_'+range.start+'_'+range.end;
+  var prev=STATE.settings.budgetPeriodKey||'';
+  if(forceToday){
+    // ручная смена горизонта — без переноса остатков, новый отсчёт с сегодня
+    STATE.settings.budgetPeriodKey=key;
+    STATE.settings.budgetTrackFrom=today();
+    STATE.settings.budgetPeriodStart=range.start;
+    STATE.settings.budgetPeriodEnd=range.end;
+    return range;
+  }
+  if(prev!==key){
+    // натуральная смена периода: 1-е число / день зарплаты
+    var rolled=0;
+    if(prev){
+      try{rolled=rolloverBudgetLeftovers()||0;}catch(e){rolled=0;}
+    }
+    STATE.settings.budgetPeriodKey=key;
+    STATE.settings.budgetTrackFrom=range.start;
+    STATE.settings.budgetPeriodStart=range.start;
+    STATE.settings.budgetPeriodEnd=range.end;
+    if(rolled>0){
+      try{
+        // отложенный тост — render ещё может идти
+        setTimeout(function(){
+          try{toast('В накопление из бюджета: '+fmt(rolled));}catch(e){}
+        },400);
+      }catch(e){}
+    }
+  }
+  if(!STATE.settings.budgetTrackFrom)STATE.settings.budgetTrackFrom=range.start;
+  if(!STATE.settings.budgetPeriodStart)STATE.settings.budgetPeriodStart=range.start;
+  if(!STATE.settings.budgetPeriodEnd)STATE.settings.budgetPeriodEnd=range.end;
+  return range;
+}
+function spentInCat(cat,month){
+  var range=ensureBudgetPeriodTrack(false);
+  var from=String(STATE.settings.budgetTrackFrom||range.start).slice(0,10);
+  if(from<range.start)from=range.start;
+  return spentInCatRange(cat,from,range.end);
 }
 
 
@@ -1547,6 +1614,12 @@ homeHtml += '<div class="card tight budget-card" id="budgetCard">';
 homeHtml += '<div class="sec-title-sm">НУЖНЫЕ ТРАТЫ</div>';
 var bPeriod=ensureBudgetPeriodTrack(false);
 homeHtml += '<div class="budget-period">'+esc(bPeriod.mode==='payday'?'До зарплаты':'До конца месяца')+' · '+esc(bPeriod.label)+'</div>';
+try{
+  var lr=STATE.settings&&STATE.settings.lastBudgetRollover;
+  if(lr&&lr.at&&lr.amount>0&&lr.at===today()){
+    homeHtml += '<div class="budget-period budget-roll">Сегодня в накопление: '+fmt(lr.amount)+'</div>';
+  }
+}catch(e){}
 BUDGET_CATS.forEach(function(cat){
   var lim=budgetLimitOf(cat);
   var spent=spentInCat(cat, month);
