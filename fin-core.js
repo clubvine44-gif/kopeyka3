@@ -1,5 +1,6 @@
 /**
  * FinApp core facade — stable entry point for application modules.
+ * [release] Fin 4.9.6
  */
 (function (g) {
   'use strict';
