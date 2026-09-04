@@ -164,6 +164,10 @@
             } catch (e) {}
             return null;
           }
+          try {
+            global.__FIN_DECRYPT_FAILED = false;
+            global.__FIN_LOCKED_RAW = null;
+          } catch (e) {}
           return st;
         });
       }

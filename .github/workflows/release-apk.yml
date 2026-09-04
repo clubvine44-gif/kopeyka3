@@ -53,7 +53,10 @@ jobs:
           for f in matter.js matter-tour-1.mp3 matter-tour-2.mp3 matter-tour-3.mp3 matter-tour-4.mp3 matter-tour-5.mp3 fin-plan.js fin-design.js; do test -f "$WWW/$f" || { echo "Missing packaged asset: $f"; exit 1; }; done
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('android/app/src/main/assets/www/index.html'); t=p.read_text(encoding='utf-8'); t=t.replace("if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js?v=46').catch(function(){});",'window.__FIN_NATIVE=true;');
+          p=Path('android/app/src/main/assets/www/index.html'); t=p.read_text(encoding='utf-8'); import re
+          t=re.sub(r"if\(!window\.__FIN_NATIVE&&'serviceWorker' in navigator\)navigator\.serviceWorker\.register\('sw\.js\?v=\d+'\)\.catch\(function\(\)\{\}\);", '', t)
+          t=re.sub(r"if\('serviceWorker' in navigator\)navigator\.serviceWorker\.register\('sw\.js\?v=\d+'\)\.catch\(function\(\)\{\}\);", '', t)
+          if 'window.__FIN_NATIVE=true' not in t: t=t.replace('window.__FIN_NATIVE=!!(window.FinBridge);','window.__FIN_NATIVE=true;',1)
           if 'window.__FIN_NATIVE' not in t: t=t.replace('<script>','<script>window.__FIN_NATIVE=true;',1)
           p.write_text(t,encoding='utf-8')
           PY
@@ -92,7 +95,7 @@ jobs:
           "$BUILD_TOOLS/zipalign" -c -p -v 4 Fin.apk; "$BUILD_TOOLS/apksigner" verify --verbose Fin.apk
           unzip -l Fin.apk | grep -E 'assets/www/(fin-plan|fin-core|fin-design|engine)\.js' | tee packaged-fin-assets.txt
           for f in fin-plan fin-core fin-design engine; do test "$(grep -c "assets/www/$f.js" packaged-fin-assets.txt)" -eq 1; done
-          node --check fin-plan.js; node --check fin-core.js; node --check fin-design.js; node --check engine.js
+          node --check fin-plan.js; node --check fin-core.js; node --check fin-design.js; node --check engine.js; node --check cloud.js; node --check app.js; node --check secure-store.js; node --check fin-backup.js
           sha256sum Fin.apk | tee Fin.apk.sha256; ls -lh Fin.apk Fin.apk.sha256
       - name: Publish GitHub Release
         env:
@@ -107,6 +110,6 @@ jobs:
           import json,os
           from pathlib import Path
           vn=os.environ['RELEASE_VERSION_NAME']; vc=int(os.environ['RELEASE_VERSION_CODE'])
-          Path('update.json').write_text(json.dumps({'versionCode':vc,'versionName':vn,'apkUrl':f'https://github.com/clubvine44-gif/kopeyka3/releases/download/v{vn}/Fin.apk','notes':f'{vn} — переработанный главный экран и финансовый план на сегодня (versionCode {vc})'},ensure_ascii=False,indent=2)+'\n')
+          Path('update.json').write_text(json.dumps({'versionCode':vc,'versionName':vn,'apkUrl':f'https://github.com/clubvine44-gif/kopeyka3/releases/download/v{vn}/Fin.apk','notes':f'{vn} — сохранность данных, облако и логика кассы (versionCode {vc})'},ensure_ascii=False,indent=2)+'\n')
           PY
           git config user.name 'github-actions[bot]'; git config user.email '41898282+github-actions[bot]@users.noreply.github.com'; git add update.json; git commit -m "Update Fin release manifest to ${RELEASE_VERSION_NAME}" || true; git push origin HEAD:main

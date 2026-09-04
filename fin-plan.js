@@ -6,7 +6,7 @@ function get(){
   var e=window.kopeykaEngine;
   if(e&&e.snapshot){
     var s=e.snapshot(),c=s.calculations||{};
-    return {cash:Number(c.cash)||0,available:Number(c.available)||0,reservesTotal:Number(c.reservesTotal)||0,dailyLimit:Number(c.dailyLimit)||0};
+    return {cash:Number(c.cash)||0,available:Number(c.available)||0,reservesTotal:Number(c.reservesTotal)||0,dailyLimit:Number(c.dailyBudget||c.daily||c.dailyLimit)||0,daily:Number(c.dailyBudget||c.daily||c.dailyLimit)||0};
   }
   return {};
 }

@@ -226,10 +226,13 @@ function loadSyncFallback(){
       try{r=localStorage.getItem('kopeyka3_state_v1__raw_backup');}catch(e){}
     }
     if(!r)return def();
-    // Encrypted blob without working SecureStore — do NOT wipe to empty
+    // Encrypted blob: do not flag decrypt-failed yet — async SecureStore will open it.
+    // Never treat ciphertext as empty JSON.
     if(String(r).indexOf('FINENC1:')===0){
-      try{window.__FIN_DECRYPT_FAILED=true;window.__FIN_LOCKED_RAW=r;}catch(e){}
-      return def(); // UI empty but save() will refuse overwrite
+      if(!(window.FinSecureStore&&typeof window.FinSecureStore.loadState==='function')){
+        try{window.__FIN_DECRYPT_FAILED=true;window.__FIN_LOCKED_RAW=r;}catch(e){}
+      }
+      return def();
     }
     return norm(JSON.parse(r));
   }catch(e){return def();}
@@ -339,10 +342,14 @@ function save(skipUndo){
     if(window.FinSecureStore&&typeof window.FinSecureStore.saveState==='function'){
       window.FinSecureStore.saveState(KEY,STATE);
     }else{
-      localStorage.setItem(KEY,JSON.stringify(STATE));
+      var ex2=null;try{ex2=localStorage.getItem(KEY);}catch(e3){}
+      if(!(ex2&&String(ex2).indexOf('FINENC1:')===0)) localStorage.setItem(KEY,JSON.stringify(STATE));
     }
   }catch(e){
-    try{localStorage.setItem(KEY,JSON.stringify(STATE));}catch(e2){}
+    try{
+      var ex3=localStorage.getItem(KEY);
+      if(!(ex3&&String(ex3).indexOf('FINENC1:')===0)) localStorage.setItem(KEY,JSON.stringify(STATE));
+    }catch(e2){}
   }
   if(window.kopeykaCloud&&window.kopeykaCloud.scheduleSave)window.kopeykaCloud.scheduleSave();
   try{if(window.FinBackup&&typeof window.FinBackup.onSave==='function')window.FinBackup.onSave(STATE);}catch(e){}
@@ -1215,7 +1222,6 @@ function showSettings(){
       '<button type="button" class="set-row" id="setRestoreCloud"><div class="set-main"><b>Восстановить из облака</b><span>Подтянуть данные с аккаунта принудительно</span></div><span class="set-val">☁</span></button>'+
       '<button type="button" class="set-row" id="setImport"><div class="set-main"><b>Импорт из файла</b><span>Вернуть данные из JSON-бэкапа</span></div><span class="set-val">↑</span></button>'+
       '<button type="button" class="set-row" id="setFileBackup"><div class="set-main"><b>Бэкап в Загрузки сейчас</b><span id="setBackupStatus">Локальные снимки + файл</span></div><span class="set-val">💾</span></button>'+
-      '<button type="button" class="set-row" id="setImport"><div class="set-main"><b>Загрузить копию</b><span>Восстановить из файла</span></div><span class="set-val">↑</span></button>'+
       '<button type="button" class="set-row danger" id="setClear"><div class="set-main"><b>Удалить всё</b><span>Сбросить приложение полностью</span></div><span class="set-val"></span></button>'+
     '</div>'+
     '<div class="set-group" id="devGateWrap"><button type="button" class="set-row" id="devGate"><div class="set-main"><b>Для разработчика</b><span>Скрытый раздел · нажми 5 раз подряд</span></div><span class="set-val">🔒</span></button></div>'+
@@ -2455,8 +2461,17 @@ function runAppBoot(){
 function boot(){
   var start=function(){
     function afterLoad(st){
-      if(st){STATE=st;}
+      if(st){
+        STATE=st;
+        try{window.__FIN_DECRYPT_FAILED=false;window.__FIN_LOCKED_RAW=null;}catch(e){}
+      }
       else{STATE=def();}
+      function markAppReady(){
+        try{
+          window.__FIN_APP_READY=true;
+          window.dispatchEvent(new Event('fin-app-ready'));
+        }catch(e){}
+      }
       // Layer: recover from local rotating snapshots if primary empty
       try{
         var emptyPrimary=!(STATE&&((STATE.income&&STATE.income.length)||(STATE.expenses&&STATE.expenses.length)||(STATE.debts&&STATE.debts.length)||(STATE.reserves&&STATE.reserves.length)||(STATE.obligations&&STATE.obligations.length)||(STATE.settings&&Number(STATE.settings.openingBalance))));
@@ -2470,6 +2485,7 @@ function boot(){
         }
       }catch(e){}
       runAppBoot();
+      markAppReady();
       try{
         if(window.__FIN_DECRYPT_FAILED){
           setTimeout(function(){
