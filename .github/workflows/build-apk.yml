@@ -13,12 +13,19 @@ on:
       - 'assistant.js'
       - 'cloud.js'
       - 'engine.js'
+      - 'fin-core.js'
       - 'finn-char.js'
       - 'finn3d.js'
       - 'finn-wake.js'
       - 'matter.js'
       - 'matter-finn.js'
       - 'matter-room.jpg'
+      - 'matter-room.mp3'
+      - 'matter-tour-1.mp3'
+      - 'matter-tour-2.mp3'
+      - 'matter-tour-3.mp3'
+      - 'matter-tour-4.mp3'
+      - 'matter-tour-5.mp3'
       - 'voice.js'
       - 'onboard.js'
       - 'products.js'
@@ -49,16 +56,20 @@ jobs:
 
       - name: Accept Android licenses
         run: |
+          set -euo pipefail
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
 
       - name: Prepare web assets into Android
         run: |
-          set -e
+          set -euo pipefail
           WWW="android/app/src/main/assets/www"
           mkdir -p "$WWW"
-          for f in index.html app.js ai.js assistant-v2.js assistant.js cloud.js engine.js finn-char.js finn3d.js finn-wake.js matter.js matter-finn.js matter-room.jpg voice.js onboard.js profile.js products.js sw.js manifest.json icon.svg widget.html ai-bootstrap.js; do
+          for f in index.html app.js ai.js assistant-v2.js assistant.js cloud.js engine.js fin-core.js finn-char.js finn3d.js finn-wake.js matter.js matter-finn.js matter-room.jpg matter-room.mp3 matter-tour-1.mp3 matter-tour-2.mp3 matter-tour-3.mp3 matter-tour-4.mp3 matter-tour-5.mp3 voice.js onboard.js profile.js products.js sw.js manifest.json icon.svg widget.html ai-bootstrap.js; do
             if [ -f "$f" ]; then cp -f "$f" "$WWW/"; fi
+          done
+          for f in matter.js matter-tour-1.mp3 matter-tour-2.mp3 matter-tour-3.mp3 matter-tour-4.mp3 matter-tour-5.mp3; do
+            test -f "$WWW/$f" || { echo "Missing packaged asset: $f"; exit 1; }
           done
           if [ -f "$WWW/index.html" ]; then
             python3 - <<'PY'
@@ -72,8 +83,6 @@ jobs:
           print('index patched')
           PY
           fi
-          echo "Assets:"
-          ls -la "$WWW"
 
       - name: PNG launcher icons
         run: |
@@ -112,9 +121,10 @@ jobs:
 
       - name: Locate APK
         run: |
-          set -e
+          set -euo pipefail
           APK=$(find android/app/build/outputs/apk -name '*.apk' | head -n 1)
           echo "Found: $APK"
+          test -s "$APK"
           ls -lh "$APK"
           cp "$APK" Fin-debug.apk
 
