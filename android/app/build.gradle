@@ -10,8 +10,8 @@ android {
         applicationId "app.fin.kopeyka"
         minSdk 26
         targetSdk 34
-        versionCode 128
-        versionName "4.8.1"
+        versionCode 130
+        versionName "4.9.0"
     }
 
     signingConfigs {
@@ -35,7 +35,8 @@ android {
             versionNameSuffix "-debug"
         }
         release {
-            minifyEnabled false
+            minifyEnabled true
+            shrinkResources true
             signingConfig signingConfigs.release
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
