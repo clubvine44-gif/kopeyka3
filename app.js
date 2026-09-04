@@ -1,7 +1,7 @@
 (function(){/* v113 */'use strict';
 var KEY='kopeyka3_state_v1',ANCHOR='2026-08-17',CYCLE=['day','day','night','night','off','off'];
-var CATS=['Продукты','Одежда','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье','Прочее'];
-var BUDGET_CATS=['Продукты','Одежда','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
+var CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье','Прочее'];
+var BUDGET_CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
 function budgetLimitOf(cat){var bl=(STATE.settings&&STATE.settings.budgetLimits)||{};return Math.max(0,num(bl[cat]));}
 function setBudgetLimit(cat,val){if(!STATE.settings)STATE.settings={};if(!STATE.settings.budgetLimits||typeof STATE.settings.budgetLimits!=='object')STATE.settings.budgetLimits={};STATE.settings.budgetLimits[cat]=Math.max(0,num(val));}
 function sortReservesList(list){
