@@ -1211,6 +1211,8 @@ function showSettings(){
       '<button type="button" class="set-row" id="setCheckUpdate"><div class="set-main"><b>Проверить обновления</b><span>Сверка с сервером прямо сейчас</span></div><span class="set-val">↻</span></button>'+
       '<button type="button" class="set-row" id="setUndo"><div class="set-main"><b>Отменить последнее</b><span>'+(undoStack.length?'Можно откатить действие':'Пока нечего отменять')+'</span></div><span class="set-val">'+(undoStack.length?'↩':'')+'</span></button>'+
       '<button type="button" class="set-row" id="setExport"><div class="set-main"><b>Сохранить копию</b><span>Файл со всеми данными</span></div><span class="set-val">↓</span></button>'+
+      '<button type="button" class="set-row" id="setRestoreCloud"><div class="set-main"><b>Восстановить из облака</b><span>Подтянуть данные с аккаунта принудительно</span></div><span class="set-val">☁</span></button>'+
+      '<button type="button" class="set-row" id="setImport"><div class="set-main"><b>Импорт из файла</b><span>Вернуть данные из JSON-бэкапа</span></div><span class="set-val">↑</span></button>'+
       '<button type="button" class="set-row" id="setImport"><div class="set-main"><b>Загрузить копию</b><span>Восстановить из файла</span></div><span class="set-val">↑</span></button>'+
       '<button type="button" class="set-row danger" id="setClear"><div class="set-main"><b>Удалить всё</b><span>Сбросить приложение полностью</span></div><span class="set-val"></span></button>'+
     '</div>'+
@@ -1374,6 +1376,15 @@ function showSettings(){
       }catch(e){toast('Не удалось');}
     };
     document.getElementById('setExport').onclick=function(){exportData();};
+    var setRest=document.getElementById('setRestoreCloud');
+    if(setRest)setRest.onclick=function(){
+      if(window.kopeykaCloud&&window.kopeykaCloud.forceRestore){
+        toast('Восстанавливаю из облака…');
+        window.kopeykaCloud.forceRestore().then(function(ok){if(ok)render();});
+      }else toast('Сначала войди в облако (иконка облака)');
+    };
+    var setImp=document.getElementById('setImport');
+    if(setImp)setImp.onclick=function(){importData();};
     document.getElementById('setImport').onclick=function(){doClose();importData();};
     document.getElementById('setClear').onclick=function(){
       appConfirm('Удалить все данные? Это нельзя отменить.','Удалить всё').then(function(ok){
