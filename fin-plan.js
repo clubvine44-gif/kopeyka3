@@ -1,6 +1,6 @@
 (function(){
 'use strict';
-/* Финансовый план v2: прикладной слой + главный ответ для пользователя. */
+/* Финансовый план v3: прикладной слой + живое обновление после изменений состояния. */
 function num(v){var x=Number(v);return isFinite(x)&&x===x?Math.round(x):0;}
 function dateKey(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function today(){return dateKey(new Date());}
@@ -25,13 +25,13 @@ function build(){
   var protectedCash=Math.min(reserves,Math.max(0,cash));
   var spendable=Math.max(0,available-protectedCash),pay=nextPayday(snap),todaySpent=spentToday(snap);
   var horizon=(snap.settings&&snap.settings.limitHorizon)==='payday'&&pay.known?'payday':'month_end';
-  var days=horizon==='payday'?Math.max(1,pay.days): (m===currentMonth()?Math.max(1,monthDays(m)-new Date().getDate()+1):monthDays(m));
+  var days=horizon==='payday'?Math.max(1,pay.days):(m===currentMonth()?Math.max(1,monthDays(m)-new Date().getDate()+1):monthDays(m));
   var baseDaily=Math.floor(spendable/days),manual=snap.settings&&snap.settings.manualDailyLimit;
   var daily=(manual!==null&&manual!==undefined&&manual!==''&&isFinite(Number(manual)))?Math.max(0,Math.round(Number(manual))):baseDaily;
   daily=Math.min(daily,spendable);
   var remaining=Math.max(0,daily-todaySpent),status='ok';
   if(spendable<=0)status='critical';else if(todaySpent>daily)status='warning';else if(daily>0&&todaySpent/daily>=.8)status='attention';
-  return{version:2,generatedAt:new Date().toISOString(),month:m,cash:cash,available:available,protectedReserves:protectedCash,spendable:spendable,daysLeft:days,dailyLimit:daily,baseDailyLimit:baseDaily,spentToday:todaySpent,remainingToday:remaining,debtRemaining:num(c.debtRemaining),obligationsRemaining:num(c.obligationsRemaining),income:num(c.income),expenses:num(c.expenses),reservesTotal:reserves,payday:pay,status:status,horizon:{type:horizon,days:days}};
+  return{version:3,generatedAt:new Date().toISOString(),month:m,cash:cash,available:available,protectedReserves:protectedCash,spendable:spendable,daysLeft:days,dailyLimit:daily,baseDailyLimit:baseDaily,spentToday:todaySpent,remainingToday:remaining,debtRemaining:num(c.debtRemaining),obligationsRemaining:num(c.obligationsRemaining),income:num(c.income),expenses:num(c.expenses),reservesTotal:reserves,payday:pay,status:status,horizon:{type:horizon,days:days}};
 }
 function advice(p){
   if(!p)return 'Финансовый план недоступен.';
@@ -51,19 +51,23 @@ function renderCard(){
     var card=document.createElement('section');card.id='finPlanCard';card.className='card fin-plan-card';
     var title=p.status==='critical'?'Внимание':p.status==='warning'?'Лимит превышен':'План на сегодня';
     var sub=p.horizon.type==='payday'&&p.payday.known?'До зарплаты · '+p.horizon.days+' дн.':'До конца периода · '+p.horizon.days+' дн.';
-    card.innerHTML='<div class="fin-plan-head"><div><div class="fin-plan-kicker">'+title+'</div><div class="fin-plan-sub">'+esc(sub)+'</div></div><div class="fin-plan-value">'+fmt(p.remainingToday)+'</div></div><div class="fin-plan-track"><span style="width:'+Math.min(100,p.dailyLimit?Math.round(p.spentToday/p.dailyLimit*100):0)+'%"></span></div><div class="fin-plan-meta"><span>Лимит '+fmt(p.dailyLimit)+'</span><span>Потрачено '+fmt(p.spentToday)+'</span></div><div class="fin-plan-advice">'+esc(advice(p))+'</div></section>';
+    card.innerHTML='<div class="fin-plan-head"><div><div class="fin-plan-kicker">'+title+'</div><div class="fin-plan-sub">'+esc(sub)+'</div></div><div class="fin-plan-value">'+fmt(p.remainingToday)+'</div></div><div class="fin-plan-track"><span style="width:'+Math.min(100,p.dailyLimit?Math.round(p.spentToday/p.dailyLimit*100):0)+'%"></span></div><div class="fin-plan-meta"><span>Лимит '+fmt(p.dailyLimit)+'</span><span>Потрачено '+fmt(p.spentToday)+'</span></div><div class="fin-plan-meta fin-plan-extra"><span>Свободно '+fmt(p.spendable)+'</span><span>Резерв '+fmt(p.protectedReserves)+'</span></div><div class="fin-plan-advice">'+esc(advice(p))+'</div>';
     host.parentNode.insertBefore(card,host.nextSibling);
   }catch(e){}
 }
+function schedule(){clearTimeout(schedule._t);schedule._t=setTimeout(renderCard,80);}
 function install(){
   if(!document.getElementById('finPlanStyle')){
-    var s=document.createElement('style');s.id='finPlanStyle';s.textContent='.fin-plan-card{padding:15px 16px!important;border-color:rgba(94,200,255,.2)!important;background:linear-gradient(145deg,rgba(18,31,54,.98),rgba(12,21,37,.98))!important}.fin-plan-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.fin-plan-kicker{font-size:14px;font-weight:800}.fin-plan-sub{font-size:11px;color:var(--muted);margin-top:2px}.fin-plan-value{font-size:25px;font-weight:850;letter-spacing:-.04em}.fin-plan-track{height:6px;background:rgba(255,255,255,.07);border-radius:99px;margin:13px 0 7px;overflow:hidden}.fin-plan-track span{display:block;height:100%;background:var(--accent);border-radius:99px;transition:width .25s}.fin-plan-meta{display:flex;justify-content:space-between;gap:8px;font-size:10px;color:var(--muted)}.fin-plan-advice{font-size:12px;line-height:1.4;margin-top:10px;color:var(--text)}';document.head.appendChild(s);
+    var s=document.createElement('style');s.id='finPlanStyle';s.textContent='.fin-plan-card{padding:15px 16px!important;border-color:rgba(94,200,255,.2)!important;background:linear-gradient(145deg,rgba(18,31,54,.98),rgba(12,21,37,.98))!important}.fin-plan-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.fin-plan-kicker{font-size:14px;font-weight:800}.fin-plan-sub{font-size:11px;color:var(--muted);margin-top:2px}.fin-plan-value{font-size:25px;font-weight:850;letter-spacing:-.04em}.fin-plan-track{height:6px;background:rgba(255,255,255,.07);border-radius:99px;margin:13px 0 7px;overflow:hidden}.fin-plan-track span{display:block;height:100%;background:var(--accent);border-radius:99px;transition:width .25s}.fin-plan-meta{display:flex;justify-content:space-between;gap:8px;font-size:10px;color:var(--muted)}.fin-plan-extra{margin-top:5px}.fin-plan-advice{font-size:12px;line-height:1.4;margin-top:10px;color:var(--text)}';document.head.appendChild(s);
   }
   renderCard();
+  document.addEventListener('kopeyka:state-changed',schedule);
+  window.addEventListener('storage',schedule);
+  window.addEventListener('focus',schedule);
+  window.addEventListener('pageshow',schedule);
   var tries=0,tm=setInterval(function(){renderCard();if(++tries>20)clearInterval(tm);},500);
-  new MutationObserver(function(){if(!document.getElementById('finPlanCard'))renderCard();}).observe(document.body,{childList:true,subtree:true});
-  setInterval(renderCard,60000);
+  setInterval(renderCard,5000);
 }
-window.finPlan={build:build,get:function(){var p=build();p.advice=advice(p);return p;},advice:advice,render:renderCard};
+window.finPlan={build:build,get:function(){var p=build();p.advice=advice(p);return p;},advice:advice,render:renderCard,refresh:schedule};
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install);else install();
 })();
