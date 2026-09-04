@@ -5,7 +5,7 @@
 (function (g) {
   'use strict';
   var api = g.FinApp || {};
-  api.version = '4.9.0';
+  api.version = '4.9.3';
   api.build = function () {
     try { return g.__kopeykaBuild || ''; } catch (e) { return ''; }
   };
