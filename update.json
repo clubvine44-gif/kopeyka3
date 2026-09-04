@@ -1,6 +1,6 @@
 {
-  "versionCode": 139,
-  "versionName": "4.9.9",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.9.9/Fin.apk",
-  "notes": "4.9.9 — стабильный релиз: автообновление, secure-store, perf-mode, фикс рендера (versionCode 139)"
+  "versionCode": 136,
+  "versionName": "4.9.6",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.9.6/Fin.apk",
+  "notes": "4.9.6 — стабильная сборка (автообновление восстановлено). Следом выйдет 4.9.9."
 }
