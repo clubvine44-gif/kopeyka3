@@ -1,6 +1,6 @@
 /**
  * FinApp core facade — stable entry point for application modules.
- * [release] Fin 4.9.7 — dashboard redesign
+ * [release] Fin 4.9.7 — dashboard redesign build
  */
 (function (g) {
   'use strict';
