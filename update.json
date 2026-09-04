@@ -2,5 +2,5 @@
   "versionCode": 141,
   "versionName": "4.9.11",
   "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.9.11/Fin.apk",
-  "notes": "4.9.11 — переработанный главный экран и финансовый план на сегодня (versionCode 141)"
+  "notes": "4.9.11 — восстановление из облака, защита от перезаписи пустыми данными (versionCode 141)"
 }
