@@ -1,6 +1,6 @@
 {
-  "versionCode": 134,
-  "versionName": "4.9.4",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.9.4/Fin.apk",
-  "notes": "4.9.4 — исправления ядра, упаковки Android и стабильности релиза (versionCode 134)"
+  "versionCode": 135,
+  "versionName": "4.9.5",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.9.5/Fin.apk",
+  "notes": "4.9.5 — финансовый план на сегодня, единое финансовое ядро и стабильность Android-упаковки (versionCode 135)"
 }
