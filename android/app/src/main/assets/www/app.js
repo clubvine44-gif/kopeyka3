@@ -345,6 +345,7 @@ function save(skipUndo){
     try{localStorage.setItem(KEY,JSON.stringify(STATE));}catch(e2){}
   }
   if(window.kopeykaCloud&&window.kopeykaCloud.scheduleSave)window.kopeykaCloud.scheduleSave();
+  try{if(window.FinBackup&&typeof window.FinBackup.onSave==='function')window.FinBackup.onSave(STATE);}catch(e){}
   syncReminders();
 }
 function computeReminders(){
@@ -1213,6 +1214,7 @@ function showSettings(){
       '<button type="button" class="set-row" id="setExport"><div class="set-main"><b>Сохранить копию</b><span>Файл со всеми данными</span></div><span class="set-val">↓</span></button>'+
       '<button type="button" class="set-row" id="setRestoreCloud"><div class="set-main"><b>Восстановить из облака</b><span>Подтянуть данные с аккаунта принудительно</span></div><span class="set-val">☁</span></button>'+
       '<button type="button" class="set-row" id="setImport"><div class="set-main"><b>Импорт из файла</b><span>Вернуть данные из JSON-бэкапа</span></div><span class="set-val">↑</span></button>'+
+      '<button type="button" class="set-row" id="setFileBackup"><div class="set-main"><b>Бэкап в Загрузки сейчас</b><span id="setBackupStatus">Локальные снимки + файл</span></div><span class="set-val">💾</span></button>'+
       '<button type="button" class="set-row" id="setImport"><div class="set-main"><b>Загрузить копию</b><span>Восстановить из файла</span></div><span class="set-val">↑</span></button>'+
       '<button type="button" class="set-row danger" id="setClear"><div class="set-main"><b>Удалить всё</b><span>Сбросить приложение полностью</span></div><span class="set-val"></span></button>'+
     '</div>'+
@@ -1385,6 +1387,30 @@ function showSettings(){
     };
     var setImp=document.getElementById('setImport');
     if(setImp)setImp.onclick=function(){importData();};
+    var setFile=document.getElementById('setFileBackup');
+    if(setFile)setFile.onclick=function(){
+      try{
+        if(window.FinBackup&&window.FinBackup.forceFileBackup){
+          window.FinBackup.forceSnapshot(STATE);
+          window.FinBackup.forceFileBackup(STATE);
+          toast('Бэкап в Загрузки запущен');
+        }else exportData();
+      }catch(e){exportData();}
+    };
+    try{
+      if(window.FinBackup&&window.FinBackup.status){
+        var st=window.FinBackup.status();
+        var el=document.getElementById('setBackupStatus');
+        if(el){
+          var parts=[];
+          parts.push('снимков: '+(st.slots||0));
+          if(st.lastExportDay)parts.push('файл: '+st.lastExportDay);
+          if(st.cloudLoggedIn)parts.push('облако: ок');
+          else parts.push('облако: выкл');
+          el.textContent=parts.join(' · ');
+        }
+      }
+    }catch(e){}
     document.getElementById('setImport').onclick=function(){doClose();importData();};
     document.getElementById('setClear').onclick=function(){
       appConfirm('Удалить все данные? Это нельзя отменить.','Удалить всё').then(function(ok){
@@ -2431,6 +2457,18 @@ function boot(){
     function afterLoad(st){
       if(st){STATE=st;}
       else{STATE=def();}
+      // Layer: recover from local rotating snapshots if primary empty
+      try{
+        var emptyPrimary=!(STATE&&((STATE.income&&STATE.income.length)||(STATE.expenses&&STATE.expenses.length)||(STATE.debts&&STATE.debts.length)||(STATE.reserves&&STATE.reserves.length)||(STATE.obligations&&STATE.obligations.length)||(STATE.settings&&Number(STATE.settings.openingBalance))));
+        if(emptyPrimary&&window.FinBackup&&typeof window.FinBackup.restoreBest==='function'){
+          var recovered=window.FinBackup.restoreBest();
+          if(recovered){
+            STATE=norm(recovered);
+            try{save(true);}catch(e){}
+            setTimeout(function(){toast('Восстановлено из локального снимка');},800);
+          }
+        }
+      }catch(e){}
       runAppBoot();
       try{
         if(window.__FIN_DECRYPT_FAILED){
@@ -2439,13 +2477,25 @@ function boot(){
           },900);
         }
       }catch(e){}
-      // Try cloud pull if local looks empty
+      // Cloud pull if still empty
       try{
         var empty=!(STATE.income.length||STATE.expenses.length||STATE.debts.length||STATE.reserves.length||STATE.obligations.length);
         if(empty&&window.kopeykaCloud&&typeof window.kopeykaCloud.load==='function'){
           setTimeout(function(){try{window.kopeykaCloud.load();}catch(e){}},1500);
         }
       }catch(e){}
+      // Nudge cloud login if has data but not logged in
+      setTimeout(function(){
+        try{
+          var hasData=STATE&&((STATE.income&&STATE.income.length)||(STATE.expenses&&STATE.expenses.length)||(STATE.debts&&STATE.debts.length)||(STATE.reserves&&STATE.reserves.length)||(STATE.obligations&&STATE.obligations.length));
+          var user=window.kopeykaCloud&&window.kopeykaCloud.user&&window.kopeykaCloud.user();
+          if(hasData&&!user){
+            toast('Включи облако (иконка ☁) — так данные не потеряются');
+          }
+        }catch(e){}
+      },4000);
+      // Ensure snapshot of whatever we have
+      try{if(window.FinBackup&&window.FinBackup.forceSnapshot)window.FinBackup.forceSnapshot(STATE);}catch(e){}
     }
     if(window.FinSecureStore&&typeof window.FinSecureStore.loadState==='function'){
       window.FinSecureStore.loadState(KEY,def,norm).then(function(st){

@@ -1,4 +1,4 @@
-/* cloud.js v18 — field-aware merge, conflict preservation, tombstones, optimistic locking, safe offline/logout */
+/* cloud.js v19 — field-aware merge, conflict preservation, tombstones, optimistic locking, safe offline/logout */
 (function(){
 'use strict';
 const URL='https://cqslrfphsjllhltsvvuq.supabase.co';
@@ -15,7 +15,7 @@ function client(){if(!sb&&window.supabase)sb=window.supabase.createClient(URL,KE
 function normalize(raw){var base=typeof window.defaultState==='function'?window.defaultState():{version:6,settings:{openingBalance:0,month:'',dayRate:0,nightRate:0},income:[],expenses:[],reserves:[],debts:[],reserveOps:[],obligations:[],obligationPays:[],shiftsOverride:{},dayPlans:{},voiceMap:{}};var r=raw&&typeof raw==='object'?raw:{},o=Object.assign({},base,r);o.settings=Object.assign({},base.settings||{},r.settings||{});COLLECTIONS.forEach(function(k){if(!Array.isArray(o[k]))o[k]=[];});if(!o.shiftsOverride||typeof o.shiftsOverride!=='object')o.shiftsOverride={};if(!o.dayPlans||typeof o.dayPlans!=='object'||Array.isArray(o.dayPlans))o.dayPlans={};if(!o.voiceMap||typeof o.voiceMap!=='object')o.voiceMap={};if(!o._deleted||typeof o._deleted!=='object')o._deleted={};COLLECTIONS.forEach(function(k){if(!o._deleted[k]||typeof o._deleted[k]!=='object')o._deleted[k]={};});if(!Array.isArray(o._conflicts))o._conflicts=[];return o;}
 function stamp(s){var n=normalize(s);if(!n.updatedAt)n.updatedAt=new Date().toISOString();return n;}
 function readLocal(){try{var v=localStorage.getItem(LOCAL_BASE);if(!v){try{v=localStorage.getItem('kopeyka3_state_v1__raw_backup');}catch(e){}}if(!v)return null;if(String(v).indexOf('FINENC1:')===0)return null;return stamp(JSON.parse(v));}catch(_){}return null;}
-function writeLocal(s){try{localStorage.setItem(LOCAL_BASE,JSON.stringify(stamp(s)));}catch(_){} }
+function writeLocal(s){try{var n=stamp(s);if(window.FinSecureStore&&typeof window.FinSecureStore.saveState==='function'){window.FinSecureStore.saveState(LOCAL_BASE,n);}else{localStorage.setItem(LOCAL_BASE,JSON.stringify(n));}}catch(_){} }
 function readBase(){try{var v=localStorage.getItem(SYNC_BASE);return v?stamp(JSON.parse(v)):null;}catch(_){}return null;}
 function writeBase(s){try{if(s)localStorage.setItem(SYNC_BASE,JSON.stringify(stamp(s)));else localStorage.removeItem(SYNC_BASE);}catch(_){} }
 function clearIntent(){try{return Number(localStorage.getItem(CLEAR_INTENT)||0)||0;}catch(_){return 0;}}
