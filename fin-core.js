@@ -1,5 +1,6 @@
 /**
  * FinApp core facade — single entry for modules.
+ * Does not replace app.js; gives a stable public API surface.
  */
 (function (g) {
   'use strict';

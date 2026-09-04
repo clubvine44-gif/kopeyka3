@@ -219,8 +219,10 @@ function norm(raw){
   if(!Array.isArray(o.opLog))o.opLog=[];
   return o;
 }
-function load(){try{var r=localStorage.getItem(KEY);return r?norm(JSON.parse(r)):def();}catch(e){return def();}}
-var STATE=load();
+function loadSyncFallback(){try{var r=localStorage.getItem(KEY);if(!r)return def();if(String(r).indexOf('FINENC1:')===0)return def();return norm(JSON.parse(r));}catch(e){return def();}}
+function load(){return loadSyncFallback();}
+var STATE=loadSyncFallback();
+var _saveTimer=null;
 function pushUndo(){try{undoStack.push(JSON.stringify(STATE));if(undoStack.length>UNDO_MAX)undoStack.shift();}catch(e){}}
 function trackLastOp(kind,id){try{STATE.lastOp={kind:kind,id:id,at:Date.now()};}catch(e){}}
 function pinCurrentMonth(){try{viewMonth=today().slice(0,7);if(STATE.settings)STATE.settings.month=viewMonth;}catch(e){}}
@@ -305,7 +307,20 @@ function softDeleteIn(arrKey,id,kind,note){
   return row;
 }
 
-function save(skipUndo){STATE.updatedAt=new Date().toISOString();try{localStorage.setItem(KEY,JSON.stringify(STATE));}catch(e){}if(window.kopeykaCloud&&window.kopeykaCloud.scheduleSave)window.kopeykaCloud.scheduleSave();syncReminders();}
+function save(skipUndo){
+  STATE.updatedAt=new Date().toISOString();
+  try{
+    if(window.FinSecureStore&&typeof window.FinSecureStore.saveState==='function'){
+      window.FinSecureStore.saveState(KEY,STATE);
+    }else{
+      localStorage.setItem(KEY,JSON.stringify(STATE));
+    }
+  }catch(e){
+    try{localStorage.setItem(KEY,JSON.stringify(STATE));}catch(e2){}
+  }
+  if(window.kopeykaCloud&&window.kopeykaCloud.scheduleSave)window.kopeykaCloud.scheduleSave();
+  syncReminders();
+}
 function computeReminders(){
   var out=[],t=today(),day=Number(t.slice(8)),month=(STATE.settings&&STATE.settings.month)||t.slice(0,7);
   (STATE.obligations||[]).forEach(function(ob){
@@ -1164,16 +1179,18 @@ function showSettings(){
       '<button type="button" class="set-row" id="setDayTime"><div class="set-main"><b>Время дневной смены</b><span>Начало и конец</span></div><span class="set-val">'+(st.dayStart||'08:00')+'–'+(st.dayEnd||'20:00')+'</span></button>'+
       '<button type="button" class="set-row" id="setNightTime"><div class="set-main"><b>Время ночной смены</b><span>Начало и конец</span></div><span class="set-val">'+(st.nightStart||'20:00')+'–'+(st.nightEnd||'08:00')+'</span></button>';})()+
     '</div>'+
-    '<div class="set-group" id="devGateWrap"><button type="button" class="set-row" id="devGate"><div class="set-main"><b>Для разработчика</b><span>Скрытый раздел · нажми 5 раз подряд</span></div><span class="set-val">🔒</span></button></div>'+
-    '<div class="set-group" id="devSection" style="display:none"><div class="set-group-title">Разработчик · Ассистент и данные</div>'+
-      '<button type="button" class="set-row" id="setAi"><div class="set-main"><b>Голосовой помощник</b><span>Ключ для умных ответов Финны</span></div><span class="set-val" id="setAiStatus">—</span></button>'+
+    '<div class="set-group"><div class="set-group-title">Финна и данные</div>'+
+      '<button type="button" class="set-row" id="setAi"><div class="set-main"><b>Ключ ИИ (Groq)</b><span>Нужен для умных ответов Финны · console.groq.com</span></div><span class="set-val" id="setAiStatus">—</span></button>'+
       '<button type="button" class="set-row" id="setScenario"><div class="set-main"><b>Сценарий жизни</b><span>Работа, бюджет, фокус — перестроить приложение</span></div><span class="set-val">↻</span></button>'+
       '<button type="button" class="set-row" id="setCheckUpdate"><div class="set-main"><b>Проверить обновления</b><span>Сверка с сервером прямо сейчас</span></div><span class="set-val">↻</span></button>'+
-      '<button type="button" class="set-row" id="setTestPush"><div class="set-main"><b>Проверить уведомление</b><span>Придёт через несколько секунд</span></div><span class="set-val">↗</span></button>'+
       '<button type="button" class="set-row" id="setUndo"><div class="set-main"><b>Отменить последнее</b><span>'+(undoStack.length?'Можно откатить действие':'Пока нечего отменять')+'</span></div><span class="set-val">'+(undoStack.length?'↩':'')+'</span></button>'+
       '<button type="button" class="set-row" id="setExport"><div class="set-main"><b>Сохранить копию</b><span>Файл со всеми данными</span></div><span class="set-val">↓</span></button>'+
       '<button type="button" class="set-row" id="setImport"><div class="set-main"><b>Загрузить копию</b><span>Восстановить из файла</span></div><span class="set-val">↑</span></button>'+
       '<button type="button" class="set-row danger" id="setClear"><div class="set-main"><b>Удалить всё</b><span>Сбросить приложение полностью</span></div><span class="set-val"></span></button>'+
+    '</div>'+
+    '<div class="set-group" id="devGateWrap"><button type="button" class="set-row" id="devGate"><div class="set-main"><b>Для разработчика</b><span>Скрытый раздел · нажми 5 раз подряд</span></div><span class="set-val">🔒</span></button></div>'+
+    '<div class="set-group" id="devSection" style="display:none"><div class="set-group-title">Разработчик</div>'+
+      '<button type="button" class="set-row" id="setTestPush"><div class="set-main"><b>Проверить уведомление</b><span>Придёт через несколько секунд</span></div><span class="set-val">↗</span></button>'+
     '</div></div>'+
     '<button type="button" class="btn-primary" id="setClose">Готово</button></div>';
   openModal(html,function(){
@@ -2260,9 +2277,61 @@ function showShiftBannerOnce(){
   setTimeout(function(){el.classList.remove('show');setTimeout(function(){try{el.remove();}catch(e){}},300);},3200);
 }
 
-function boot(){if(!window.__scrollSaveBound){window.__scrollSaveBound=true;var st=null;window.addEventListener('scroll',function(){if((window.__finView||currentView||'home')!=='home')return;if(st)return;st=setTimeout(function(){st=null;window.__homeScroll=window.scrollY||document.documentElement.scrollTop||0;},120);},{passive:true});}try{STATE=norm(STATE);ensureMonth();var c=compute();if(STATE.income.length===0&&STATE.expenses.length===0&&c.cash<0&&!STATE.obligations.length&&!STATE.reserves.length){STATE=def();save(true);}}catch(e){STATE=def();}setup();render();syncReminders();setTimeout(function(){try{showShiftBannerOnce();}catch(e){}},600);setTimeout(bindFabHold,300);setTimeout(bindFabHold,1200);setTimeout(function(){try{if(!getUserName())showNameIntro(false);}catch(e){}},700);/* автооткрытие Материи убрано — приглашение только из чата Финны */
+function hideSplash(){
+  try{
+    var sp=document.getElementById('finSplash');
+    if(!sp)return;
+    sp.classList.add('hide');
+    setTimeout(function(){try{sp.remove();}catch(e){}},520);
+  }catch(e){}
 }
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+function runAppBoot(){
+  if(!window.__scrollSaveBound){
+    window.__scrollSaveBound=true;
+    var st=null;
+    window.addEventListener('scroll',function(){
+      if((window.__finView||currentView||'home')!=='home')return;
+      if(st)return;
+      st=setTimeout(function(){st=null;window.__homeScroll=window.scrollY||document.documentElement.scrollTop||0;},120);
+    },{passive:true});
+  }
+  try{
+    STATE=norm(STATE);
+    ensureMonth();
+    try{if(typeof maybeRepairCarryCash==='function')maybeRepairCarryCash();}catch(e){}
+    var c=compute();
+    if(STATE.income.length===0&&STATE.expenses.length===0&&c.cash<0&&!STATE.obligations.length&&!STATE.reserves.length){
+      STATE=def();save(true);
+    }
+  }catch(e){STATE=def();}
+  setup();
+  render();
+  syncReminders();
+  hideSplash();
+  setTimeout(function(){try{showShiftBannerOnce();}catch(e){}},600);
+  setTimeout(bindFabHold,300);
+  setTimeout(bindFabHold,1200);
+  setTimeout(function(){try{if(!getUserName())showNameIntro(false);}catch(e){}},700);
+}
+function boot(){
+  var start=function(){
+    if(window.FinSecureStore&&typeof window.FinSecureStore.loadState==='function'){
+      window.FinSecureStore.loadState(KEY,def,norm).then(function(st){
+        STATE=st||def();
+        runAppBoot();
+      }).catch(function(){
+        STATE=loadSyncFallback();
+        runAppBoot();
+      });
+    }else{
+      STATE=loadSyncFallback();
+      runAppBoot();
+    }
+  };
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);
+  else start();
+}
+boot();
 window.goView=goView;window.goHome=goHome;window.render=render;window.compute=compute;window.syncReminders=typeof syncReminders==="function"?syncReminders:function(){};
 Object.defineProperty(window,'currentView',{get:function(){return currentView;},set:function(v){currentView=v||'home';window.__finView=currentView;}});
 })();

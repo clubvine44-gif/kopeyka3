@@ -171,7 +171,24 @@ function autoSelectBestModel(force){
   }).catch(function(){return null;});
 }
 
-function getKey(){try{var k=(localStorage.getItem(GROQ_KEY)||'').trim();if(k)return k;}catch(e){}return (function(){try{return atob(['Z3NrX3N0','VVZMNHJF','VFJFQk56','OGs3ZWV2','V0dkeWIz','RllIeUMx','ZHJUbk1j','ZWU3TzBC','eHk4N0E3','M08='].join(''));}catch(e){return '';}})();}
+function getKey(){
+  try{
+    var k=(localStorage.getItem(GROQ_KEY)||'').trim();
+    if(k)return k;
+  }catch(e){}
+  // Native bridge may inject key (never ship secrets in client bundle)
+  try{
+    if(window.FinBridge&&typeof window.FinBridge.getGroqKey==='function'){
+      var bk=String(window.FinBridge.getGroqKey()||'').trim();
+      if(bk)return bk;
+    }
+  }catch(e){}
+  try{
+    var envK=(window.__FIN_GROQ_KEY||'').trim();
+    if(envK)return envK;
+  }catch(e){}
+  return '';
+}
 
 function setKey(key){try{key=String(key||'').trim();if(key)localStorage.setItem(GROQ_KEY,key);else localStorage.removeItem(GROQ_KEY);}catch(e){}}
 function hasKey(){return !!getKey();}

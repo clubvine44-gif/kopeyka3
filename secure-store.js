@@ -125,6 +125,7 @@
           return parseOk(text);
         });
       }
+      // Legacy plaintext → migrate to encrypted
       var state = parseOk(raw);
       return encryptString(JSON.stringify(state)).then(function (enc) {
         try {
