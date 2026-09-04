@@ -2,10 +2,7 @@ name: Publish current Fin APK
 
 on:
   workflow_dispatch:
-  # Автозапуск отключён: раньше триггерился на те же пуши, что и release-apk.yml,
-  # и обе джобы гонялись за один и тот же релиз-тег (race condition), из-за чего
-  # один из воркфлоу падал с ошибкой на публикации ассета. Публикацию делает
-  # release-apk.yml; этот воркфлоу оставлен только для ручного запуска при необходимости.
+  # Автозапуск отключён: публикацию делает release-apk.yml.
 
 permissions:
   contents: write
@@ -59,6 +56,7 @@ jobs:
       - name: Install Android SDK components
         if: steps.release_exists.outputs.exists != 'true'
         run: |
+          set -euo pipefail
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
 
@@ -68,8 +66,11 @@ jobs:
           set -euo pipefail
           WWW="android/app/src/main/assets/www"
           mkdir -p "$WWW"
-          for f in index.html app.js ai.js assistant-v2.js assistant.js cloud.js engine.js finn-wake.js finn3d.js voice.js onboard.js profile.js products.js sw.js manifest.json icon.svg widget.html ai-bootstrap.js; do
+          for f in index.html app.js ai.js assistant-v2.js assistant.js cloud.js engine.js fin-core.js finn-wake.js finn3d.js matter.js matter-finn.js matter-room.jpg matter-room.mp3 matter-tour-1.mp3 matter-tour-2.mp3 matter-tour-3.mp3 matter-tour-4.mp3 matter-tour-5.mp3 voice.js onboard.js profile.js products.js sw.js manifest.json icon.svg widget.html ai-bootstrap.js; do
             if [ -f "$f" ]; then cp -f "$f" "$WWW/"; fi
+          done
+          for f in matter.js matter-tour-1.mp3 matter-tour-2.mp3 matter-tour-3.mp3 matter-tour-4.mp3 matter-tour-5.mp3; do
+            test -f "$WWW/$f" || { echo "Missing packaged asset: $f"; exit 1; }
           done
           python3 - <<'PY'
           from pathlib import Path
@@ -120,21 +121,11 @@ jobs:
           cp android/app/build/outputs/apk/release/app-release.apk Fin.apk
           test -s Fin.apk
           BUILD_TOOLS="$(find "${ANDROID_HOME:-/nonexistent}" "${ANDROID_SDK_ROOT:-/nonexistent}" /usr/local/lib/android/sdk -maxdepth 3 -type d -path '*build-tools/34.0.0' 2>/dev/null | head -n1)"
-          if [ -z "$BUILD_TOOLS" ]; then
-            BUILD_TOOLS="$(find / -maxdepth 8 -type d -path '*build-tools/34.0.0' 2>/dev/null | head -n1)"
-          fi
           test -n "$BUILD_TOOLS" || { echo "build-tools 34.0.0 not found"; exit 1; }
-          echo "Using build-tools at: $BUILD_TOOLS"
-          ZIPALIGN="$BUILD_TOOLS/zipalign"
-          APKSIGNER="$BUILD_TOOLS/apksigner"
-          test -x "$ZIPALIGN" || { echo "zipalign not executable at $ZIPALIGN"; exit 1; }
-          test -x "$APKSIGNER" || { echo "apksigner not executable at $APKSIGNER"; exit 1; }
-          # Gradle уже зип-алайнит и подписывает release APK (v2/v3) при сборке.
-          # Повторный zipalign после подписи ломает блок подписи — поэтому НЕ прогоняем его снова,
-          # только проверяем, что итоговый APK уже выровнен и подпись валидна.
-          "$ZIPALIGN" -c -p -v 4 Fin.apk
-          "$APKSIGNER" verify --verbose Fin.apk
-          ls -lh Fin.apk
+          "$BUILD_TOOLS/zipalign" -c -p -v 4 Fin.apk
+          "$BUILD_TOOLS/apksigner" verify --verbose Fin.apk
+          sha256sum Fin.apk | tee Fin.apk.sha256
+          ls -lh Fin.apk Fin.apk.sha256
 
       - name: Publish GitHub Release
         if: steps.release_exists.outputs.exists != 'true'
@@ -145,6 +136,6 @@ jobs:
           VERSION_CODE: ${{ steps.version.outputs.version_code }}
         run: |
           set -euo pipefail
-          gh release create "$TAG" Fin.apk \
+          gh release create "$TAG" Fin.apk Fin.apk.sha256 \
             --title "Финн $VERSION_NAME" \
             --notes "Финн $VERSION_NAME (versionCode $VERSION_CODE). Подписанный APK."
