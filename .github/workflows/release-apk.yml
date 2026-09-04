@@ -32,7 +32,7 @@ jobs:
           INPUT_VERSION_NAME: ${{ inputs.version_name }}
           INPUT_VERSION_CODE: ${{ inputs.version_code }}
         run: |
-          set -e
+          set -euo pipefail
           if [ -n "$INPUT_VERSION_NAME" ] && [ -n "$INPUT_VERSION_CODE" ]; then
             VERSION_NAME="$INPUT_VERSION_NAME"
             VERSION_CODE="$INPUT_VERSION_CODE"
@@ -57,15 +57,16 @@ jobs:
 
       - name: Accept Android licenses
         run: |
+          set -euo pipefail
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
 
       - name: Prepare web assets
         run: |
-          set -e
+          set -euo pipefail
           WWW="android/app/src/main/assets/www"
           mkdir -p "$WWW"
-          for f in index.html app.js ai.js assistant-v2.js assistant.js cloud.js engine.js finn-char.js finn3d.js finn-wake.js matter.js matter-finn.js matter-room.jpg matter-room.mp3 voice.js onboard.js profile.js products.js sw.js manifest.json icon.svg widget.html ai-bootstrap.js; do
+          for f in index.html app.js ai.js assistant-v2.js assistant.js cloud.js engine.js fin-core.js finn-char.js finn3d.js finn-wake.js matter.js matter-finn.js matter-room.jpg matter-room.mp3 matter-tour-1.mp3 matter-tour-2.mp3 matter-tour-3.mp3 matter-tour-4.mp3 matter-tour-5.mp3 voice.js onboard.js profile.js products.js sw.js manifest.json icon.svg widget.html ai-bootstrap.js; do
             if [ -f "$f" ]; then cp -f "$f" "$WWW/"; fi
           done
           python3 - <<'PY'
@@ -77,6 +78,9 @@ jobs:
               t = t.replace('<script>', '<script>window.__FIN_NATIVE=true;', 1)
           p.write_text(t, encoding='utf-8')
           PY
+          for f in matter.js matter-tour-1.mp3 matter-tour-2.mp3 matter-tour-3.mp3 matter-tour-4.mp3 matter-tour-5.mp3; do
+            test -f "$WWW/$f" || { echo "Missing packaged asset: $f"; exit 1; }
+          done
 
       - name: Set version
         run: |
@@ -94,8 +98,10 @@ jobs:
         env:
           FIN_KEYSTORE_BASE64: ${{ secrets.FIN_KEYSTORE_BASE64 }}
         run: |
-          test -n "$FIN_KEYSTORE_BASE64" || (echo "Missing FIN_KEYSTORE_BASE64 secret" && exit 1)
+          set -euo pipefail
+          test -n "$FIN_KEYSTORE_BASE64" || { echo "Missing FIN_KEYSTORE_BASE64 secret"; exit 1; }
           echo "$FIN_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/fin-release.jks"
+          test -s "$RUNNER_TEMP/fin-release.jks"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -109,27 +115,40 @@ jobs:
           FIN_KEYSTORE_PASSWORD: ${{ secrets.FIN_KEYSTORE_PASSWORD }}
           FIN_KEY_ALIAS: ${{ secrets.FIN_KEY_ALIAS }}
           FIN_KEY_PASSWORD: ${{ secrets.FIN_KEY_PASSWORD }}
-        run: gradle assembleRelease --no-daemon --stacktrace
-
-      - name: Prepare APK
         run: |
-          cp android/app/build/outputs/apk/release/app-release.apk "Fin.apk"
-          ls -lh Fin.apk
+          set -euo pipefail
+          test -n "$FIN_KEYSTORE_PASSWORD"
+          test -n "$FIN_KEY_ALIAS"
+          test -n "$FIN_KEY_PASSWORD"
+          gradle assembleRelease --no-daemon --stacktrace
+
+      - name: Validate APK
+        run: |
+          set -euo pipefail
+          cp android/app/build/outputs/apk/release/app-release.apk Fin.apk
+          test -s Fin.apk
+          BUILD_TOOLS="$(find "${ANDROID_HOME:-/nonexistent}" "${ANDROID_SDK_ROOT:-/nonexistent}" /usr/local/lib/android/sdk -maxdepth 3 -type d -path '*build-tools/34.0.0' 2>/dev/null | head -n1)"
+          test -n "$BUILD_TOOLS" || { echo "build-tools 34.0.0 not found"; exit 1; }
+          "$BUILD_TOOLS/zipalign" -c -p -v 4 Fin.apk
+          "$BUILD_TOOLS/apksigner" verify --verbose Fin.apk
+          sha256sum Fin.apk | tee Fin.apk.sha256
+          ls -lh Fin.apk Fin.apk.sha256
 
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          set -e
+          set -euo pipefail
           TAG="v${RELEASE_VERSION_NAME}"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" Fin.apk --clobber
+            gh release upload "$TAG" Fin.apk Fin.apk.sha256 --clobber
           else
-            gh release create "$TAG" Fin.apk --title "Финна ${RELEASE_VERSION_NAME}" --notes "Обновление Финна ${RELEASE_VERSION_NAME}" ||               gh release upload "$TAG" Fin.apk --clobber
+            gh release create "$TAG" Fin.apk Fin.apk.sha256 --title "Финн ${RELEASE_VERSION_NAME}" --notes "Подписанный APK Финна ${RELEASE_VERSION_NAME} (versionCode ${RELEASE_VERSION_CODE})."
           fi
 
       - name: Update public update manifest
         run: |
+          set -euo pipefail
           python3 - <<'PY'
           import json, os
           from pathlib import Path
@@ -139,7 +158,7 @@ jobs:
             'versionCode': vc,
             'versionName': vn,
             'apkUrl': f'https://github.com/clubvine44-gif/kopeyka3/releases/download/v{vn}/Fin.apk',
-            'notes': f'{vn} — Фина-звезда с пламенем, морф при падении, заход в дверь (versionCode {vc})'
+            'notes': f'{vn} — исправления ядра, упаковки Android и стабильности релиза (versionCode {vc})'
           }
           Path('update.json').write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
           PY
