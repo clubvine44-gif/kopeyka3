@@ -4,6 +4,17 @@ var CATS=['Продукты','Одежда','Транспорт','Карманн
 var BUDGET_CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
 function budgetLimitOf(cat){var bl=(STATE.settings&&STATE.settings.budgetLimits)||{};return Math.max(0,num(bl[cat]));}
 function setBudgetLimit(cat,val){if(!STATE.settings)STATE.settings={};if(!STATE.settings.budgetLimits||typeof STATE.settings.budgetLimits!=='object')STATE.settings.budgetLimits={};STATE.settings.budgetLimits[cat]=Math.max(0,num(val));}
+function budgetSavingsOf(cat){
+  var bs=(STATE.settings&&STATE.settings.budgetSavings)||{};
+  return Math.max(0,num(bs[cat]));
+}
+function addBudgetSaving(cat,amount){
+  amount=Math.max(0,num(amount));
+  if(amount<=0)return;
+  if(!STATE.settings)STATE.settings={};
+  if(!STATE.settings.budgetSavings||typeof STATE.settings.budgetSavings!=='object')STATE.settings.budgetSavings={};
+  STATE.settings.budgetSavings[cat]=Math.max(0,num(STATE.settings.budgetSavings[cat])+amount);
+}
 function sortReservesList(list){
   return (list||[]).slice().sort(function(a,b){
     var pa=num(a.priority), pb=num(b.priority);
@@ -82,7 +93,7 @@ function spentInCatRange(cat,from,end){
   });
   return s;
 }
-/** Остатки лимитов нужных трат → резерв «Накопление из бюджета», затем период сбрасывается. */
+/** Остатки лимитов → накопление по категориям (в панели нужных трат), без отдельного резерва. */
 function rolloverBudgetLeftovers(){
   if(!STATE.settings)return 0;
   var from=String(STATE.settings.budgetTrackFrom||STATE.settings.budgetPeriodStart||'').slice(0,10);
@@ -96,31 +107,12 @@ function rolloverBudgetLeftovers(){
     var spent=spentInCatRange(cat,from,end);
     var left=Math.max(0,lim-spent);
     if(left>0){
+      addBudgetSaving(cat,left);
       total+=left;
       parts.push(cat+': '+fmt(left));
     }
   });
   if(total<=0)return 0;
-  if(!STATE.reserves)STATE.reserves=[];
-  var name='Накопление из бюджета';
-  var r=null;
-  for(var i=0;i<STATE.reserves.length;i++){
-    if(STATE.reserves[i]&&!STATE.reserves[i].deleted&&STATE.reserves[i].name===name){r=STATE.reserves[i];break;}
-  }
-  if(!r){
-    r={id:uid(),name:name,category:name,saved:0,target:0,urgent:false,urgentDate:'',priority:0};
-    STATE.reserves.push(r);
-  }
-  r.saved=num(r.saved)+total;
-  if(!STATE.reserveOps)STATE.reserveOps=[];
-  STATE.reserveOps.push({
-    id:uid(),
-    reserveId:r.id,
-    type:'deposit',
-    amount:total,
-    date:today(),
-    note:'Остаток нужных трат '+from+'…'+end
-  });
   STATE.settings.lastBudgetRollover={amount:total,at:today(),from:from,end:end,parts:parts.slice(0,8)};
   return total;
 }
@@ -151,7 +143,7 @@ function ensureBudgetPeriodTrack(forceToday){
       try{
         // отложенный тост — render ещё может идти
         setTimeout(function(){
-          try{toast('В накопление из бюджета: '+fmt(rolled));}catch(e){}
+          try{toast('Накоплено по категориям: '+fmt(rolled));}catch(e){}
         },400);
       }catch(e){}
     }
@@ -1617,7 +1609,7 @@ homeHtml += '<div class="budget-period">'+esc(bPeriod.mode==='payday'?'До за
 try{
   var lr=STATE.settings&&STATE.settings.lastBudgetRollover;
   if(lr&&lr.at&&lr.amount>0&&lr.at===today()){
-    homeHtml += '<div class="budget-period budget-roll">Сегодня в накопление: '+fmt(lr.amount)+'</div>';
+    homeHtml += '<div class="budget-period budget-roll">Сегодня добавлено к накоплениям категорий: '+fmt(lr.amount)+'</div>';
   }
 }catch(e){}
 BUDGET_CATS.forEach(function(cat){
@@ -1626,12 +1618,14 @@ BUDGET_CATS.forEach(function(cat){
   var pct=lim>0?Math.min(100, Math.round(spent/lim*100)):0;
   var over=lim>0&&spent>lim;
   var barCol=over?'#F87171':(pct>=85?'#F0A060':'#5ED9B0');
+  var savedCat=budgetSavingsOf(cat);
   homeHtml += '<div class="budget-row" data-budget-cat="'+esc(cat)+'">';
   homeHtml += '<div class="budget-row-top"><b>'+esc(cat)+'</b>';
   homeHtml += '<button type="button" class="budget-lim" data-budget-edit="'+esc(cat)+'">'+fmt(lim)+'</button></div>';
   homeHtml += '<div class="budget-row-sub"><span class="'+(over?'neg':'')+'">'+fmt(spent)+' из '+fmt(lim)+'</span>';
   homeHtml += '<span class="muted">'+(lim>0?(pct+'%'):'лимит не задан')+'</span></div>';
   homeHtml += '<div class="limit-bar"><div class="limit-fill" style="width:'+pct+'%;background:'+barCol+'"></div></div>';
+  homeHtml += '<div class="budget-saved'+(savedCat>0?' has':'')+'">Накоплено: <b>'+fmt(savedCat)+'</b></div>';
   homeHtml += '</div>';
 });
 homeHtml += '</div>';
