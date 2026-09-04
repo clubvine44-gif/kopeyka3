@@ -2,6 +2,9 @@
  * Finna SecureStore — AES-GCM encryption for local state.
  * Device-local key (not a password): protects against casual
  * file/backup inspection. Not a substitute for full-disk encryption.
+ *
+ * CRITICAL: never overwrite an existing FINENC1 payload with empty/default
+ * state when decrypt fails — that is how data was wiped in intermediate builds.
  */
 (function (global) {
   'use strict';
@@ -9,6 +12,7 @@
   var INSTALL_KEY = 'finna_install_id_v1';
   var ENC_PREFIX = 'FINENC1:';
   var LEGACY_MIGRATED = 'finna_state_enc_v1';
+  var RAW_BACKUP_KEY = 'kopeyka3_state_v1__raw_backup';
   var _ready = null;
   var _cryptoKey = null;
 
@@ -86,7 +90,8 @@
   }
 
   function decryptString(raw) {
-    if (!_cryptoKey || typeof raw !== 'string' || raw.indexOf(ENC_PREFIX) !== 0) {
+    if (!_cryptoKey) return Promise.resolve(null);
+    if (!raw || raw.indexOf(ENC_PREFIX) !== 0) {
       return Promise.resolve(raw);
     }
     var body = raw.slice(ENC_PREFIX.length);
@@ -101,6 +106,19 @@
     });
   }
 
+  function isEmptyState(obj) {
+    if (!obj || typeof obj !== 'object') return true;
+    var inc = obj.income || [];
+    var exp = obj.expenses || [];
+    var res = obj.reserves || [];
+    var deb = obj.debts || [];
+    var obl = obj.obligations || [];
+    var hasData = (inc.length + exp.length + res.length + deb.length + obl.length) > 0;
+    var bal = 0;
+    try { bal = Number((obj.settings && obj.settings.openingBalance) || 0); } catch (e) {}
+    return !hasData && !bal;
+  }
+
   function loadState(storageKey, defFn, normFn) {
     return init().then(function () {
       var raw = null;
@@ -109,28 +127,54 @@
       } catch (e) {
         return defFn();
       }
+      if (!raw) {
+        // try emergency backup
+        try {
+          var bak = localStorage.getItem(RAW_BACKUP_KEY);
+          if (bak) raw = bak;
+        } catch (e2) {}
+      }
       if (!raw) return defFn();
 
       function parseOk(text) {
         try {
           return normFn(JSON.parse(text));
         } catch (e) {
-          return defFn();
+          return null;
         }
       }
 
       if (raw.indexOf(ENC_PREFIX) === 0) {
+        // preserve encrypted blob before any write path
+        try { localStorage.setItem(RAW_BACKUP_KEY, raw); } catch (e) {}
         return decryptString(raw).then(function (text) {
-          if (!text) return defFn();
-          return parseOk(text);
+          if (!text) {
+            // DECRYPT FAILED — do NOT wipe. Flag for UI recovery.
+            try {
+              global.__FIN_DECRYPT_FAILED = true;
+              global.__FIN_LOCKED_RAW = raw;
+            } catch (e) {}
+            return null; // caller must not save empty over this
+          }
+          var st = parseOk(text);
+          if (!st) {
+            try {
+              global.__FIN_DECRYPT_FAILED = true;
+              global.__FIN_LOCKED_RAW = raw;
+            } catch (e) {}
+            return null;
+          }
+          return st;
         });
       }
       // Legacy plaintext → migrate to encrypted
       var state = parseOk(raw);
+      if (!state) return defFn();
       return encryptString(JSON.stringify(state)).then(function (enc) {
         try {
           localStorage.setItem(storageKey, enc);
           localStorage.setItem(LEGACY_MIGRATED, '1');
+          localStorage.setItem(RAW_BACKUP_KEY, enc);
         } catch (e) {}
         return state;
       }).catch(function () {
@@ -140,6 +184,17 @@
   }
 
   function saveState(storageKey, stateObj) {
+    // Refuse to overwrite a locked encrypted blob with empty state
+    try {
+      if (global.__FIN_DECRYPT_FAILED && isEmptyState(stateObj)) {
+        return Promise.resolve(false);
+      }
+      var existing = localStorage.getItem(storageKey);
+      if (existing && existing.indexOf(ENC_PREFIX) === 0 && isEmptyState(stateObj)) {
+        return Promise.resolve(false);
+      }
+    } catch (e) {}
+
     var plain = JSON.stringify(stateObj);
     return init().then(function () {
       if (!_cryptoKey) {
@@ -151,6 +206,7 @@
       return encryptString(plain).then(function (enc) {
         try {
           localStorage.setItem(storageKey, enc);
+          localStorage.setItem(RAW_BACKUP_KEY, enc);
         } catch (e) {}
         return true;
       }).catch(function () {
@@ -168,6 +224,9 @@
     saveState: saveState,
     isEncryptedPayload: function (s) {
       return typeof s === 'string' && s.indexOf(ENC_PREFIX) === 0;
-    }
+    },
+    isEmptyState: isEmptyState,
+    ENC_PREFIX: ENC_PREFIX,
+    RAW_BACKUP_KEY: RAW_BACKUP_KEY
   };
 })(typeof window !== 'undefined' ? window : this);

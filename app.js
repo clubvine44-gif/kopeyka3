@@ -219,7 +219,21 @@ function norm(raw){
   if(!Array.isArray(o.opLog))o.opLog=[];
   return o;
 }
-function loadSyncFallback(){try{var r=localStorage.getItem(KEY);if(!r)return def();if(String(r).indexOf('FINENC1:')===0)return def();return norm(JSON.parse(r));}catch(e){return def();}}
+function loadSyncFallback(){
+  try{
+    var r=localStorage.getItem(KEY);
+    if(!r){
+      try{r=localStorage.getItem('kopeyka3_state_v1__raw_backup');}catch(e){}
+    }
+    if(!r)return def();
+    // Encrypted blob without working SecureStore — do NOT wipe to empty
+    if(String(r).indexOf('FINENC1:')===0){
+      try{window.__FIN_DECRYPT_FAILED=true;window.__FIN_LOCKED_RAW=r;}catch(e){}
+      return def(); // UI empty but save() will refuse overwrite
+    }
+    return norm(JSON.parse(r));
+  }catch(e){return def();}
+}
 function load(){return loadSyncFallback();}
 var STATE=loadSyncFallback();
 var _saveTimer=null;
@@ -308,6 +322,18 @@ function softDeleteIn(arrKey,id,kind,note){
 }
 
 function save(skipUndo){
+  try{
+    if(window.__FIN_DECRYPT_FAILED){
+      var empty=!(STATE&&((STATE.income&&STATE.income.length)||(STATE.expenses&&STATE.expenses.length)||(STATE.debts&&STATE.debts.length)||(STATE.reserves&&STATE.reserves.length)||(STATE.obligations&&STATE.obligations.length)||(STATE.settings&&Number(STATE.settings.openingBalance))));
+      if(empty)return;
+    }
+    var existing=localStorage.getItem(KEY);
+    if(existing&&String(existing).indexOf('FINENC1:')===0){
+      var empty2=!(STATE&&((STATE.income&&STATE.income.length)||(STATE.expenses&&STATE.expenses.length)||(STATE.debts&&STATE.debts.length)||(STATE.reserves&&STATE.reserves.length)||(STATE.obligations&&STATE.obligations.length)||(STATE.settings&&Number(STATE.settings.openingBalance))));
+      if(empty2)return;
+    }
+  }catch(e){}
+
   STATE.updatedAt=new Date().toISOString();
   try{
     if(window.FinSecureStore&&typeof window.FinSecureStore.saveState==='function'){
@@ -2378,10 +2404,8 @@ function runAppBoot(){
     ensureMonth();
     try{if(typeof maybeRepairCarryCash==='function')maybeRepairCarryCash();}catch(e){}
     var c=compute();
-    if(STATE.income.length===0&&STATE.expenses.length===0&&c.cash<0&&!STATE.obligations.length&&!STATE.reserves.length){
-      STATE=def();save(true);
-    }
-  }catch(e){STATE=def();}
+    // NEVER auto-wipe storage here — empty UI may mean decrypt-locked data still on disk
+  }catch(e){console.error(e);}
   setup();
   render();
   syncReminders();
@@ -2393,17 +2417,33 @@ function runAppBoot(){
 }
 function boot(){
   var start=function(){
+    function afterLoad(st){
+      if(st){STATE=st;}
+      else{STATE=def();}
+      runAppBoot();
+      try{
+        if(window.__FIN_DECRYPT_FAILED){
+          setTimeout(function(){
+            toast('Данные зашифрованы, но не удалось открыть. Не переустанавливай приложение. Зайди в облако или импорт JSON.');
+          },900);
+        }
+      }catch(e){}
+      // Try cloud pull if local looks empty
+      try{
+        var empty=!(STATE.income.length||STATE.expenses.length||STATE.debts.length||STATE.reserves.length||STATE.obligations.length);
+        if(empty&&window.kopeykaCloud&&typeof window.kopeykaCloud.load==='function'){
+          setTimeout(function(){try{window.kopeykaCloud.load();}catch(e){}},1500);
+        }
+      }catch(e){}
+    }
     if(window.FinSecureStore&&typeof window.FinSecureStore.loadState==='function'){
       window.FinSecureStore.loadState(KEY,def,norm).then(function(st){
-        STATE=st||def();
-        runAppBoot();
+        afterLoad(st);
       }).catch(function(){
-        STATE=loadSyncFallback();
-        runAppBoot();
+        afterLoad(loadSyncFallback());
       });
     }else{
-      STATE=loadSyncFallback();
-      runAppBoot();
+      afterLoad(loadSyncFallback());
     }
   };
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);
