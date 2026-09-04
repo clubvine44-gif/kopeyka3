@@ -66,8 +66,11 @@ jobs:
           set -euo pipefail
           WWW="android/app/src/main/assets/www"
           mkdir -p "$WWW"
-          for f in index.html app.js ai.js assistant-v2.js assistant.js cloud.js engine.js fin-core.js finn-char.js finn3d.js finn-wake.js matter.js matter-finn.js matter-room.jpg matter-room.mp3 matter-tour-1.mp3 matter-tour-2.mp3 matter-tour-3.mp3 matter-tour-4.mp3 matter-tour-5.mp3 voice.js onboard.js profile.js products.js sw.js manifest.json icon.svg widget.html ai-bootstrap.js; do
+          for f in index.html app.js ai.js assistant-v2.js assistant.js cloud.js engine.js fin-core.js fin-plan.js finn-char.js finn3d.js finn-wake.js matter.js matter-finn.js matter-room.jpg matter-room.mp3 matter-tour-1.mp3 matter-tour-2.mp3 matter-tour-3.mp3 matter-tour-4.mp3 matter-tour-5.mp3 voice.js onboard.js profile.js products.js sw.js manifest.json icon.svg widget.html ai-bootstrap.js; do
             if [ -f "$f" ]; then cp -f "$f" "$WWW/"; fi
+          done
+          for f in matter.js matter-tour-1.mp3 matter-tour-2.mp3 matter-tour-3.mp3 matter-tour-4.mp3 matter-tour-5.mp3 fin-plan.js; do
+            test -f "$WWW/$f" || { echo "Missing packaged asset: $f"; exit 1; }
           done
           python3 - <<'PY'
           from pathlib import Path
@@ -78,9 +81,6 @@ jobs:
               t = t.replace('<script>', '<script>window.__FIN_NATIVE=true;', 1)
           p.write_text(t, encoding='utf-8')
           PY
-          for f in matter.js matter-tour-1.mp3 matter-tour-2.mp3 matter-tour-3.mp3 matter-tour-4.mp3 matter-tour-5.mp3; do
-            test -f "$WWW/$f" || { echo "Missing packaged asset: $f"; exit 1; }
-          done
 
       - name: Set version
         run: |
@@ -158,7 +158,7 @@ jobs:
             'versionCode': vc,
             'versionName': vn,
             'apkUrl': f'https://github.com/clubvine44-gif/kopeyka3/releases/download/v{vn}/Fin.apk',
-            'notes': f'{vn} — исправления ядра, упаковки Android и стабильности релиза (versionCode {vc})'
+            'notes': f'{vn} — финансовый план на сегодня, единое финансовое ядро и стабильность Android-упаковки (versionCode {vc})'
           }
           Path('update.json').write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
           PY
