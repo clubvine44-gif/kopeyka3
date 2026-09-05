@@ -163,9 +163,15 @@ function open(opts){
       bubbleTap.addEventListener('click',function(e){
         e.preventDefault();e.stopPropagation();
         if(listening||wantListen||_micStarting){
-          wantListen=false;_micStarting=false;stopListen();
-          status('Нажми на меня, чтобы говорить');
-          kaEmo('idle');
+          // повторный тап: если уже говорили — отправить на распознавание; иначе просто стоп
+          if(_usingWhisper&&_speechHeardTs){
+            status('Обрабатываю…');
+            stopWhisperRecordAndTranscribe(_listenGen);
+          }else{
+            wantListen=false;_micStarting=false;stopListen();
+            status('Нажми на меня, чтобы говорить');
+            kaEmo('idle');
+          }
         }else{
           startListen();
         }
@@ -441,8 +447,14 @@ function status(t){
   if(e)e.textContent=t||'';
 }
 
+
 var _speechBuf='',_silenceTimer=null,_finalizing=false,_listenGen=0,_seenFinals={};
-var SILENCE_MS=1500;
+var SILENCE_MS=1400;
+var MAX_REC_MS=22000;
+var MIN_SPEECH_MS=350;
+// Whisper path (no system SpeechRecognition beep)
+var _mediaStream=null,_mediaRec=null,_mediaChunks=[],_audioCtx=null,_analyser=null,_rafVad=null;
+var _recStartTs=0,_speechHeardTs=0,_lastLoudTs=0,_usingWhisper=false,_mimeType='';
 
 function clearSilenceTimer(){
   if(_silenceTimer){clearTimeout(_silenceTimer);_silenceTimer=null;}
@@ -456,6 +468,359 @@ function setListeningUI(on){
   }else{
     if(b)b.classList.remove('listening');
   }
+}
+
+function getGroqKeyLocal(){
+  try{
+    if(window.kopeykaAI&&typeof window.kopeykaAI.getKey==='function'){
+      var k=String(window.kopeykaAI.getKey()||'').trim();
+      if(k)return k;
+    }
+  }catch(e){}
+  try{return (localStorage.getItem('kopeyka_groq_key')||'').trim();}catch(e){}
+  try{
+    if(window.FinBridge&&typeof window.FinBridge.getGroqKey==='function'){
+      return String(window.FinBridge.getGroqKey()||'').trim();
+    }
+  }catch(e){}
+  return '';
+}
+
+function canUseWhisperStt(){
+  try{
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)return false;
+    if(typeof MediaRecorder==='undefined')return false;
+    if(!getGroqKeyLocal())return false;
+    return true;
+  }catch(e){return false;}
+}
+
+function pickMimeType(){
+  if(typeof MediaRecorder==='undefined')return '';
+  var cands=[
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/mp4',
+    'audio/ogg;codecs=opus',
+    'audio/ogg'
+  ];
+  for(var i=0;i<cands.length;i++){
+    try{if(MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(cands[i]))return cands[i];}catch(e){}
+  }
+  return '';
+}
+
+function stopMediaTracks(){
+  try{
+    if(_mediaStream){
+      _mediaStream.getTracks().forEach(function(tr){try{tr.stop();}catch(e){}});
+    }
+  }catch(e){}
+  _mediaStream=null;
+  try{if(_audioCtx){_audioCtx.close();}}catch(e){}
+  _audioCtx=null;_analyser=null;
+  if(_rafVad){try{cancelAnimationFrame(_rafVad);}catch(e){}_rafVad=null;}
+}
+
+function cleanupRecorder(){
+  clearSilenceTimer();
+  if(_rafVad){try{cancelAnimationFrame(_rafVad);}catch(e){}_rafVad=null;}
+  try{
+    if(_mediaRec){
+      _mediaRec.ondataavailable=null;
+      _mediaRec.onstop=null;
+      _mediaRec.onerror=null;
+      if(_mediaRec.state==='recording'||_mediaRec.state==='paused'){
+        try{_mediaRec.stop();}catch(e){}
+      }
+    }
+  }catch(e){}
+  _mediaRec=null;
+  stopMediaTracks();
+  _mediaChunks=[];
+  _usingWhisper=false;
+  _mimeType='';
+}
+
+function rmsFromAnalyser(){
+  if(!_analyser)return 0;
+  var n=_analyser.fftSize||2048;
+  var buf=new Uint8Array(n);
+  try{_analyser.getByteTimeDomainData(buf);}catch(e){return 0;}
+  var sum=0;
+  for(var i=0;i<buf.length;i++){
+    var v=(buf[i]-128)/128;
+    sum+=v*v;
+  }
+  return Math.sqrt(sum/buf.length);
+}
+
+function startVadWatch(myGen){
+  var SPEECH_THR=0.028;
+  var QUIET_THR=0.018;
+  function tick(){
+    if(myGen!==_listenGen||!_usingWhisper||!wantListen)return;
+    var now=Date.now();
+    var rms=rmsFromAnalyser();
+    if(rms>=SPEECH_THR){
+      if(!_speechHeardTs)_speechHeardTs=now;
+      _lastLoudTs=now;
+    }
+    // max length
+    if(now-_recStartTs>=MAX_REC_MS){
+      status('Обрабатываю…');
+      stopWhisperRecordAndTranscribe(myGen);
+      return;
+    }
+    // silence after speech
+    if(_speechHeardTs && (now-_speechHeardTs)>=MIN_SPEECH_MS && _lastLoudTs && (now-_lastLoudTs)>=SILENCE_MS){
+      status('Обрабатываю…');
+      stopWhisperRecordAndTranscribe(myGen);
+      return;
+    }
+    _rafVad=requestAnimationFrame(tick);
+  }
+  _rafVad=requestAnimationFrame(tick);
+}
+
+function stopWhisperRecordAndTranscribe(myGen){
+  if(!_usingWhisper)return;
+  if(myGen!==_listenGen)return;
+  clearSilenceTimer();
+  if(_rafVad){try{cancelAnimationFrame(_rafVad);}catch(e){}_rafVad=null;}
+  var rec=_mediaRec;
+  if(!rec){
+    cleanupRecorder();
+    listening=false;_micStarting=false;wantListen=false;
+    setListeningUI(false);
+    status('Нажми на меня, чтобы говорить');
+    return;
+  }
+  // onstop will fire transcription
+  try{
+    if(rec.state==='recording'||rec.state==='paused')rec.stop();
+    else if(rec.state==='inactive'){
+      // already stopped
+      finishWhisperBlob(myGen);
+    }
+  }catch(e){
+    cleanupRecorder();
+    listening=false;_micStarting=false;wantListen=false;
+    setListeningUI(false);
+    status('Ошибка записи');kaEmo('alert',1600);
+  }
+}
+
+function finishWhisperBlob(myGen){
+  if(myGen!==_listenGen){cleanupRecorder();return;}
+  var chunks=_mediaChunks.slice();
+  var mime=_mimeType||'audio/webm';
+  var heard=!!_speechHeardTs;
+  stopMediaTracks();
+  _mediaRec=null;
+  _mediaChunks=[];
+  _usingWhisper=false;
+  listening=false;
+  _micStarting=false;
+
+  if(!heard||!chunks.length){
+    wantListen=false;
+    setListeningUI(false);
+    status('Не расслышал. Нажми и скажи ещё раз');
+    kaEmo('idle');
+    return;
+  }
+
+  var blob=new Blob(chunks,{type:mime});
+  if(blob.size<1200){
+    wantListen=false;
+    setListeningUI(false);
+    status('Слишком тихо. Повтори');
+    kaEmo('idle');
+    return;
+  }
+
+  status('Распознаю…');
+  setListeningUI(false);
+  kaEmo('thinking');
+  transcribeWithGroq(blob,mime).then(function(text){
+    if(myGen!==_listenGen)return;
+    wantListen=false;
+    text=String(text||'').replace(/\s+/g,' ').trim();
+    if(!text){
+      status('Не разобрал речь. Повтори');
+      kaEmo('idle');
+      return;
+    }
+    if(isOnlyWake(text)){
+      status('Да, слушаю…');
+      setTimeout(function(){startListen();},280);
+      return;
+    }
+    status('Думаю…');
+    kaEmo('thinking');
+    handle(text);
+  }).catch(function(err){
+    if(myGen!==_listenGen)return;
+    wantListen=false;
+    var msg=(err&&err.message)?String(err.message):'Ошибка распознавания';
+    status(msg.length>60?msg.slice(0,60)+'…':msg);
+    kaEmo('alert',2000);
+    setListeningUI(false);
+  });
+}
+
+function transcribeWithGroq(blob,mime){
+  return new Promise(function(resolve,reject){
+    var key=getGroqKeyLocal();
+    if(!key){reject(new Error('Нужен ключ Groq'));return;}
+    var ext='webm';
+    if(/mp4|m4a|aac/i.test(mime))ext='mp4';
+    else if(/ogg/i.test(mime))ext='ogg';
+    else if(/wav/i.test(mime))ext='wav';
+    else if(/mpeg|mp3/i.test(mime))ext='mp3';
+    var fd=new FormData();
+    fd.append('file',blob,'speech.'+ext);
+    fd.append('model','whisper-large-v3-turbo');
+    fd.append('language','ru');
+    fd.append('response_format','text');
+    fd.append('temperature','0');
+    var controller=typeof AbortController!=='undefined'?new AbortController():null;
+    var timer=setTimeout(function(){try{if(controller)controller.abort();}catch(e){}},25000);
+    fetch('https://api.groq.com/openai/v1/audio/transcriptions',{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+key},
+      body:fd,
+      signal:controller?controller.signal:undefined
+    }).then(function(res){
+      return res.text().then(function(body){
+        clearTimeout(timer);
+        if(!res.ok){
+          var msg=body||('HTTP '+res.status);
+          try{var j=JSON.parse(body);if(j&&j.error&&j.error.message)msg=j.error.message;}catch(e){}
+          if(res.status===401)msg='Неверный ключ Groq';
+          if(res.status===413)msg='Слишком длинная запись';
+          throw new Error(msg);
+        }
+        // response_format=text → plain string; sometimes JSON
+        var text=body;
+        try{
+          var j2=JSON.parse(body);
+          if(j2&&typeof j2.text==='string')text=j2.text;
+        }catch(e){}
+        resolve(String(text||'').trim());
+      });
+    }).catch(function(err){
+      clearTimeout(timer);
+      if(err&&err.name==='AbortError')reject(new Error('Таймаут распознавания'));
+      else if(err&&/Failed to fetch/i.test(err.message||''))reject(new Error('Нет сети для распознавания'));
+      else reject(err||new Error('Ошибка распознавания'));
+    });
+  });
+}
+
+function startWhisperListen(myGen){
+  _usingWhisper=true;
+  _mediaChunks=[];
+  _speechHeardTs=0;
+  _lastLoudTs=0;
+  _recStartTs=Date.now();
+  _mimeType=pickMimeType();
+  status('Слушаю…');
+  setListeningUI(true);
+  var constraints={audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}};
+  navigator.mediaDevices.getUserMedia(constraints).then(function(stream){
+    if(myGen!==_listenGen||!wantListen){
+      try{stream.getTracks().forEach(function(tr){tr.stop();});}catch(e){}
+      return;
+    }
+    _mediaStream=stream;
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(AC){
+        _audioCtx=new AC();
+        var src=_audioCtx.createMediaStreamSource(stream);
+        _analyser=_audioCtx.createAnalyser();
+        _analyser.fftSize=2048;
+        src.connect(_analyser);
+        if(_audioCtx.state==='suspended')_audioCtx.resume();
+      }
+    }catch(e){}
+    var opts=_mimeType?{mimeType:_mimeType}:undefined;
+    try{
+      _mediaRec=opts?new MediaRecorder(stream,opts):new MediaRecorder(stream);
+      if(!_mimeType&&_mediaRec.mimeType)_mimeType=_mediaRec.mimeType;
+    }catch(e){
+      try{_mediaRec=new MediaRecorder(stream);}catch(e2){
+        cleanupRecorder();
+        // fallback web speech
+        if(SR){createRecognition();return;}
+        listening=false;_micStarting=false;wantListen=false;
+        setListeningUI(false);
+        status('Запись недоступна на устройстве');
+        kaEmo('alert',1800);
+        return;
+      }
+    }
+    _mediaRec.ondataavailable=function(ev){
+      if(ev&&ev.data&&ev.data.size>0)_mediaChunks.push(ev.data);
+    };
+    _mediaRec.onerror=function(){
+      if(myGen!==_listenGen)return;
+      cleanupRecorder();
+      listening=false;_micStarting=false;wantListen=false;
+      setListeningUI(false);
+      status('Ошибка микрофона');
+      kaEmo('alert',1800);
+    };
+    _mediaRec.onstop=function(){
+      finishWhisperBlob(myGen);
+    };
+    try{
+      _mediaRec.start(250); // timeslice — стабильнее на Android WebView
+    }catch(e){
+      cleanupRecorder();
+      if(SR){createRecognition();return;}
+      listening=false;_micStarting=false;wantListen=false;
+      setListeningUI(false);
+      status('Не удалось начать запись');
+      kaEmo('alert',1800);
+      return;
+    }
+    listening=true;
+    _micStarting=false;
+    startVadWatch(myGen);
+    // safety timeout
+    clearSilenceTimer();
+    _silenceTimer=setTimeout(function(){
+      if(myGen===_listenGen&&wantListen&&_usingWhisper){
+        status('Обрабатываю…');
+        stopWhisperRecordAndTranscribe(myGen);
+      }
+    },MAX_REC_MS+500);
+  }).catch(function(err){
+    if(myGen!==_listenGen)return;
+    _usingWhisper=false;
+    _micStarting=false;
+    var name=err&&err.name;
+    if(name==='NotAllowedError'||name==='PermissionDeniedError'){
+      wantListen=false;
+      setListeningUI(false);
+      status('Нет доступа к микрофону');
+      kaEmo('alert',1800);
+      return;
+    }
+    // fallback to system speech if mic path fails
+    if(SR){
+      status('Слушаю…');
+      createRecognition();
+      return;
+    }
+    wantListen=false;
+    setListeningUI(false);
+    status('Микрофон недоступен');
+    kaEmo('alert',1800);
+  });
 }
 
 function finalizeSpeech(){
@@ -479,7 +844,6 @@ function finalizeSpeech(){
 }
 
 function startListen(){
-  if(!SR){status('Нет распознавания речи');return;}
   if(listening||_micStarting||_finalizing)return;
   _listenGen++;
   wantListen=true;
@@ -489,20 +853,36 @@ function startListen(){
   _seenFinals={};
   _finalizing=false;
   clearSilenceTimer();
+  cleanupRecorder();
   status('Слушаю…');
   setListeningUI(true);
+  var myGen=_listenGen;
+  // Primary: MediaRecorder + Groq Whisper (no Android system STT beep)
+  if(canUseWhisperStt()){
+    startWhisperListen(myGen);
+    return;
+  }
+  // Fallback: Web Speech API (may beep on Android)
+  if(!SR){
+    _micStarting=false;wantListen=false;setListeningUI(false);
+    if(!getGroqKeyLocal())status('Нужен ключ Groq для голоса без системного звука');
+    else status('Нет распознавания речи');
+    kaEmo('alert',1800);
+    return;
+  }
   createRecognition();
 }
 
 function createRecognition(){
   if(!wantListen||_finalizing){_micStarting=false;return;}
   if(listening){_micStarting=false;return;}
+  _usingWhisper=false;
   try{if(rec){try{rec.onend=null;rec.onerror=null;rec.onresult=null;rec.abort();}catch(x){}rec=null;}}catch(x){}
   rec=new SR();
   rec.lang='ru-RU';
-  rec.interimResults=true;   // внутренне для тишины; в UI слова не показываем
-  rec.continuous=true;       // одна сессия дольше — меньше системных писков от restart
-  rec.maxAlternatives=3;     // берём лучший вариант фразы
+  rec.interimResults=true;
+  rec.continuous=true;
+  rec.maxAlternatives=3;
   var myGen=_listenGen;
   rec.onstart=function(){
     if(myGen!==_listenGen)return;
@@ -517,7 +897,6 @@ function createRecognition(){
     for(var i=e.resultIndex;i<e.results.length;i++){
       var res=e.results[i];
       if(!res)continue;
-      // лучший из alternatives
       var best='', bestScore=-1;
       var nAlt=res.length||0;
       for(var a=0;a<nAlt;a++){
@@ -537,7 +916,6 @@ function createRecognition(){
       _speechBuf=(_speechBuf?(_speechBuf+' '):'')+chunk;
       _speechBuf=_speechBuf.replace(/\s+/g,' ').trim();
     }
-    // слова в UI не показываем — только статус слушания
     status('Слушаю…');
     if(_speechBuf){
       clearSilenceTimer();
@@ -561,7 +939,6 @@ function createRecognition(){
       _silenceTimer=setTimeout(function(){if(myGen===_listenGen)finalizeSpeech();},200);
       return;
     }
-    // без рестартов — ждём повторного нажатия
     wantListen=false;setListeningUI(false);
     status('Нажми на меня, чтобы говорить');kaEmo('idle');
   };
@@ -575,7 +952,6 @@ function createRecognition(){
       if(!_silenceTimer)_silenceTimer=setTimeout(function(){if(myGen===_listenGen)finalizeSpeech();},200);
       return;
     }
-    // тишина / пусто — стоп, без автоперезапуска
     wantListen=false;
     setListeningUI(false);
     status('Нажми на меня, чтобы говорить');
@@ -592,6 +968,24 @@ function stopListen(){
   wantListen=false;
   _micStarting=false;
   clearSilenceTimer();
+  if(_usingWhisper||_mediaRec||_mediaStream){
+    try{
+      if(_mediaRec&&(_mediaRec.state==='recording'||_mediaRec.state==='paused')){
+        // abort without transcribe on explicit stop mid-flight if no speech
+        var had=_speechHeardTs;
+        if(_rafVad){try{cancelAnimationFrame(_rafVad);}catch(e){}_rafVad=null;}
+        if(!had){
+          try{_mediaRec.onstop=null;}catch(e){}
+          try{_mediaRec.stop();}catch(e){}
+          cleanupRecorder();
+        }else{
+          try{_mediaRec.stop();}catch(e){cleanupRecorder();}
+        }
+      }else{
+        cleanupRecorder();
+      }
+    }catch(e){cleanupRecorder();}
+  }
   if(rec){try{rec.onend=null;rec.onerror=null;rec.onresult=null;rec.stop();}catch(e){try{rec.abort();}catch(x){}}rec=null;}
   listening=false;
   setListeningUI(false);
