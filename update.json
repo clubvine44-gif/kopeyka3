@@ -1,6 +1,6 @@
 {
-  "versionCode": 146,
-  "versionName": "4.9.16",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.9.16/Fin.apk",
-  "notes": "4.9.16 — без накоплений по категориям, отчёт за период, перенос кассы (versionCode 146)"
+  "versionCode": 147,
+  "versionName": "4.9.17",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.9.17/Fin.apk",
+  "notes": "4.9.17 — сохранность данных, облако и логика кассы (versionCode 147)"
 }
