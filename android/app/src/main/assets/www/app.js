@@ -4,17 +4,8 @@ var CATS=['Продукты','Одежда','Транспорт','Карманн
 var BUDGET_CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
 function budgetLimitOf(cat){var bl=(STATE.settings&&STATE.settings.budgetLimits)||{};return Math.max(0,num(bl[cat]));}
 function setBudgetLimit(cat,val){if(!STATE.settings)STATE.settings={};if(!STATE.settings.budgetLimits||typeof STATE.settings.budgetLimits!=='object')STATE.settings.budgetLimits={};STATE.settings.budgetLimits[cat]=Math.max(0,num(val));}
-function budgetSavingsOf(cat){
-  var bs=(STATE.settings&&STATE.settings.budgetSavings)||{};
-  return Math.max(0,num(bs[cat]));
-}
-function addBudgetSaving(cat,amount){
-  amount=Math.max(0,num(amount));
-  if(amount<=0)return;
-  if(!STATE.settings)STATE.settings={};
-  if(!STATE.settings.budgetSavings||typeof STATE.settings.budgetSavings!=='object')STATE.settings.budgetSavings={};
-  STATE.settings.budgetSavings[cat]=Math.max(0,num(STATE.settings.budgetSavings[cat])+amount);
-}
+function budgetSavingsOf(cat){return 0;}
+function addBudgetSaving(cat,amount){/* накопления по категориям отключены */}
 function sortReservesList(list){
   return (list||[]).slice().sort(function(a,b){
     var pa=num(a.priority), pb=num(b.priority);
@@ -93,28 +84,56 @@ function spentInCatRange(cat,from,end){
   });
   return s;
 }
-/** Остатки лимитов → накопление по категориям (в панели нужных трат), без отдельного резерва. */
-function rolloverBudgetLeftovers(){
-  if(!STATE.settings)return 0;
+/** Закрытие периода «нужных трат»: локальный отчёт по категориям, без накоплений. */
+function archiveBudgetPeriodReport(){
+  if(!STATE.settings)return null;
   var from=String(STATE.settings.budgetTrackFrom||STATE.settings.budgetPeriodStart||'').slice(0,10);
   var end=String(STATE.settings.budgetPeriodEnd||'').slice(0,10);
-  if(!from||!end)return 0;
-  var total=0;
-  var parts=[];
+  if(!from||!end)return null;
+  var byCat={}, total=0, parts=[];
   BUDGET_CATS.forEach(function(cat){
     var lim=budgetLimitOf(cat);
-    if(lim<=0)return;
     var spent=spentInCatRange(cat,from,end);
-    var left=Math.max(0,lim-spent);
-    if(left>0){
-      addBudgetSaving(cat,left);
-      total+=left;
-      parts.push(cat+': '+fmt(left));
-    }
+    byCat[cat]={spent:spent,limit:lim};
+    total+=spent;
+    if(spent>0||lim>0)parts.push(cat+': '+fmt(spent)+(lim>0?(' / '+fmt(lim)):'') );
   });
-  if(total<=0)return 0;
-  STATE.settings.lastBudgetRollover={amount:total,at:today(),from:from,end:end,parts:parts.slice(0,8)};
-  return total;
+  var report={
+    id:'pr_'+from+'_'+end,
+    from:from,
+    end:end,
+    mode:(STATE.settings.limitHorizon==='month')?'month':'payday',
+    closedAt:new Date().toISOString(),
+    totalSpent:total,
+    byCat:byCat,
+    parts:parts.slice(0,12),
+    cashSnapshot:null
+  };
+  try{
+    var month=today().slice(0,7);
+    var c=computeForMonth(month);
+    report.cashSnapshot={opening:num(STATE.settings.openingBalance),cash:num(c.cash),month:month};
+  }catch(e){}
+  if(!Array.isArray(STATE.settings.periodReports))STATE.settings.periodReports=[];
+  var exists=STATE.settings.periodReports.some(function(r){return r&&r.from===from&&r.end===end;});
+  if(!exists){
+    STATE.settings.periodReports.unshift(report);
+    if(STATE.settings.periodReports.length>36)STATE.settings.periodReports=STATE.settings.periodReports.slice(0,36);
+  }
+  STATE.settings.lastPeriodReport=report;
+  try{STATE.settings.budgetSavings={};}catch(e){}
+  try{
+    var fname='finna-period-'+from+'_'+end+'.json';
+    var json=JSON.stringify(report,null,2);
+    if(window.FinBridge&&typeof window.FinBridge.saveBackup==='function'){
+      window.FinBridge.saveBackup(json,fname);
+    }
+  }catch(e){}
+  return report;
+}
+function rolloverBudgetLeftovers(){
+  var r=archiveBudgetPeriodReport();
+  return r?num(r.totalSpent):0;
 }
 function ensureBudgetPeriodTrack(forceToday){
   if(!STATE.settings)STATE.settings={};
@@ -130,20 +149,20 @@ function ensureBudgetPeriodTrack(forceToday){
     return range;
   }
   if(prev!==key){
-    // натуральная смена периода: 1-е число / день зарплаты
-    var rolled=0;
+    // Смена периода: 1-е (месяц) или день зарплаты — отчёт + обнуление учёта трат
+    var closed=null;
     if(prev){
-      try{rolled=rolloverBudgetLeftovers()||0;}catch(e){rolled=0;}
+      try{closed=archiveBudgetPeriodReport();}catch(e){closed=null;}
     }
     STATE.settings.budgetPeriodKey=key;
     STATE.settings.budgetTrackFrom=range.start;
     STATE.settings.budgetPeriodStart=range.start;
     STATE.settings.budgetPeriodEnd=range.end;
-    if(rolled>0){
+    try{STATE.settings.budgetSavings={};}catch(e){}
+    if(closed){
       try{
-        // отложенный тост — render ещё может идти
         setTimeout(function(){
-          try{toast('Накоплено по категориям: '+fmt(rolled));}catch(e){}
+          try{toast('Период закрыт. Отчёт: '+fmt(closed.totalSpent)+' по категориям');}catch(e){}
         },400);
       }catch(e){}
     }
@@ -202,6 +221,7 @@ function norm(raw){
   o.settings.nightRate=sane(o.settings.nightRate);
   if(o.settings.paydayDay!=null&&o.settings.paydayDay!==''){var pd=num(o.settings.paydayDay);o.settings.paydayDay=(pd>=1&&pd<=31)?pd:null;}else o.settings.paydayDay=null;
   if(o.settings.limitHorizon!=='month'&&o.settings.limitHorizon!=='payday')o.settings.limitHorizon=(o.settings.paydayDay? 'payday':'month');
+  if(!Array.isArray(o.settings.periodReports))o.settings.periodReports=[];
   if(o.settings.shiftNotifHour==null||o.settings.shiftNotifHour==='')o.settings.shiftNotifHour=20;else o.settings.shiftNotifHour=Math.min(23,Math.max(0,num(o.settings.shiftNotifHour)));
   if(o.settings.shiftNotifMinute==null||o.settings.shiftNotifMinute==='')o.settings.shiftNotifMinute=0;else o.settings.shiftNotifMinute=Math.min(59,Math.max(0,num(o.settings.shiftNotifMinute)));
   if(o.settings.shiftNotifEnabled==null)o.settings.shiftNotifEnabled=true;
@@ -226,10 +246,13 @@ function loadSyncFallback(){
       try{r=localStorage.getItem('kopeyka3_state_v1__raw_backup');}catch(e){}
     }
     if(!r)return def();
-    // Encrypted blob without working SecureStore — do NOT wipe to empty
+    // Encrypted blob: do not flag decrypt-failed yet — async SecureStore will open it.
+    // Never treat ciphertext as empty JSON.
     if(String(r).indexOf('FINENC1:')===0){
-      try{window.__FIN_DECRYPT_FAILED=true;window.__FIN_LOCKED_RAW=r;}catch(e){}
-      return def(); // UI empty but save() will refuse overwrite
+      if(!(window.FinSecureStore&&typeof window.FinSecureStore.loadState==='function')){
+        try{window.__FIN_DECRYPT_FAILED=true;window.__FIN_LOCKED_RAW=r;}catch(e){}
+      }
+      return def();
     }
     return norm(JSON.parse(r));
   }catch(e){return def();}
@@ -339,10 +362,14 @@ function save(skipUndo){
     if(window.FinSecureStore&&typeof window.FinSecureStore.saveState==='function'){
       window.FinSecureStore.saveState(KEY,STATE);
     }else{
-      localStorage.setItem(KEY,JSON.stringify(STATE));
+      var ex2=null;try{ex2=localStorage.getItem(KEY);}catch(e3){}
+      if(!(ex2&&String(ex2).indexOf('FINENC1:')===0)) localStorage.setItem(KEY,JSON.stringify(STATE));
     }
   }catch(e){
-    try{localStorage.setItem(KEY,JSON.stringify(STATE));}catch(e2){}
+    try{
+      var ex3=localStorage.getItem(KEY);
+      if(!(ex3&&String(ex3).indexOf('FINENC1:')===0)) localStorage.setItem(KEY,JSON.stringify(STATE));
+    }catch(e2){}
   }
   if(window.kopeykaCloud&&window.kopeykaCloud.scheduleSave)window.kopeykaCloud.scheduleSave();
   try{if(window.FinBackup&&typeof window.FinBackup.onSave==='function')window.FinBackup.onSave(STATE);}catch(e){}
@@ -475,18 +502,20 @@ function ensureMonth(){
   var cur=today().slice(0,7);
   var st=(STATE.settings&&STATE.settings.month)||cur;
   if(!STATE.settings)STATE.settings={};
+  try{ensureBudgetPeriodTrack(false);}catch(e){}
   if(st===cur)return;
+  // Касса: opening нового месяца = opening + операции всех закрытых месяцев
   var guard=0,m=st,open=num(STATE.settings.openingBalance);
   while(m!==cur&&guard++<240){
     open=num(open)+num(monthOps(m).delta);
     m=nextMonth(m);
   }
-  // копейки/дроби не копятся
   STATE.settings.openingBalance=Math.round(num(open));
   STATE.settings.month=cur;
   viewMonth=cur;
+  try{delete STATE.settings.carryCashRepaired;}catch(e){STATE.settings.carryCashRepaired=false;}
   save(true);
-  toast('Новый месяц: остаток '+fmt(STATE.settings.openingBalance)+' перенесён');
+  toast('Новый месяц: остаток кассы '+fmt(STATE.settings.openingBalance)+' перенесён');
 }
 /** Убрать ложный небольшой минус кассы после кривого переноса месяца (однократно). */
 function maybeRepairCarryCash(){
@@ -1215,7 +1244,6 @@ function showSettings(){
       '<button type="button" class="set-row" id="setRestoreCloud"><div class="set-main"><b>Восстановить из облака</b><span>Подтянуть данные с аккаунта принудительно</span></div><span class="set-val">☁</span></button>'+
       '<button type="button" class="set-row" id="setImport"><div class="set-main"><b>Импорт из файла</b><span>Вернуть данные из JSON-бэкапа</span></div><span class="set-val">↑</span></button>'+
       '<button type="button" class="set-row" id="setFileBackup"><div class="set-main"><b>Бэкап в Загрузки сейчас</b><span id="setBackupStatus">Локальные снимки + файл</span></div><span class="set-val">💾</span></button>'+
-      '<button type="button" class="set-row" id="setImport"><div class="set-main"><b>Загрузить копию</b><span>Восстановить из файла</span></div><span class="set-val">↑</span></button>'+
       '<button type="button" class="set-row danger" id="setClear"><div class="set-main"><b>Удалить всё</b><span>Сбросить приложение полностью</span></div><span class="set-val"></span></button>'+
     '</div>'+
     '<div class="set-group" id="devGateWrap"><button type="button" class="set-row" id="devGate"><div class="set-main"><b>Для разработчика</b><span>Скрытый раздел · нажми 5 раз подряд</span></div><span class="set-val">🔒</span></button></div>'+
@@ -1747,9 +1775,9 @@ homeHtml += '<div class="sec-title-sm">НУЖНЫЕ ТРАТЫ</div>';
 var bPeriod=ensureBudgetPeriodTrack(false);
 homeHtml += '<div class="budget-period">'+esc(bPeriod.mode==='payday'?'До зарплаты':'До конца месяца')+' · '+esc(bPeriod.label)+'</div>';
 try{
-  var lr=STATE.settings&&STATE.settings.lastBudgetRollover;
-  if(lr&&lr.at&&lr.amount>0&&lr.at===today()){
-    homeHtml += '<div class="budget-period budget-roll">Сегодня добавлено к накоплениям категорий: '+fmt(lr.amount)+'</div>';
+  var lr=STATE.settings&&STATE.settings.lastPeriodReport;
+  if(lr&&lr.closedAt&&String(lr.closedAt).slice(0,10)===today()){
+    homeHtml += '<div class="budget-period budget-roll">Закрыт прошлый период: '+fmt(lr.totalSpent)+' по категориям (отчёт сохранён)</div>';
   }
 }catch(e){}
 BUDGET_CATS.forEach(function(cat){
@@ -1758,15 +1786,13 @@ BUDGET_CATS.forEach(function(cat){
   var pct=lim>0?Math.min(100, Math.round(spent/lim*100)):0;
   var over=lim>0&&spent>lim;
   var barCol=over?'#F87171':(pct>=85?'#F0A060':'#5ED9B0');
-  var savedCat=budgetSavingsOf(cat);
   homeHtml += '<div class="budget-row" data-budget-cat="'+esc(cat)+'">';
   homeHtml += '<div class="budget-row-top"><b>'+esc(cat)+'</b>';
   homeHtml += '<button type="button" class="budget-lim" data-budget-edit="'+esc(cat)+'">'+fmt(lim)+'</button></div>';
   homeHtml += '<div class="budget-row-sub"><span class="'+(over?'neg':'')+'">'+fmt(spent)+' из '+fmt(lim)+'</span>';
   homeHtml += '<span class="muted">'+(lim>0?(pct+'%'):'лимит не задан')+'</span></div>';
   homeHtml += '<div class="limit-bar"><div class="limit-fill" style="width:'+pct+'%;background:'+barCol+'"></div></div>';
-  homeHtml += '<div class="budget-saved'+(savedCat>0?' has':'')+'">Накоплено: <b>'+fmt(savedCat)+'</b></div>';
-  homeHtml += '</div>';
+    homeHtml += '</div>';
 });
 homeHtml += '</div>';
 window.__finnTipText=finnTip;
@@ -2455,8 +2481,17 @@ function runAppBoot(){
 function boot(){
   var start=function(){
     function afterLoad(st){
-      if(st){STATE=st;}
+      if(st){
+        STATE=st;
+        try{window.__FIN_DECRYPT_FAILED=false;window.__FIN_LOCKED_RAW=null;}catch(e){}
+      }
       else{STATE=def();}
+      function markAppReady(){
+        try{
+          window.__FIN_APP_READY=true;
+          window.dispatchEvent(new Event('fin-app-ready'));
+        }catch(e){}
+      }
       // Layer: recover from local rotating snapshots if primary empty
       try{
         var emptyPrimary=!(STATE&&((STATE.income&&STATE.income.length)||(STATE.expenses&&STATE.expenses.length)||(STATE.debts&&STATE.debts.length)||(STATE.reserves&&STATE.reserves.length)||(STATE.obligations&&STATE.obligations.length)||(STATE.settings&&Number(STATE.settings.openingBalance))));
@@ -2470,6 +2505,7 @@ function boot(){
         }
       }catch(e){}
       runAppBoot();
+      markAppReady();
       try{
         if(window.__FIN_DECRYPT_FAILED){
           setTimeout(function(){
