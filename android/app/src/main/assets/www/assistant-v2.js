@@ -28,9 +28,9 @@ function playOpenSound(){
       o.connect(g);g.connect(ctx.destination);o.start(now+start);o.stop(now+start+dur+0.02);
     }
     // пузырь: мягкий pop + короткий chime
-    tone(180,0,0.12,'sine',0.28,90);
-    tone(520,0.04,0.16,'triangle',0.16,420);
-    tone(780,0.09,0.22,'sine',0.12,650);
+    tone(180,0,0.10,'sine',0.16,90);
+    tone(520,0.04,0.14,'triangle',0.10,420);
+    tone(780,0.08,0.18,'sine',0.07,650);
   }catch(e){}
 }
 function cleanReplyText(s){
@@ -442,7 +442,7 @@ function status(t){
 }
 
 var _speechBuf='',_silenceTimer=null,_finalizing=false,_listenGen=0,_seenFinals={};
-var SILENCE_MS=900;
+var SILENCE_MS=1500;
 
 function clearSilenceTimer(){
   if(_silenceTimer){clearTimeout(_silenceTimer);_silenceTimer=null;}
@@ -500,9 +500,9 @@ function createRecognition(){
   try{if(rec){try{rec.onend=null;rec.onerror=null;rec.onresult=null;rec.abort();}catch(x){}rec=null;}}catch(x){}
   rec=new SR();
   rec.lang='ru-RU';
-  rec.interimResults=true;   // для статуса «слышу…», не клеим в ответ
-  rec.continuous=false;      // один заход — без циклов вкл/выкл
-  rec.maxAlternatives=1;
+  rec.interimResults=true;   // внутренне для тишины; в UI слова не показываем
+  rec.continuous=true;       // одна сессия дольше — меньше системных писков от restart
+  rec.maxAlternatives=3;     // берём лучший вариант фразы
   var myGen=_listenGen;
   rec.onstart=function(){
     if(myGen!==_listenGen)return;
@@ -513,25 +513,34 @@ function createRecognition(){
   };
   rec.onresult=function(e){
     if(!wantListen||myGen!==_listenGen||_finalizing)return;
-    var interim='',chunk='';
+    var chunk='';
     for(var i=e.resultIndex;i<e.results.length;i++){
-      var piece=String(e.results[i][0].transcript||'').trim();
-      if(!piece)continue;
-      if(e.results[i].isFinal){
-        var key=piece.toLowerCase();
-        if(!_seenFinals[key]){_seenFinals[key]=1;chunk+=(chunk?' ':'')+piece;}
-      }else interim+=(interim?' ':'')+piece;
+      var res=e.results[i];
+      if(!res)continue;
+      // лучший из alternatives
+      var best='', bestScore=-1;
+      var nAlt=res.length||0;
+      for(var a=0;a<nAlt;a++){
+        var alt=res[a];
+        if(!alt)continue;
+        var tx=String(alt.transcript||'').trim();
+        var sc=(typeof alt.confidence==='number')?alt.confidence:0;
+        if(tx && (sc>bestScore || !best)){best=tx;bestScore=sc;}
+      }
+      if(!best)continue;
+      if(res.isFinal){
+        var key=best.toLowerCase();
+        if(!_seenFinals[key]){_seenFinals[key]=1;chunk+=(chunk?' ':'')+best;}
+      }
     }
     if(chunk){
       _speechBuf=(_speechBuf?(_speechBuf+' '):'')+chunk;
       _speechBuf=_speechBuf.replace(/\s+/g,' ').trim();
     }
-    // краткая диктовка только в статус-строке (не в ответе)
-    if(interim)status('… '+(interim.length>48?interim.slice(0,48)+'…':interim));
-    else if(_speechBuf)status('… '+(_speechBuf.length>48?_speechBuf.slice(0,48)+'…':_speechBuf));
+    // слова в UI не показываем — только статус слушания
+    status('Слушаю…');
     if(_speechBuf){
       clearSilenceTimer();
-      // после финала быстро отдаём в обработку — без рестартов
       _silenceTimer=setTimeout(function(){if(myGen===_listenGen)finalizeSpeech();},SILENCE_MS);
     }
   };
