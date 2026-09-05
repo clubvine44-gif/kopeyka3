@@ -90,9 +90,12 @@
   }
 
   function decryptString(raw) {
-    if (!_cryptoKey) return Promise.resolve(null);
     if (!raw || raw.indexOf(ENC_PREFIX) !== 0) {
       return Promise.resolve(raw);
+    }
+    if (!_cryptoKey) {
+      try { global.__FIN_CRYPTO_UNAVAILABLE = true; } catch (e) {}
+      return Promise.resolve(null);
     }
     var body = raw.slice(ENC_PREFIX.length);
     var parts = body.split(':');
@@ -108,15 +111,22 @@
 
   function isEmptyState(obj) {
     if (!obj || typeof obj !== 'object') return true;
-    var inc = obj.income || [];
-    var exp = obj.expenses || [];
-    var res = obj.reserves || [];
-    var deb = obj.debts || [];
-    var obl = obj.obligations || [];
-    var hasData = (inc.length + exp.length + res.length + deb.length + obl.length) > 0;
-    var bal = 0;
+    var cols = ['income', 'expenses', 'reserves', 'debts', 'reserveOps', 'obligations', 'obligationPays'];
+    for (var i = 0; i < cols.length; i++) {
+      var arr = obj[cols[i]];
+      if (Array.isArray(arr)) {
+        for (var j = 0; j < arr.length; j++) {
+          if (arr[j] && !arr[j].deleted) return false;
+        }
+      }
+    }
+    var bal = 0, rates = 0;
     try { bal = Number((obj.settings && obj.settings.openingBalance) || 0); } catch (e) {}
-    return !hasData && !bal;
+    try { rates = Number((obj.settings && obj.settings.dayRate) || 0) + Number((obj.settings && obj.settings.nightRate) || 0); } catch (e) {}
+    if (bal || rates) return false;
+    if (obj.shiftsOverride && Object.keys(obj.shiftsOverride).length) return false;
+    if (obj.dayPlans && Object.keys(obj.dayPlans).length) return false;
+    return true;
   }
 
   function loadState(storageKey, defFn, normFn) {
@@ -164,6 +174,10 @@
             } catch (e) {}
             return null;
           }
+          try {
+            global.__FIN_DECRYPT_FAILED = false;
+            global.__FIN_LOCKED_RAW = null;
+          } catch (e) {}
           return st;
         });
       }
@@ -184,9 +198,9 @@
   }
 
   function saveState(storageKey, stateObj) {
-    // Refuse to overwrite a locked encrypted blob with empty state
+    // Never overwrite a locked encrypted blob — decrypt failed or crypto missing.
     try {
-      if (global.__FIN_DECRYPT_FAILED && isEmptyState(stateObj)) {
+      if (global.__FIN_DECRYPT_FAILED || global.__FIN_CRYPTO_UNAVAILABLE) {
         return Promise.resolve(false);
       }
       var existing = localStorage.getItem(storageKey);

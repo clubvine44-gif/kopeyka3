@@ -1,4 +1,4 @@
-(function(){/* v113 */'use strict';
+(function(){/* v114 */'use strict';
 var KEY='kopeyka3_state_v1',ANCHOR='2026-08-17',CYCLE=['day','day','night','night','off','off'];
 var CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье','Прочее'];
 var BUDGET_CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
@@ -229,6 +229,24 @@ function days(a,b){return Math.round((pd(b)-pd(a))/864e5);}
 function shift(ds,ov){var v=ov&&ov[ds];if(typeof v==='string'&&SHIFT_LABEL[v])return v;return CYCLE[((days(ANCHOR,ds)%6)+6)%6];}window.shift=shift;window.SHIFT_LABEL=SHIFT_LABEL;
 function cleanShifts(ov){var out={};if(!ov||typeof ov!=='object')return out;Object.keys(ov).forEach(function(k){var v=ov[k];if(typeof v==='string'&&SHIFT_LABEL[v])out[k]=v;});return out;}
 function inMonth(dateStr,month){return String(dateStr||'').slice(0,7)===month;}
+function alive(x){return !!(x&&!x.deleted);}
+function hasLiveData(s){
+  s=s||STATE;
+  if(!s||typeof s!=='object')return false;
+  var cols=['income','expenses','reserves','debts','reserveOps','obligations','obligationPays'];
+  for(var i=0;i<cols.length;i++){
+    var arr=s[cols[i]];
+    if(Array.isArray(arr)){
+      for(var j=0;j<arr.length;j++){if(alive(arr[j]))return true;}
+    }
+  }
+  if(s.settings&&Number(s.settings.openingBalance))return true;
+  if(s.settings&&Number(s.settings.dayRate))return true;
+  if(s.settings&&Number(s.settings.nightRate))return true;
+  if(s.shiftsOverride&&Object.keys(s.shiftsOverride).length)return true;
+  if(s.dayPlans&&Object.keys(s.dayPlans).length)return true;
+  return false;
+}
 function def(){return{version:6,settings:{openingBalance:0,month:today().slice(0,7),dayRate:0,nightRate:0,paydayDay:null,limitHorizon:'payday',shiftNotifHour:20,shiftNotifMinute:0,shiftNotifEnabled:true,userName:''},income:[],expenses:[],reserves:[],debts:[],reserveOps:[],obligations:[],obligationPays:[],voiceMap:{},shiftsOverride:{},dayPlans:{},updatedAt:new Date().toISOString()};}
 function norm(raw){
   var b=def();if(!raw||typeof raw!=='object')return b;
@@ -283,7 +301,7 @@ var STATE=loadSyncFallback();
 var _saveTimer=null;
 function pushUndo(){try{undoStack.push(JSON.stringify(STATE));if(undoStack.length>UNDO_MAX)undoStack.shift();}catch(e){}}
 function trackLastOp(kind,id){try{STATE.lastOp={kind:kind,id:id,at:Date.now()};}catch(e){}}
-function pinCurrentMonth(){try{viewMonth=today().slice(0,7);if(STATE.settings)STATE.settings.month=viewMonth;}catch(e){}}
+function pinCurrentMonth(){try{viewMonth=today().slice(0,7);}catch(e){}}
 function stampOp(o){if(!o||typeof o!=='object')return o;if(!o.createdAt)o.createdAt=Date.now();if(!o.date)o.date=today();return o;}
 
 function debtExpenseLinked(e, d, nameHint){
@@ -319,16 +337,21 @@ function syncDebtPaid(d, newPaid, nameHint){
   }
   // Возврат в кассу: сначала пытаемся убрать связанные расходы, остаток — доходом
   var need=-cashDelta;
-  var drop={};
   for(var i=STATE.expenses.length-1;i>=0&&need>0;i--){
     var e=STATE.expenses[i];
+    if(!alive(e))continue;
     if(!debtExpenseLinked(e,d,matchName))continue;
     var a=num(e.amount);
     if(a<=0)continue;
-    if(a<=need){drop[e.id]=1;need-=a;}
-    else{e.amount=a-need;need=0;}
+    if(a<=need){
+      e.deleted=true;
+      e.deletedAt=new Date().toISOString();
+      tombstone('expenses',e.id);
+      need-=a;
+    }
+    else{e.amount=a-need;e.editedAt=new Date().toISOString();need=0;}
   }
-  if(Object.keys(drop).length)STATE.expenses=STATE.expenses.filter(function(x){return !drop[x.id];});
+  // остаток — доходом; связанные расходы не вырезаем из массива (tombstone для облака)
   // Всегда возвращаем остаток доходом — даже если расходов не нашли
   if(need>0){
     var iid=uid();
@@ -367,15 +390,10 @@ function softDeleteIn(arrKey,id,kind,note){
 
 function save(skipUndo){
   try{
-    if(window.__FIN_DECRYPT_FAILED){
-      var empty=!(STATE&&((STATE.income&&STATE.income.length)||(STATE.expenses&&STATE.expenses.length)||(STATE.debts&&STATE.debts.length)||(STATE.reserves&&STATE.reserves.length)||(STATE.obligations&&STATE.obligations.length)||(STATE.settings&&Number(STATE.settings.openingBalance))));
-      if(empty)return;
-    }
+    // Locked encrypted blob: never write over it (even with "recovered" data).
+    if(window.__FIN_DECRYPT_FAILED)return;
     var existing=localStorage.getItem(KEY);
-    if(existing&&String(existing).indexOf('FINENC1:')===0){
-      var empty2=!(STATE&&((STATE.income&&STATE.income.length)||(STATE.expenses&&STATE.expenses.length)||(STATE.debts&&STATE.debts.length)||(STATE.reserves&&STATE.reserves.length)||(STATE.obligations&&STATE.obligations.length)||(STATE.settings&&Number(STATE.settings.openingBalance))));
-      if(empty2)return;
-    }
+    if(existing&&String(existing).indexOf('FINENC1:')===0&&!hasLiveData(STATE))return;
   }catch(e){}
 
   STATE.updatedAt=new Date().toISOString();
@@ -399,8 +417,8 @@ function save(skipUndo){
 function computeReminders(){
   var out=[],t=today(),day=Number(t.slice(8)),month=(STATE.settings&&STATE.settings.month)||t.slice(0,7);
   (STATE.obligations||[]).forEach(function(ob){
-    if(ob.active===false)return;
-    var paid=0;(STATE.obligationPays||[]).forEach(function(p){if(p.obligId===ob.id&&p.month===month)paid+=num(p.amount);});
+    if(!alive(ob)||ob.active===false)return;
+    var paid=0;(STATE.obligationPays||[]).forEach(function(p){if(!alive(p))return;if(p.obligId===ob.id&&p.month===month)paid+=num(p.amount);});
     var remain=Math.max(0,num(ob.amount)-paid);if(remain<=0)return;
     var y=Number(t.slice(0,4)),m=Number(t.slice(5,7)),dim=new Date(y,m,0).getDate(),d=Math.min(Math.max(1,num(ob.day)||1),dim);
     if(d<day){m+=1;if(m>12){m=1;y+=1;}var dim2=new Date(y,m,0).getDate();d=Math.min(Math.max(1,num(ob.day)||1),dim2);}
@@ -470,7 +488,8 @@ function prevMonth(ym){var p=String(ym||'').split('-').map(Number);if(p.length<2
 function cmpMonth(a,b){return String(a||'').localeCompare(String(b||''));}
 function openingForMonth(target){var anchor=(STATE.settings&&STATE.settings.month)||today().slice(0,7);var open=num(STATE.settings&&STATE.settings.openingBalance);target=String(target||anchor);if(target===anchor)return open;var guard=0;if(cmpMonth(target,anchor)>0){var m=anchor;while(m!==target&&guard++<240){open=open+monthOps(m).delta;m=nextMonth(m);}return open;}var m2=anchor;while(m2!==target&&guard++<240){m2=prevMonth(m2);open=open-monthOps(m2).delta;}return open;}
 function debtActiveInMonth(d,month){
-  if(!d||!d.deferUntil)return true;
+  if(!d||d.deleted)return false;
+  if(!d.deferUntil)return true;
   var du=String(d.deferUntil);
   var dm=du.slice(0,7);
   month=String(month||today().slice(0,7));
@@ -480,7 +499,7 @@ function debtActiveInMonth(d,month){
   if(du.length>=10&&month===today().slice(0,7)&&today()<du.slice(0,10))return false;
   return true;
 }
-function computeForMonth(month){month=String(month||today().slice(0,7));var ops=monthOps(month);var open=openingForMonth(month);var cash=open+ops.delta;var resT=0;(STATE.reserves||[]).forEach(function(r){resT+=num(r.saved);});var debt=0;(STATE.debts||[]).forEach(function(d){if(!debtActiveInMonth(d,month))return;debt+=Math.max(0,num(d.total)-num(d.paid));});var obligDue=0,obligPaid=0;(STATE.obligations||[]).forEach(function(ob){if(ob.active===false)return;var paid=0;(STATE.obligationPays||[]).forEach(function(p){if(p.obligId===ob.id&&p.month===month)paid+=num(p.amount);});obligPaid+=paid;obligDue+=Math.max(0,num(ob.amount)-paid);});var avail=cash-debt-obligDue;var t=today(),p=month.split('-').map(Number);var last=new Date(p[0],p[1],0).getDate();var dayNum=Number(t.slice(8));
+function computeForMonth(month){month=String(month||today().slice(0,7));var ops=monthOps(month);var open=openingForMonth(month);var cash=open+ops.delta;var resT=0;(STATE.reserves||[]).forEach(function(r){if(!alive(r))return;resT+=num(r.saved);});var debt=0;(STATE.debts||[]).forEach(function(d){if(!debtActiveInMonth(d,month))return;debt+=Math.max(0,num(d.total)-num(d.paid));});var obligDue=0,obligPaid=0;(STATE.obligations||[]).forEach(function(ob){if(!alive(ob)||ob.active===false)return;var paid=0;(STATE.obligationPays||[]).forEach(function(p){if(!alive(p))return;if(p.obligId===ob.id&&p.month===month)paid+=num(p.amount);});obligPaid+=paid;obligDue+=Math.max(0,num(ob.amount)-paid);});var avail=cash-debt-obligDue;var t=today(),p=month.split('-').map(Number);var last=new Date(p[0],p[1],0).getDate();var dayNum=Number(t.slice(8));
 var payday=STATE.settings&&STATE.settings.paydayDay!=null?num(STATE.settings.paydayDay):0;
 var daysToMonthEnd=month===t.slice(0,7)?Math.max(1,last-dayNum+1):last;
 var daysToPayday=daysToMonthEnd;
@@ -519,6 +538,7 @@ var by={};
 var cats=Object.keys(by).map(function(k){return{name:k,amount:by[k]};}).sort(function(a,b){return b.amount-a.amount;});
 return{open:open,cash:cash,available:avail,incomeSum:ops.inc,expenseSum:ops.exp,depSum:ops.dep,wdSum:ops.wd,debtLeft:debt,reservesTotal:resT,obligDue:obligDue,obligPaid:obligPaid,daily:daily,daysLeft:leftDays,daysToMonthEnd:daysToMonthEnd,daysToPayday:daysToPayday,horizon:horizon,horizonLabel:horizonLabel,hasPayday:payday>=1&&payday<=31,spentToday:spentTodayCalc,cats:cats,month:month};}
 function compute(){return computeForMonth(getViewMonth());}
+window.ensureMonth=ensureMonth;
 function ensureMonth(){
   var cur=today().slice(0,7);
   var st=(STATE.settings&&STATE.settings.month)||cur;
@@ -538,33 +558,11 @@ function ensureMonth(){
   save(true);
   toast('Новый месяц: остаток кассы '+fmt(STATE.settings.openingBalance)+' перенесён');
 }
-/** Убрать ложный небольшой минус кассы после кривого переноса месяца (однократно). */
+/** Больше не трогаем openingBalance. Старый одноразовый «ремонт» мог завысить кассу при реальном минусе. */
 function maybeRepairCarryCash(){
   try{
     if(!STATE||!STATE.settings)return;
-    if(STATE.settings.carryCashRepaired)return;
-    var month=today().slice(0,7);
-    if((STATE.settings.month||month)!==month)return;
-    var ops=monthOps(month);
-    var open=num(STATE.settings.openingBalance);
-    var cash=Math.round(open+num(ops.delta));
-    // уже ок
-    if(cash>=0){
-      STATE.settings.carryCashRepaired=true;
-      try{save(true);}catch(e){}
-      return;
-    }
-    // крупный минус не трогаем — это уже реальный перерасход по операциям
-    if(cash<-1000){
-      STATE.settings.carryCashRepaired=true;
-      try{save(true);}catch(e){}
-      return;
-    }
-    // поднимаем opening так, чтобы касса стала 0; available пересчитается сам
-    STATE.settings.openingBalance=Math.round(open-cash);
-    STATE.settings.carryCashRepaired=true;
-    save(true);
-    try{toast('Касса выровнена: убран ошибочный минус '+fmt(-cash));}catch(e){}
+    if(!STATE.settings.carryCashRepaired)STATE.settings.carryCashRepaired=true;
   }catch(e){}
 }
 
@@ -1143,8 +1141,8 @@ function buildSmartNotifs(){
   var list=[],t=today(),c=compute();
   var month=(STATE.settings&&STATE.settings.month)||t.slice(0,7);
   (STATE.obligations||[]).forEach(function(ob){
-    if(ob.active===false)return;
-    var paid=0;(STATE.obligationPays||[]).forEach(function(p){if(p.obligId===ob.id&&p.month===month)paid+=num(p.amount);});
+    if(!alive(ob)||ob.active===false)return;
+    var paid=0;(STATE.obligationPays||[]).forEach(function(p){if(!alive(p))return;if(p.obligId===ob.id&&p.month===month)paid+=num(p.amount);});
     var remain=Math.max(0,num(ob.amount)-paid);if(remain<=0)return;
     var day=Number(t.slice(8)), y=Number(t.slice(0,4)), m=Number(t.slice(5,7));
     var dim=new Date(y,m,0).getDate();
@@ -1473,11 +1471,11 @@ var _calCache={month:null,html:null,shiftsKey:null};
 function buildCalHtml(month,t,isCurrent){
   var shiftsKey=JSON.stringify(STATE.shiftsOverride||{});
   var oblKey='';
-  try{(STATE.obligations||[]).forEach(function(ob){if(ob.active!==false)oblKey+=ob.day+',';});}catch(e){}
+  try{(STATE.obligations||[]).forEach(function(ob){if(alive(ob)&&ob.active!==false)oblKey+=ob.day+',';});}catch(e){}
   if(_calCache.month===month&&_calCache.shiftsKey===shiftsKey&&_calCache.oblKey===oblKey&&_calCache.t===t)return _calCache.html;
   var ym=month.split('-').map(Number),first=new Date(ym[0],ym[1]-1,1),sw=(first.getDay()+6)%7,dim=new Date(ym[0],ym[1],0).getDate();
   var oblDays={};
-  (STATE.obligations||[]).forEach(function(ob){if(ob.active!==false)oblDays[num(ob.day)]=1;});
+  (STATE.obligations||[]).forEach(function(ob){if(alive(ob)&&ob.active!==false)oblDays[num(ob.day)]=1;});
   var cal='<div class="cal">';
   var heads=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
   for(var hi=0;hi<7;hi++)cal+='<div class="cal-h">'+heads[hi]+'</div>';
@@ -1591,9 +1589,9 @@ var homeHtml = '';
 var spentToday=0;(STATE.expenses||[]).forEach(function(e){if(e.deleted)return;if(e.date===t)spentToday+=num(e.amount);});
 var nearestObl = [];
 (STATE.obligations||[]).forEach(function(ob){
-  if(ob.active===false)return;
+  if(!alive(ob)||ob.active===false)return;
   var paid=0;
-  (STATE.obligationPays||[]).forEach(function(p){if(p.obligId===ob.id&&p.month===month)paid+=num(p.amount);});
+  (STATE.obligationPays||[]).forEach(function(p){if(!alive(p))return;if(p.obligId===ob.id&&p.month===month)paid+=num(p.amount);});
   var left=Math.max(0,num(ob.amount)-paid);
   if(left<=0)return;
   var day=Math.min(Math.max(1,num(ob.day)||1), new Date(ym[0],ym[1],0).getDate());
@@ -2561,12 +2559,11 @@ function boot(){
           window.dispatchEvent(new Event('fin-app-ready'));
         }catch(e){}
       }
-      // Layer: recover from local rotating snapshots if primary empty
+      // Recover from rotating snapshots only if primary is empty AND encrypted blob is not locked.
       try{
-        var emptyPrimary=!(STATE&&((STATE.income&&STATE.income.length)||(STATE.expenses&&STATE.expenses.length)||(STATE.debts&&STATE.debts.length)||(STATE.reserves&&STATE.reserves.length)||(STATE.obligations&&STATE.obligations.length)||(STATE.settings&&Number(STATE.settings.openingBalance))));
-        if(emptyPrimary&&window.FinBackup&&typeof window.FinBackup.restoreBest==='function'){
+        if(!window.__FIN_DECRYPT_FAILED&&!hasLiveData(STATE)&&window.FinBackup&&typeof window.FinBackup.restoreBest==='function'){
           var recovered=window.FinBackup.restoreBest();
-          if(recovered){
+          if(recovered&&hasLiveData(recovered)){
             STATE=norm(recovered);
             try{save(true);}catch(e){}
             setTimeout(function(){toast('Восстановлено из локального снимка');},800);
@@ -2582,25 +2579,20 @@ function boot(){
           },900);
         }
       }catch(e){}
-      // Cloud pull if still empty
       try{
-        var empty=!(STATE.income.length||STATE.expenses.length||STATE.debts.length||STATE.reserves.length||STATE.obligations.length);
-        if(empty&&window.kopeykaCloud&&typeof window.kopeykaCloud.load==='function'){
+        if(!window.__FIN_DECRYPT_FAILED&&!hasLiveData(STATE)&&window.kopeykaCloud&&typeof window.kopeykaCloud.load==='function'){
           setTimeout(function(){try{window.kopeykaCloud.load();}catch(e){}},1500);
         }
       }catch(e){}
-      // Nudge cloud login if has data but not logged in
       setTimeout(function(){
         try{
-          var hasData=STATE&&((STATE.income&&STATE.income.length)||(STATE.expenses&&STATE.expenses.length)||(STATE.debts&&STATE.debts.length)||(STATE.reserves&&STATE.reserves.length)||(STATE.obligations&&STATE.obligations.length));
           var user=window.kopeykaCloud&&window.kopeykaCloud.user&&window.kopeykaCloud.user();
-          if(hasData&&!user){
+          if(hasLiveData(STATE)&&!user){
             toast('Включи облако (иконка ☁) — так данные не потеряются');
           }
         }catch(e){}
       },4000);
-      // Ensure snapshot of whatever we have
-      try{if(window.FinBackup&&window.FinBackup.forceSnapshot)window.FinBackup.forceSnapshot(STATE);}catch(e){}
+      try{if(!window.__FIN_DECRYPT_FAILED&&window.FinBackup&&window.FinBackup.forceSnapshot)window.FinBackup.forceSnapshot(STATE);}catch(e){}
     }
     if(window.FinSecureStore&&typeof window.FinSecureStore.loadState==='function'){
       window.FinSecureStore.loadState(KEY,def,norm).then(function(st){
@@ -2616,6 +2608,6 @@ function boot(){
   else start();
 }
 boot();
-window.goView=goView;window.goHome=goHome;window.render=render;window.compute=compute;window.syncReminders=typeof syncReminders==="function"?syncReminders:function(){};
+window.goView=goView;window.goHome=goHome;window.render=render;window.compute=compute;window.ensureMonth=ensureMonth;window.syncReminders=typeof syncReminders==="function"?syncReminders:function(){};
 Object.defineProperty(window,'currentView',{get:function(){return currentView;},set:function(v){currentView=v||'home';window.__finView=currentView;}});
 })();

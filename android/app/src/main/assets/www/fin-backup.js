@@ -24,7 +24,7 @@
   function isEmptyState(s) {
     if (!s || typeof s !== 'object') return true;
     var emptyCols = collections().every(function (k) {
-      return !Array.isArray(s[k]) || s[k].length === 0;
+      return !Array.isArray(s[k]) || !s[k].some(function (x) { return x && !x.deleted; });
     });
     var bal = 0;
     try {
