@@ -124,6 +124,7 @@ button,input,select{font:inherit;color:inherit;border:none;outline:none;backgrou
 }
 .finn-avatar:active{transform:scale(.92)}
 .finn-avatar svg{width:38px;height:38px;position:relative;z-index:1}
+.finn-face-slot{display:contents}
 .finn-avatar::before{
   content:'';position:absolute;inset:-3px;border-radius:50%;pointer-events:none;
   background:conic-gradient(from 0deg,rgba(94,200,255,0) 0%,rgba(94,200,255,.65) 14%,rgba(94,200,255,0) 30%);
@@ -147,7 +148,6 @@ button,input,select{font:inherit;color:inherit;border:none;outline:none;backgrou
   60%{transform:translateX(3px) rotate(4deg)}
   75%{transform:translateX(-1.5px) rotate(-2deg)}
 }
-.finn-brow{transition:opacity .18s,transform .18s}
 .finn-avatar .finn-tip{animation:finnTipPulse 1.8s ease-in-out infinite}
 @keyframes finnTipPulse{0%,100%{opacity:.7;r:2.1px}50%{opacity:1;r:2.6px}}
 .finn-mini-face{display:inline-flex;width:22px;height:22px;flex-shrink:0}
@@ -566,14 +566,6 @@ html, body { overscroll-behavior-y: none; overscroll-behavior: none; }
 }
 .modal-bg.show { overscroll-behavior: none; }
 .modal-bg.show .modal-card { touch-action: pan-y; overscroll-behavior-y: contain; }
-.finn-eye-g { transform-origin: center; transform-box: fill-box; }
-.finn-avatar.blinking .finn-eye-g { animation: finnBlink 0.16s ease-in-out; }
-@keyframes finnBlink {
-  0% { transform: scaleY(1); }
-  45% { transform: scaleY(0.08); }
-  55% { transform: scaleY(0.08); }
-  100% { transform: scaleY(1); }
-}
 
 /* ===== New Home Screen styles ===== */
 .hero-label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
@@ -886,37 +878,7 @@ html.fin-tour-scroll .card{content-visibility:visible!important;contain:none!imp
   <div class="top-left">
     <div class="finn-avatar status-green" id="finnAvatar" data-emotion="idle" title="Финна">
       <span class="finn-aura"></span>
-      <svg class="finn-face" viewBox="0 0 64 64" fill="none">
-        <defs>
-          <radialGradient id="finnCoinH" cx=".35" cy=".28" r=".85"><stop offset="0" stop-color="#FCE7B8"/><stop offset=".55" stop-color="#E9AE66"/><stop offset="1" stop-color="#B8712E"/></radialGradient>
-          <radialGradient id="finnGemH" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#FFD3E6"/><stop offset="1" stop-color="#F472B6"/></radialGradient>
-          <filter id="finnSoftH" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="1" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-        </defs>
-        <path d="M22 8c-3.2-2.7-8.4-1-8.4 2.7 0 2.7 3.6 3.8 8.4 1.7" fill="#F472B6" stroke="#D9418E" stroke-width=".6"/>
-        <path d="M26 8c3.2-2.7 8.4-1 8.4 2.7 0 2.7-3.6 3.8-8.4 1.7" fill="#F472B6" stroke="#D9418E" stroke-width=".6"/>
-        <circle class="finn-tip" cx="24" cy="10.4" r="2.1" fill="url(#finnGemH)"/>
-        <circle cx="32" cy="33" r="27" fill="#171018" stroke="#E5A75E" stroke-width="1.8" opacity=".95"/>
-        <circle cx="32" cy="33" r="22.5" fill="url(#finnCoinH)" filter="url(#finnSoftH)"/>
-        <circle cx="32" cy="33" r="18.5" fill="#1A1208"/>
-        <ellipse cx="19.5" cy="38" rx="3.2" ry="2" fill="#F472B6" opacity=".28"/>
-        <ellipse cx="44.5" cy="38" rx="3.2" ry="2" fill="#F472B6" opacity=".28"/>
-        <path class="finn-brow finn-brow-l" d="M18.5 24c2.6-2.2 6.6-2.4 9-.6" stroke="#F2C879" stroke-width="2" stroke-linecap="round" fill="none" style="opacity:.85;transform-origin:23px 23px"/>
-        <path class="finn-brow finn-brow-r" d="M36.5 23.4c2.4-1.8 6.4-1.6 9 .6" stroke="#F2C879" stroke-width="2" stroke-linecap="round" fill="none" style="opacity:.85;transform-origin:41px 23px"/>
-        <g class="finn-eye-g">
-          <ellipse class="finn-eye" id="finnEyeL" cx="24" cy="31" rx="4.4" ry="5.4" fill="#4ADE80"/>
-          <circle cx="22.3" cy="28.7" r="1.3" fill="#fff" opacity=".85"/>
-          <path d="M19.2 25.9l-2.5-1.5M20.4 24.9l-1.7-2.3M22.1 24.3l-.8-2.7" stroke="#F2C879" stroke-width=".9" stroke-linecap="round"/>
-        </g>
-        <g class="finn-eye-g">
-          <ellipse class="finn-eye" id="finnEyeR" cx="40" cy="31" rx="4.4" ry="5.4" fill="#4ADE80"/>
-          <circle cx="38.3" cy="28.7" r="1.3" fill="#fff" opacity=".85"/>
-          <path d="M44.8 25.9l2.5-1.5M43.6 24.9l1.7-2.3M41.9 24.3l.8-2.7" stroke="#F2C879" stroke-width=".9" stroke-linecap="round"/>
-        </g>
-        <path class="finn-mouth finn-mouth-smile" id="finnMouth" d="M23 43.5c2.6 2.8 6 4 9 4s6.4-1.2 9-4" stroke="#E5A75E" stroke-width="2.5" stroke-linecap="round" fill="none" style="opacity:.9"/>
-        <path class="finn-mouth finn-mouth-big" d="M21 42.5c3.2 4 7.6 5.6 11 5.6s7.8-1.6 11-5.6" stroke="#4ADE80" stroke-width="2.7" stroke-linecap="round" fill="none" style="opacity:0"/>
-        <path class="finn-mouth finn-mouth-frown" d="M23 48.5c2.6-2.8 6-4 9-4s6.4 1.2 9 4" stroke="#F87171" stroke-width="2.5" stroke-linecap="round" fill="none" style="opacity:0"/>
-        <path class="finn-mouth finn-mouth-neutral" d="M25 45.5h14" stroke="#5EC8FF" stroke-width="2.5" stroke-linecap="round" fill="none" style="opacity:0"/>
-      </svg>
+      <div class="finn-face-slot" id="finnFaceSlot"></div>
       <div class="finn-tip-tooltip">Нажми, чтобы поговорить с Финной</div>
     </div>
   </div>
@@ -957,7 +919,7 @@ html.fin-tour-scroll .card{content-visibility:visible!important;contain:none!imp
     <span>Платежи</span>
   </button>
 </nav>
-<div class="fab-wrap"><div class="radial" id="radial"><button data-act="income"><span class="ic">➕</span> Доход</button><button data-act="expense"><span class="ic">➖</span> Расход</button><button data-act="reserve"><span class="ic">🏦</span> Резерв</button><button data-act="debt"><span class="ic">📉</span> Долг</button><button data-act="oblig"><span class="ic">📅</span> Обязательный</button></div><button class="fab" id="fab" aria-label="Добавить"><span aria-hidden="true">+</span></button></div><div class="modal-bg" id="modalBg"></div><div class="modal-bg" id="dlgLayer"></div><div class="toast" id="toast"></div><script src="secure-store.js?v=2026090509"></script><script src="fin-core.js?v=2026090509"></script><script src="fin-plan.js?v=2026090509"></script><script src="fin-design.js?v=2026090509"></script><script src="finn-char.js?v=2026090509"></script><script src="fin-backup.js?v=2026090509"></script><script src="app.js?v=2026090509"></script><script src="profile.js?v=2026082419"></script><script src="onboard.js?v=2026082419"></script><script src="cloud.js?v=2026090509"></script><script src="products.js?v=2026082419"></script><script src="engine.js?v=2026090509"></script><script src="ai.js?v=2026090509"></script><script src="assistant-v2.js?v=2026090509"></script><script src="voice.js?v=2026082419"></script><script src="finn3d.js?v=2026082419"></script><script src="finn-wake.js?v=2026082419"></script><script src="matter.js?v=2026082617"></script><script>window.__kopeykaBuild='2026090509';window.__FIN_NATIVE=!!(window.FinBridge);if(!window.__FIN_NATIVE&&'serviceWorker' in navigator)navigator.serviceWorker.register('sw.js?v=72').catch(function(){});</script><script>
+<div class="fab-wrap"><div class="radial" id="radial"><button data-act="income"><span class="ic">➕</span> Доход</button><button data-act="expense"><span class="ic">➖</span> Расход</button><button data-act="reserve"><span class="ic">🏦</span> Резерв</button><button data-act="debt"><span class="ic">📉</span> Долг</button><button data-act="oblig"><span class="ic">📅</span> Обязательный</button></div><button class="fab" id="fab" aria-label="Добавить"><span aria-hidden="true">+</span></button></div><div class="modal-bg" id="modalBg"></div><div class="modal-bg" id="dlgLayer"></div><div class="toast" id="toast"></div><script src="secure-store.js?v=2026090509"></script><script src="fin-core.js?v=2026090509"></script><script src="fin-plan.js?v=2026090509"></script><script src="fin-design.js?v=2026090509"></script><script src="finn-char.js?v=2026090510"></script><script src="fin-backup.js?v=2026090509"></script><script src="app.js?v=2026090509"></script><script src="profile.js?v=2026082419"></script><script src="onboard.js?v=2026082419"></script><script src="cloud.js?v=2026090509"></script><script src="products.js?v=2026082419"></script><script src="engine.js?v=2026090509"></script><script src="ai.js?v=2026090509"></script><script src="assistant-v2.js?v=2026090509"></script><script src="voice.js?v=2026082419"></script><script src="finn3d.js?v=2026090510"></script><script src="finn-wake.js?v=2026082419"></script><script src="matter.js?v=2026082617"></script><script>window.__kopeykaBuild='2026090509';window.__FIN_NATIVE=!!(window.FinBridge);if(!window.__FIN_NATIVE&&'serviceWorker' in navigator)navigator.serviceWorker.register('sw.js?v=72').catch(function(){});</script><script>
 (function(){
   function tryTestPush(){
     try{
