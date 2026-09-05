@@ -83,6 +83,15 @@ body{background:linear-gradient(180deg,#070B12 0%,#0A1019 58%,#0B111A 100%)}
   .card{padding:13px}.sec-head{padding:12px!important}.sec-body{padding:0 12px 12px!important}
 }
 @media(min-width:700px){.wrap{max-width:620px}.card{margin-bottom:12px}}
+
+.budget-row.selected{
+  border-color:rgba(102,200,255,.45)!important;
+  background:linear-gradient(135deg, rgba(102,200,255,.12), rgba(255,255,255,.03))!important;
+  box-shadow:0 0 0 1px rgba(102,200,255,.18);
+}
+.budget-row{
+  cursor:pointer;
+}
 `;
   document.head.appendChild(s);
 }

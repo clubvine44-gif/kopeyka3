@@ -179,12 +179,33 @@ function spentInCat(cat,month){
   return spentInCatRange(cat,from,range.end);
 }
 
+/** Остаток лимита категории на текущий период и дневной лимит по ней */
+function categoryDailyLimit(cat,leftDays){
+  cat=String(cat||'');
+  var lim=budgetLimitOf(cat);
+  if(lim<=0)return {lim:0,spent:0,left:0,daily:0,spentToday:0};
+  var spent=spentInCat(cat);
+  var left=Math.max(0,lim-spent);
+  var days=Math.max(1,num(leftDays)||1);
+  var daily=Math.floor(left/days);
+  var st=0, td=today();
+  (STATE.expenses||[]).forEach(function(e){
+    if(!e||e.deleted)return;
+    if(String(e.date||'').slice(0,10)!==td)return;
+    if(String(e.category||'')!==cat)return;
+    st+=num(e.amount);
+  });
+  return {lim:lim,spent:spent,left:left,daily:daily,spentToday:st};
+}
+
 
 var RES_PRESETS=['Подушка безопасности','Права','Отпуск','Ремонт','Налог','Свой вариант'];
 var SHIFT_LABEL={day:'День',night:'Ночь',off:'Выходной'};
 var _renderQueued=false,_rafRender=null;
 var MONTHS_RU=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 var viewMonth=null,currentView='home',openSecs={ops:1,obl:1,an:0,res:0,debt:0},undoStack=[],UNDO_MAX=30;
+var __budgetFocusCat=null; // выбранная категория для «лимит на день»
+
 function monthLabel(ym){var p=String(ym||'').split('-').map(Number);return (MONTHS_RU[(p[1]||1)-1]||'')+' '+(p[0]||'');}
 function shiftMonth(ym,delta){var p=String(ym).split('-').map(Number);var d=new Date(p[0],(p[1]||1)-1+delta,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
 function getViewMonth(){var m=viewMonth||(STATE.settings&&STATE.settings.month)||today().slice(0,7);window.__kopeykaViewMonth=m;return m;}
@@ -1731,8 +1752,27 @@ if(c.available < c.daily * 3 && c.available > 0){
 }
 
 // ===== 1. Сейчас: доступно + лимит на день =====
-var leftLimitShow=Math.max(0,(c.daily||0)-(spentToday||0));
-var limitPctRing = c.daily>0 ? Math.min(100, Math.round( (spentToday||0)/c.daily *100 )) : 0;
+// Если выбрана категория — дневной лимит из остатка категории / дни горизонта
+var focusCat=__budgetFocusCat||null;
+var focusInfo=null;
+var displayDaily=c.daily||0;
+var displaySpentToday=spentToday||0;
+var limitSubLabel='На день';
+if(focusCat){
+  focusInfo=categoryDailyLimit(focusCat,c.daysLeft||1);
+  if(focusInfo.lim>0){
+    displayDaily=focusInfo.daily;
+    displaySpentToday=focusInfo.spentToday;
+    limitSubLabel=String(focusCat).length>12?(String(focusCat).slice(0,11)+'…'):String(focusCat);
+  }else{
+    // лимит не задан — сбрасываем выбор
+    __budgetFocusCat=null;
+    focusCat=null;
+    focusInfo=null;
+  }
+}
+var leftLimitShow=Math.max(0,(displayDaily||0)-(displaySpentToday||0));
+var limitPctRing = displayDaily>0 ? Math.min(100, Math.round( (displaySpentToday||0)/displayDaily *100 )) : 0;
 // второе кольцо — прогресс дневного лимита (не красный)
 // то же viewBox/радиус/толщина, что у кольца «Доступно»
 var limR=50, limCirc=2*Math.PI*limR;
@@ -1749,8 +1789,8 @@ homeHtml += '<div class="hero-label">Сейчас</div>';
 homeHtml += '<div class="hero-dual">';
 homeHtml += '<div class="orbit-wrap" id="ringTap" title="Подробная расшифровка">'+ringSvg;
 homeHtml += '<div class="orbit-core"><div class="orbit-val'+orbitValCls(c.available)+'">'+fmt(c.available)+'</div><div class="orbit-sub">Доступно</div></div></div>';
-homeHtml += '<div class="orbit-wrap orbit-limit" id="limitRingTap" title="Лимит на сегодня">'+limitRingSvg;
-homeHtml += '<div class="orbit-core"><div class="orbit-val orbit-val-lim'+orbitValCls(c.daily)+'">'+fmt(c.daily)+'</div><div class="orbit-sub">На день</div></div></div>';
+homeHtml += '<div class="orbit-wrap orbit-limit" id="limitRingTap" title="'+(focusCat?('Лимит на день · '+focusCat):'Лимит на сегодня')+'">'+limitRingSvg;
+homeHtml += '<div class="orbit-core"><div class="orbit-val orbit-val-lim'+orbitValCls(displayDaily)+'">'+fmt(displayDaily)+'</div><div class="orbit-sub">'+esc(limitSubLabel)+'</div></div></div>';
 homeHtml += '</div>';
 var hz=c.horizon||'month';
 homeHtml += '<div class="hero-horizon limit-modes horizon" data-limit-kind="horizon" id="heroHorizon">';
@@ -1786,7 +1826,8 @@ BUDGET_CATS.forEach(function(cat){
   var pct=lim>0?Math.min(100, Math.round(spent/lim*100)):0;
   var over=lim>0&&spent>lim;
   var barCol=over?'#F87171':(pct>=85?'#F0A060':'#5ED9B0');
-  homeHtml += '<div class="budget-row" data-budget-cat="'+esc(cat)+'">';
+  var isFocus=(__budgetFocusCat&&__budgetFocusCat===cat);
+  homeHtml += '<div class="budget-row'+(isFocus?' selected':'')+'" data-budget-cat="'+esc(cat)+'" role="button" tabindex="0">';
   homeHtml += '<div class="budget-row-top"><b>'+esc(cat)+'</b>';
   homeHtml += '<button type="button" class="budget-lim" data-budget-edit="'+esc(cat)+'">'+fmt(lim)+'</button></div>';
   homeHtml += '<div class="budget-row-sub"><span class="'+(over?'neg':'')+'">'+fmt(spent)+' из '+fmt(lim)+'</span>';
@@ -1954,7 +1995,7 @@ app.innerHTML = htmlOut;
 if(currentView==='home'&&prevScroll>0){requestAnimationFrame(function(){window.scrollTo(0,prevScroll);requestAnimationFrame(function(){window.scrollTo(0,prevScroll);});});}
 
 try{if(window.FinBridge){if(window.FinBridge.updateWidgetDataFull){window.FinBridge.updateWidgetDataFull(fmt(c.daily),fmt(c.cash),fmt(c.available),sl,String(c.daysLeft));}else if(window.FinBridge.updateWidgetData){window.FinBridge.updateWidgetData(fmt(c.daily),fmt(c.cash),sl);}}}catch(e){}
-if(!app._bound){app._bound=true;app.addEventListener('click',function(e){var t=e.target.closest('[data-date],.item[data-id],.sec-head,#mPrev,#mNext,#btnShiftPay,.quick-nav,[data-view],#btnAddMain,.qcat,#limitCard,#ringTap,#limitRingTap,#finnTipCard,#btnFullCal,.link-more,.mode,[data-budget-edit],.budget-lim,[data-horizon],.hero-horizon');if(!t||!app.contains(t))return;if(t.classList&&t.classList.contains('quick-nav')||t.dataset.view){goView(t.dataset.view);return;}
+if(!app._bound){app._bound=true;app.addEventListener('click',function(e){var t=e.target.closest('[data-date],.item[data-id],.sec-head,#mPrev,#mNext,#btnShiftPay,.quick-nav,[data-view],#btnAddMain,.qcat,#limitCard,#ringTap,#limitRingTap,#finnTipCard,#btnFullCal,.link-more,.mode,[data-budget-edit],.budget-lim,[data-horizon],.hero-horizon,.budget-row,[data-budget-cat]');if(!t||!app.contains(t))return;if(t.classList&&t.classList.contains('quick-nav')||t.dataset.view){goView(t.dataset.view);return;}
 if(t.id==='btnAddMain'||t.classList.contains('qcat')){
   var cat=t.dataset.cat;
   if(typeof openModal==='function'){
@@ -1978,6 +2019,29 @@ if(bedEl||(t.getAttribute&&t.getAttribute('data-budget-edit'))){
     return;
   }
 }
+// Тап по категории → фокус для «лимит на день» (повторный тап снимает)
+var brow=t.closest?t.closest('.budget-row[data-budget-cat]'):null;
+if(brow&&!bedEl){
+  var catFocus=brow.getAttribute('data-budget-cat')||'';
+  if(catFocus){
+    if(__budgetFocusCat===catFocus){
+      __budgetFocusCat=null;
+      render();
+      toast('Лимит на день — общий');
+    }else{
+      var lim0=budgetLimitOf(catFocus);
+      if(lim0<=0){
+        toast('Сначала задай лимит на «'+catFocus+'»');
+        return;
+      }
+      __budgetFocusCat=catFocus;
+      var info=categoryDailyLimit(catFocus,(compute().daysLeft||1));
+      render();
+      toast(catFocus+': '+fmt(info.daily)+'/день · остаток '+fmt(info.left)+' · '+(compute().daysLeft||1)+' дн.');
+    }
+    return;
+  }
+}
 if(t.id==='limitRingTap'||t.closest&&t.closest('#limitRingTap')){
   var isMan=STATE.settings&&STATE.settings.manualDailyLimit!=null&&STATE.settings.manualDailyLimit!=='';
   appChoice('Лимит на день',['Авто','Задать вручную','Расшифровка'],'Лимит').then(function(act){
@@ -1990,8 +2054,13 @@ if(t.id==='limitRingTap'||t.closest&&t.closest('#limitRingTap')){
       return;
     }
     var ccL=compute();
-    var st=0;(STATE.expenses||[]).forEach(function(e){if(!e.deleted&&e.date===today())st+=num(e.amount);});
-    appAlert('Лимит — '+fmt(ccL.daily)+'\nПотрачено сегодня — '+fmt(st)+'\nОсталось сегодня — '+fmt(Math.max(0,(ccL.daily||0)-st)),'Лимит на день');
+    if(__budgetFocusCat){
+      var ci=categoryDailyLimit(__budgetFocusCat,ccL.daysLeft||1);
+      appAlert('Категория — '+__budgetFocusCat+'\nЛимит периода — '+fmt(ci.lim)+'\nПотрачено за период — '+fmt(ci.spent)+'\nОстаток — '+fmt(ci.left)+'\nДней ('+(ccL.horizonLabel||'')+') — '+(ccL.daysLeft||1)+'\n\nЛимит на день — '+fmt(ci.daily)+'\nПотрачено сегодня — '+fmt(ci.spentToday)+'\nОсталось сегодня — '+fmt(Math.max(0,ci.daily-ci.spentToday)),'Лимит · '+__budgetFocusCat);
+    }else{
+      var st=0;(STATE.expenses||[]).forEach(function(e){if(!e.deleted&&e.date===today())st+=num(e.amount);});
+      appAlert('Лимит — '+fmt(ccL.daily)+'\nПотрачено сегодня — '+fmt(st)+'\nОсталось сегодня — '+fmt(Math.max(0,(ccL.daily||0)-st)),'Лимит на день');
+    }
   });
   return;
 }
