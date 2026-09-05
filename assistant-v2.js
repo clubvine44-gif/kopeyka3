@@ -1,7 +1,7 @@
 (function(){
 'use strict';
 var SR=window.SpeechRecognition||window.webkitSpeechRecognition,history=[],pending=null,rec=null,listening=false,wantListen=false,restarts=0,HKEY='kopeyka_ai_history_v2';
-var firstOpenListen=true, openingAnim=false, _micStarting=false;
+var firstOpenListen=true, openingAnim=false, _micStarting=false, _micMuted=false;
 
 function n(v){var x=Number(v);return isFinite(x)?Math.round(x):0;}
 function id(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
@@ -23,14 +23,17 @@ function playOpenSound(){
       o.type=type||'sine';o.frequency.setValueAtTime(freq,now+start);
       if(freqEnd)o.frequency.exponentialRampToValueAtTime(Math.max(40,freqEnd),now+start+dur);
       g.gain.setValueAtTime(0.0001,now+start);
-      g.gain.exponentialRampToValueAtTime(vol||0.22,now+start+0.02);
+      g.gain.exponentialRampToValueAtTime(vol||0.22,now+start+0.018);
       g.gain.exponentialRampToValueAtTime(0.0001,now+start+dur);
-      o.connect(g);g.connect(ctx.destination);o.start(now+start);o.stop(now+start+dur+0.02);
+      o.connect(g);g.connect(ctx.destination);o.start(now+start);o.stop(now+start+dur+0.03);
     }
-    // пузырь: мягкий pop + короткий chime
-    tone(180,0,0.10,'sine',0.16,90);
-    tone(520,0.04,0.14,'triangle',0.10,420);
-    tone(780,0.08,0.18,'sine',0.07,650);
+    // Фирменный «старт Финны»: глухой body + яркий glass chime (слышно, не писк ОС)
+    tone(110,0.00,0.14,'sine',0.34,70);
+    tone(220,0.03,0.12,'triangle',0.22,160);
+    tone(523.25,0.07,0.22,'sine',0.28,440);   // C5
+    tone(659.25,0.12,0.26,'sine',0.24,520);   // E5
+    tone(783.99,0.17,0.32,'triangle',0.18,620); // G5
+    tone(1046.5,0.22,0.28,'sine',0.12,880);   // C6 sparkle
   }catch(e){}
 }
 function cleanReplyText(s){
@@ -101,9 +104,17 @@ function open(opts){
             '</button>'+
           '</div>'+
         '</div>'+
-        '<div class="ka-hint" id="kaStatus">'+(_nm?('Привет, '+_nm+'! '):'')+'Нажми на меня, чтобы говорить</div>'+
+        '<div class="ka-hint" id="kaStatus">'+(_nm?('Привет, '+_nm+'! '):'')+'Слушаю…</div>'+
+        '<button type="button" class="ka-micbtn" id="kaMicToggle" aria-label="Микрофон" title="Выключить микрофон">'+
+          '<span class="ka-mic-pulse"></span>'+
+          '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">'+
+            '<path class="ka-mic-ico" d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>'+
+            '<path class="ka-mic-ico" d="M5 11a7 7 0 0 0 14 0M12 18v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>'+
+          '</svg>'+
+        '</button>'+
       '</div>';
     document.body.appendChild(wrap);
+    try{var av=document.getElementById('kaFinnAvatar');if(av&&window.FinnChar&&window.FinnChar.scheduleBlink)window.FinnChar.scheduleBlink(av);}catch(e){}
 
     var stage=document.getElementById('kaStage');
     if(stage){
@@ -162,21 +173,29 @@ function open(opts){
     if(bubbleTap){
       bubbleTap.addEventListener('click',function(e){
         e.preventDefault();e.stopPropagation();
+        if(_micMuted){setMicMuted(false);return;}
         if(listening||wantListen||_micStarting){
-          // повторный тап: если уже говорили — отправить на распознавание; иначе просто стоп
           if(_usingWhisper&&_speechHeardTs){
             status('Обрабатываю…');
             stopWhisperRecordAndTranscribe(_listenGen);
           }else{
-            wantListen=false;_micStarting=false;stopListen();
-            status('Нажми на меня, чтобы говорить');
-            kaEmo('idle');
+            // в continuous-режиме повторный тап не глушит — только mute-кнопка
+            status('Слушаю…');
           }
         }else{
           startListen();
         }
       });
     }
+    var micBtn=document.getElementById('kaMicToggle');
+    if(micBtn){
+      micBtn.addEventListener('click',function(e){
+        e.preventDefault();e.stopPropagation();
+        setMicMuted(!_micMuted);
+      });
+    }
+    _micMuted=false;
+    updateMicBtn();
 
     // только при первом открытии сессии — один автостарт микрофона
     firstOpenListen=true;
@@ -196,7 +215,7 @@ function open(opts){
 }
 
 function close(){
-  wantListen=false;_micStarting=false;stopListen();pending=null;firstOpenListen=true;
+  wantListen=false;_micStarting=false;_micMuted=false;stopListen();pending=null;firstOpenListen=true;
   var e=document.getElementById('kopeykaAiDialog');
   if(!e)return;
   e.classList.remove('ka-show');
@@ -266,7 +285,7 @@ function style(){
   '@keyframes kaNod{0%{transform:rotate(0)}30%{transform:rotate(-8deg) translateY(2px)}60%{transform:rotate(5deg)}100%{transform:rotate(0)}}'+
   '@keyframes kaFaceShake{0%,100%{transform:rotate(0)}30%{transform:rotate(-10deg)}60%{transform:rotate(10deg)}}'+
   '@keyframes kaIdleSway{0%,100%{transform:rotate(-2deg)}50%{transform:rotate(2.5deg)}}'+
-  ' .ka-micbtn{display:none!important;position:absolute;left:calc(50% + 86px);top:38px;width:48px;height:48px;border-radius:50%;border:1.5px solid rgba(94,200,255,.4);'+
+  '.ka-micbtn{position:absolute;left:calc(50% + 78px);top:92px;width:46px;height:46px;border-radius:50%;border:1.5px solid rgba(94,200,255,.4);'+
   'background:linear-gradient(145deg,rgba(30,42,70,.95),rgba(14,22,40,.98));'+
   'color:#5EC8FF;display:flex;align-items:center;justify-content:center;'+
   'box-shadow:0 8px 28px rgba(0,0,0,.4),0 0 16px rgba(94,200,255,.15);'+
@@ -279,6 +298,9 @@ function style(){
   '.ka-mic-pulse{position:absolute;inset:-4px;border-radius:50%;border:2px solid rgba(94,200,255,.4);'+
   'opacity:0;pointer-events:none}'+
   '.ka-micbtn.listening .ka-mic-pulse{animation:kaRing 1.4s ease-out infinite;opacity:1}'+
+  '.ka-micbtn.muted{background:linear-gradient(145deg,#7f1d1d,#450a0a);color:#fecaca;border-color:rgba(248,113,113,.55);box-shadow:0 0 0 4px rgba(248,113,113,.18),0 8px 22px rgba(0,0,0,.45);animation:none}'+
+  '.ka-micbtn.muted .ka-mic-pulse{display:none}'+
+  '.ka-micbtn{pointer-events:auto;z-index:6}'+
   ' .ka-x{display:none!important;position:absolute;top:-36px;right:-4px;width:30px;height:30px;border-radius:50%;'+
   'border:1px solid rgba(255,255,255,.12);background:rgba(20,28,44,.85);color:#9AA0B0;'+
   'font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;'+
@@ -468,6 +490,7 @@ function setListeningUI(on){
   }else{
     if(b)b.classList.remove('listening');
   }
+  try{updateMicBtn();}catch(e){}
 }
 
 function getGroqKeyLocal(){
@@ -844,6 +867,7 @@ function finalizeSpeech(){
 }
 
 function startListen(){
+  if(_micMuted){status('Микрофон выключен');updateMicBtn();return;}
   if(listening||_micStarting||_finalizing)return;
   _listenGen++;
   wantListen=true;
@@ -993,9 +1017,40 @@ function stopListen(){
 
 function isMicLocked(){return false;}
 
+function updateMicBtn(){
+  var btn=document.getElementById('kaMicToggle');
+  if(!btn)return;
+  btn.classList.toggle('muted', !!_micMuted);
+  btn.classList.toggle('listening', !_micMuted && !!(listening||wantListen||_micStarting));
+  btn.setAttribute('aria-label', _micMuted?'Микрофон выключен':'Микрофон включён');
+  btn.title=_micMuted?'Включить микрофон':'Выключить микрофон';
+}
+function setMicMuted(on){
+  _micMuted=!!on;
+  updateMicBtn();
+  if(_micMuted){
+    wantListen=false;_micStarting=false;stopListen();
+    status('Микрофон выключен');
+    kaEmo('idle');
+  }else{
+    status('Слушаю…');
+    setTimeout(function(){if(!_micMuted)startListen();},220);
+  }
+}
 function maybeResumeListen(ms){
-  status('Нажми на меня, чтобы говорить');
+  if(_micMuted){
+    status('Микрофон выключен');
+    kaEmo('idle');
+    updateMicBtn();
+    return;
+  }
+  status('Слушаю…');
   kaEmo('idle');
+  updateMicBtn();
+  setTimeout(function(){
+    if(_micMuted)return;
+    if(document.getElementById('kopeykaAiDialog'))startListen();
+  }, typeof ms==='number'?ms:450);
 }
 
 function confirmWord(t){return /^(да|ага|угу|подтверждаю|сделай|выполняй|верно|правильно|ок|окей|yes|удали)$/i.test(norm(t));}
