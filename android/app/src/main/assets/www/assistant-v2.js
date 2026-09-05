@@ -285,7 +285,7 @@ function style(){
   '@keyframes kaNod{0%{transform:rotate(0)}30%{transform:rotate(-8deg) translateY(2px)}60%{transform:rotate(5deg)}100%{transform:rotate(0)}}'+
   '@keyframes kaFaceShake{0%,100%{transform:rotate(0)}30%{transform:rotate(-10deg)}60%{transform:rotate(10deg)}}'+
   '@keyframes kaIdleSway{0%,100%{transform:rotate(-2deg)}50%{transform:rotate(2.5deg)}}'+
-  '.ka-micbtn{position:absolute;left:calc(50% + 78px);top:92px;width:46px;height:46px;border-radius:50%;border:1.5px solid rgba(94,200,255,.4);'+
+  '.ka-micbtn{position:absolute;left:calc(50% + 102px);top:96px;width:46px;height:46px;border-radius:50%;border:1.5px solid rgba(94,200,255,.4);'+
   'background:linear-gradient(145deg,rgba(30,42,70,.95),rgba(14,22,40,.98));'+
   'color:#5EC8FF;display:flex;align-items:center;justify-content:center;'+
   'box-shadow:0 8px 28px rgba(0,0,0,.4),0 0 16px rgba(94,200,255,.15);'+

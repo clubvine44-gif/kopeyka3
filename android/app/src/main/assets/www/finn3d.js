@@ -79,10 +79,6 @@ else boot();
     if(!av) return;
     av.classList.remove('status-green','status-orange','status-red');
     av.classList.add('status-'+kind);
-    var color = kind==='green' ? '#4ADE80' : kind==='orange' ? '#FBBF24' : '#F87171';
-    var l=document.getElementById('finnEyeL'), r=document.getElementById('finnEyeR');
-    if(l) l.setAttribute('fill', color);
-    if(r) r.setAttribute('fill', color);
   }
   function updateStatus(){
     var online=false, problems=false;
@@ -112,6 +108,10 @@ else boot();
   function bootAvatar(){
     var av=document.getElementById('finnAvatar');
     if(!av) return;
+    var slot=document.getElementById('finnFaceSlot');
+    if(slot && !slot.firstChild && window.FinnChar){
+      slot.innerHTML = window.FinnChar.svgMarkup('finnAvatar','H');
+    }
     av.addEventListener('click', function(e){
       e.stopPropagation();
       av.classList.add('show-tip');
