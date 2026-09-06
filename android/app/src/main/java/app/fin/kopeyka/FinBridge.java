@@ -241,16 +241,99 @@ public class FinBridge {
     }
 
     @JavascriptInterface public void saveBackup(String json, String filename) {
+        writeFinnaBackupFile(json, filename);
+    }
+
+    @JavascriptInterface public String getBackupFolderHint() {
+        return "Загрузки / Finna";
+    }
+
+    private void writeFinnaBackupFile(String json, String filename) {
+        if (json == null) json = "";
+        if (filename == null || filename.trim().isEmpty()) filename = "finna-latest.json";
+        filename = filename.replace("\\", "/");
+        int slash = filename.lastIndexOf('/');
+        if (slash >= 0) filename = filename.substring(slash + 1);
+        if (!filename.toLowerCase().endsWith(".json")) filename = filename + ".json";
+        byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
+
+        try {
+            File priv = context.getExternalFilesDir("FinnaBackup");
+            if (priv == null) priv = new File(context.getFilesDir(), "FinnaBackup");
+            if (!priv.exists()) priv.mkdirs();
+            File pf = new File(priv, filename);
+            FileOutputStream pos = new FileOutputStream(pf);
+            pos.write(bytes);
+            pos.close();
+        } catch (Exception ignored) {}
+
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                ContentValues cv = new ContentValues(); cv.put(MediaStore.Downloads.DISPLAY_NAME, filename); cv.put(MediaStore.Downloads.MIME_TYPE, "application/json"); cv.put(MediaStore.Downloads.IS_PENDING, 1);
-                Uri uri = context.getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv); if (uri == null) throw new IllegalStateException("не удалось создать файл");
-                OutputStream out = context.getContentResolver().openOutputStream(uri); if (out == null) throw new IllegalStateException("нет доступа к файлу");
-                out.write(json.getBytes(StandardCharsets.UTF_8)); out.close(); cv.clear(); cv.put(MediaStore.Downloads.IS_PENDING, 0); context.getContentResolver().update(uri, cv, null, null);
-            } else { File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS); if (!dir.exists()) dir.mkdirs(); File file = new File(dir, filename); FileOutputStream out = new FileOutputStream(file); out.write(json.getBytes(StandardCharsets.UTF_8)); out.close(); }
-            postToast("Сохранено в Загрузки: " + filename);
-        } catch (Exception e) { postToast("Не удалось сохранить бэкап: " + e.getMessage()); }
+                if ("finna-latest.json".equalsIgnoreCase(filename)) {
+                    try {
+                        android.database.Cursor cur = context.getContentResolver().query(
+                                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                                new String[]{MediaStore.Downloads._ID},
+                                MediaStore.Downloads.DISPLAY_NAME + "=? AND " + MediaStore.Downloads.RELATIVE_PATH + " LIKE ?",
+                                new String[]{filename, "%/Finna/%"},
+                                null);
+                        if (cur != null) {
+                            if (cur.moveToFirst()) {
+                                long id = cur.getLong(0);
+                                Uri exist = Uri.withAppendedPath(MediaStore.Downloads.EXTERNAL_CONTENT_URI, String.valueOf(id));
+                                OutputStream uo = context.getContentResolver().openOutputStream(exist, "wt");
+                                if (uo != null) {
+                                    uo.write(bytes);
+                                    uo.close();
+                                    cur.close();
+                                    return;
+                                }
+                            }
+                            cur.close();
+                        }
+                    } catch (Exception ignored) {}
+                }
+                ContentValues cv = new ContentValues();
+                cv.put(MediaStore.Downloads.DISPLAY_NAME, filename);
+                cv.put(MediaStore.Downloads.MIME_TYPE, "application/json");
+                cv.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Finna");
+                cv.put(MediaStore.Downloads.IS_PENDING, 1);
+                Uri uri = context.getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv);
+                if (uri == null) throw new IllegalStateException("insert failed");
+                OutputStream out = context.getContentResolver().openOutputStream(uri);
+                if (out == null) throw new IllegalStateException("no stream");
+                out.write(bytes);
+                out.close();
+                cv.clear();
+                cv.put(MediaStore.Downloads.IS_PENDING, 0);
+                context.getContentResolver().update(uri, cv, null, null);
+            } else {
+                File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Finna");
+                if (!dir.exists()) dir.mkdirs();
+                File file = new File(dir, filename);
+                FileOutputStream out = new FileOutputStream(file);
+                out.write(bytes);
+                out.close();
+            }
+        } catch (Exception e) {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    ContentValues cv = new ContentValues();
+                    cv.put(MediaStore.Downloads.DISPLAY_NAME, "Finna-" + filename);
+                    cv.put(MediaStore.Downloads.MIME_TYPE, "application/json");
+                    cv.put(MediaStore.Downloads.IS_PENDING, 1);
+                    Uri uri = context.getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv);
+                    if (uri != null) {
+                        OutputStream out = context.getContentResolver().openOutputStream(uri);
+                        if (out != null) { out.write(bytes); out.close(); }
+                        cv.clear(); cv.put(MediaStore.Downloads.IS_PENDING, 0);
+                        context.getContentResolver().update(uri, cv, null, null);
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
     }
+
 
     @JavascriptInterface public void scheduleReminders(String json) {
         applyReminders(context, json);

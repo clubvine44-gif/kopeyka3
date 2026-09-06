@@ -1,35 +1,29 @@
 /**
- * FinBackup — multi-layer local safety net for Finna state.
- * Layers:
- *  1) Rotating localStorage snapshots (5 slots)
- *  2) Daily file export to Downloads via FinBridge.saveBackup
- *  3) Boot-time recovery if primary state is empty
- *  4) Cloud is handled by cloud.js (must stay non-destructive)
+ * FinBackup — multi-layer safety net for Finna.
+ * Public folder: Download/Finna (latest + daily + monthly FULL state snapshots).
  */
 (function (global) {
   'use strict';
-
   var SLOT_PREFIX = 'finna_backup_slot_';
   var SLOT_COUNT = 5;
   var META_KEY = 'finna_backup_meta_v1';
   var LAST_JSON_NAME = 'finna-latest.json';
-  var MIN_SNAP_MS = 8000; // throttle snapshots
+  var MIN_SNAP_MS = 8000;
+  var MIN_LATEST_FILE_MS = 20000;
   var _lastSnapAt = 0;
+  var _lastLatestFileAt = 0;
   var _exportBusy = false;
 
   function collections() {
     return ['income', 'expenses', 'reserves', 'debts', 'reserveOps', 'obligations', 'obligationPays'];
   }
-
   function isEmptyState(s) {
     if (!s || typeof s !== 'object') return true;
     var emptyCols = collections().every(function (k) {
-      return !Array.isArray(s[k]) || !s[k].some(function (x) { return x && !x.deleted; });
+      return !Array.isArray(s[k]) || s[k].length === 0;
     });
     var bal = 0;
-    try {
-      bal = Number((s.settings && s.settings.openingBalance) || 0) || 0;
-    } catch (e) {}
+    try { bal = Number((s.settings && s.settings.openingBalance) || 0) || 0; } catch (e) {}
     var rates = 0;
     try {
       rates = Number((s.settings && s.settings.dayRate) || 0) + Number((s.settings && s.settings.nightRate) || 0);
@@ -38,44 +32,58 @@
     var plans = s.dayPlans && Object.keys(s.dayPlans).length;
     return emptyCols && !bal && !rates && !shifts && !plans;
   }
-
   function countItems(s) {
     if (!s) return 0;
     var n = 0;
-    collections().forEach(function (k) {
-      if (Array.isArray(s[k])) n += s[k].length;
-    });
+    collections().forEach(function (k) { if (Array.isArray(s[k])) n += s[k].length; });
     return n;
   }
-
   function readMeta() {
-    try {
-      return JSON.parse(localStorage.getItem(META_KEY) || '{}') || {};
-    } catch (e) {
-      return {};
-    }
+    try { return JSON.parse(localStorage.getItem(META_KEY) || '{}') || {}; } catch (e) { return {}; }
   }
-
   function writeMeta(m) {
-    try {
-      localStorage.setItem(META_KEY, JSON.stringify(m));
-    } catch (e) {}
+    try { localStorage.setItem(META_KEY, JSON.stringify(m)); } catch (e) {}
   }
-
   function todayStr() {
     var d = new Date();
-    var m = d.getMonth() + 1;
-    var day = d.getDate();
+    var m = d.getMonth() + 1, day = d.getDate();
     return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day;
   }
+  function monthStr() { return todayStr().slice(0, 7); }
 
+  function buildEnvelope(stateObj, kind) {
+    var code = 0;
+    try {
+      if (global.FinBridge && typeof global.FinBridge.getVersionCode === 'function')
+        code = Number(global.FinBridge.getVersionCode()) || 0;
+    } catch (e) {}
+    return {
+      format: 'finna-backup-v2',
+      kind: kind || 'snapshot',
+      savedAt: new Date().toISOString(),
+      versionCode: code,
+      itemCount: countItems(stateObj),
+      state: stateObj
+    };
+  }
+  function envelopeJson(stateObj, kind) {
+    return JSON.stringify(buildEnvelope(stateObj, kind), null, 2);
+  }
+  function parseBackupPayload(raw) {
+    if (!raw) return null;
+    var obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (!obj || typeof obj !== 'object') return null;
+    if (obj.format === 'finna-backup-v2' && obj.state && typeof obj.state === 'object') return obj.state;
+    if (obj.state && typeof obj.state === 'object' && (obj.savedAt || obj.itemCount != null)) return obj.state;
+    if (obj.settings || obj.income || obj.expenses || obj.debts) return obj;
+    return null;
+  }
   function rotateWrite(stateObj) {
     var payload = JSON.stringify({
       savedAt: new Date().toISOString(),
       itemCount: countItems(stateObj),
       state: stateObj
     });
-    // shift slots: 3->4, 2->3, ... 0->1, write new into 0
     try {
       for (var i = SLOT_COUNT - 1; i >= 1; i--) {
         var prev = localStorage.getItem(SLOT_PREFIX + (i - 1));
@@ -83,14 +91,12 @@
       }
       localStorage.setItem(SLOT_PREFIX + '0', payload);
     } catch (e) {
-      // quota — try clear oldest only
       try {
         localStorage.removeItem(SLOT_PREFIX + (SLOT_COUNT - 1));
         localStorage.setItem(SLOT_PREFIX + '0', payload);
       } catch (e2) {}
     }
   }
-
   function listSlots() {
     var out = [];
     for (var i = 0; i < SLOT_COUNT; i++) {
@@ -110,7 +116,6 @@
     }
     return out;
   }
-
   function bestSlot() {
     var slots = listSlots();
     if (!slots.length) return null;
@@ -120,120 +125,119 @@
     });
     return slots[0];
   }
-
-  function exportToDownloads(stateObj, filename, silent) {
-    if (_exportBusy) return Promise.resolve(false);
-    if (isEmptyState(stateObj)) return Promise.resolve(false);
-    _exportBusy = true;
-    var json = JSON.stringify(stateObj, null, 2);
+  function nativeSave(json, filename) {
     try {
       if (global.FinBridge && typeof global.FinBridge.saveBackup === 'function') {
-        global.FinBridge.saveBackup(json, filename || LAST_JSON_NAME);
-        _exportBusy = false;
-        return Promise.resolve(true);
+        global.FinBridge.saveBackup(json, filename);
+        return true;
       }
     } catch (e) {}
+    return false;
+  }
+  function exportEnvelope(stateObj, filename, kind) {
+    if (_exportBusy) return false;
+    if (isEmptyState(stateObj)) return false;
+    _exportBusy = true;
     try {
-      // browser fallback
-      var blob = new Blob([json], { type: 'application/json' });
-      var url = URL.createObjectURL(blob);
-      var a = document.createElement('a');
-      a.href = url;
-      a.download = filename || LAST_JSON_NAME;
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(function () {
+      var json = envelopeJson(stateObj, kind);
+      var ok = nativeSave(json, filename);
+      if (!ok) {
         try {
-          URL.revokeObjectURL(url);
-        } catch (e) {}
-      }, 2000);
+          var blob = new Blob([json], { type: 'application/json' });
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          a.href = url; a.download = filename || LAST_JSON_NAME; a.style.display = 'none';
+          document.body.appendChild(a); a.click(); document.body.removeChild(a);
+          setTimeout(function () { try { URL.revokeObjectURL(url); } catch (e) {} }, 2000);
+          ok = true;
+        } catch (e2) {}
+      }
       _exportBusy = false;
-      return Promise.resolve(true);
-    } catch (e2) {
+      return ok;
+    } catch (e) {
       _exportBusy = false;
-      if (!silent && global.toast) global.toast('Не удалось сохранить файл бэкапа');
-      return Promise.resolve(false);
+      return false;
     }
   }
-
   function onSave(stateObj) {
     if (!stateObj || isEmptyState(stateObj)) return;
     var now = Date.now();
+    var meta = readMeta();
+    var items = countItems(stateObj);
     if (now - _lastSnapAt >= MIN_SNAP_MS) {
       _lastSnapAt = now;
       rotateWrite(stateObj);
-      var meta = readMeta();
       meta.lastSnapAt = new Date().toISOString();
-      meta.lastItemCount = countItems(stateObj);
-      meta.snapCount = (meta.snapCount || 0) + 1;
-      writeMeta(meta);
+      meta.lastItemCount = items;
     }
-    // Daily file export (once per calendar day)
-    try {
-      var day = todayStr();
-      var meta2 = readMeta();
-      if (meta2.lastExportDay !== day) {
-        exportToDownloads(stateObj, 'finna-auto-' + day + '.json', true).then(function (ok) {
-          if (ok) {
-            var m = readMeta();
-            m.lastExportDay = day;
-            m.lastExportAt = new Date().toISOString();
-            writeMeta(m);
-          }
-        });
-        // also refresh latest pointer
-        exportToDownloads(stateObj, LAST_JSON_NAME, true);
+    if (now - _lastLatestFileAt >= MIN_LATEST_FILE_MS) {
+      _lastLatestFileAt = now;
+      exportEnvelope(stateObj, LAST_JSON_NAME, 'latest');
+      meta.lastLatestAt = new Date().toISOString();
+    }
+    var day = todayStr();
+    if (meta.lastExportDay !== day) {
+      if (exportEnvelope(stateObj, 'finna-day-' + day + '.json', 'daily')) {
+        meta.lastExportDay = day;
+        meta.lastExportAt = new Date().toISOString();
       }
-    } catch (e) {}
+    }
+    var month = monthStr();
+    if (meta.lastExportMonth !== month) {
+      if (exportEnvelope(stateObj, 'finna-month-' + month + '.json', 'monthly')) {
+        meta.lastExportMonth = month;
+        meta.lastMonthAt = new Date().toISOString();
+      }
+    }
+    writeMeta(meta);
   }
-
   function restoreBest() {
     var best = bestSlot();
     if (best && best.state) return best.state;
-    // try raw encrypted backup is handled by secure-store; here only plaintext snaps
     try {
       var raw = localStorage.getItem('kopeyka3_state_v1__raw_backup');
       if (raw && raw.indexOf('FINENC1:') !== 0) {
-        var st = JSON.parse(raw);
-        if (!isEmptyState(st)) return st;
+        var st = parseBackupPayload(raw) || JSON.parse(raw);
+        if (st && !isEmptyState(st)) return st;
       }
     } catch (e) {}
     return null;
   }
-
   function status() {
     var meta = readMeta();
     var slots = listSlots();
     var cloudUser = null;
     try {
-      if (global.kopeykaCloud && typeof global.kopeykaCloud.user === 'function') {
+      if (global.kopeykaCloud && typeof global.kopeykaCloud.user === 'function')
         cloudUser = global.kopeykaCloud.user();
-      }
+    } catch (e) {}
+    var folder = 'Загрузки / Finna';
+    try {
+      if (global.FinBridge && typeof global.FinBridge.getBackupFolderHint === 'function')
+        folder = String(global.FinBridge.getBackupFolderHint() || folder);
     } catch (e) {}
     return {
       slots: slots.length,
       lastSnapAt: meta.lastSnapAt || null,
       lastExportDay: meta.lastExportDay || null,
+      lastExportMonth: meta.lastExportMonth || null,
+      lastLatestAt: meta.lastLatestAt || null,
       lastItemCount: meta.lastItemCount || 0,
+      folder: folder,
       cloudLoggedIn: !!cloudUser,
       cloudEmail: cloudUser && (cloudUser.email || null)
     };
   }
-
   function forceSnapshot(stateObj) {
     if (!stateObj || isEmptyState(stateObj)) return false;
-    _lastSnapAt = 0;
-    onSave(stateObj);
-    return true;
+    _lastSnapAt = 0; _lastLatestFileAt = 0; onSave(stateObj); return true;
   }
-
   function forceFileBackup(stateObj) {
     var day = todayStr();
-    return exportToDownloads(stateObj, 'finna-backup-' + day + '.json', false);
+    var ok1 = exportEnvelope(stateObj, LAST_JSON_NAME, 'latest');
+    var ok2 = exportEnvelope(stateObj, 'finna-manual-' + day + '-' + Date.now() + '.json', 'manual');
+    return ok1 || ok2;
   }
-
   global.FinBackup = {
     onSave: onSave,
     restoreBest: restoreBest,
@@ -241,6 +245,8 @@
     forceSnapshot: forceSnapshot,
     forceFileBackup: forceFileBackup,
     isEmptyState: isEmptyState,
-    listSlots: listSlots
+    listSlots: listSlots,
+    parseBackupPayload: parseBackupPayload,
+    buildEnvelope: buildEnvelope
   };
 })(typeof window !== 'undefined' ? window : this);
