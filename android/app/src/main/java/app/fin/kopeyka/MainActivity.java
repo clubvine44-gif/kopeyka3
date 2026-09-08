@@ -48,6 +48,7 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.security.MessageDigest;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -260,6 +261,7 @@ public class MainActivity extends AppCompatActivity {
                 String remoteName = j.optString("versionName", "");
                 String apkUrl = j.optString("apkUrl", "");
                 String notes = j.optString("notes", "");
+                String sha256 = j.optString("sha256", "");
                 int localCode = getPackageManager().getPackageInfo(getPackageName(), 0).versionCode;
 
                 if (remoteCode <= localCode || apkUrl.isEmpty()) return;
@@ -275,7 +277,8 @@ public class MainActivity extends AppCompatActivity {
                     prefs.edit().putInt(KEY_SKIP_CODE, 0).putLong(KEY_SKIP_UNTIL, 0L).apply();
                 }
 
-                runOnUiThread(() -> showUpdateDialog(remoteCode, remoteName, apkUrl, notes));
+                final String shaFinal = sha256;
+                runOnUiThread(() -> showUpdateDialog(remoteCode, remoteName, apkUrl, notes, shaFinal));
             } catch (Exception e) {
                 android.util.Log.e("FinUpdate", "check failed: " + e.getMessage(), e);
             } finally {
@@ -285,7 +288,7 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private void showUpdateDialog(int code, String name, String apkUrl, String notes) {
+    private void showUpdateDialog(int code, String name, String apkUrl, String notes, String sha256) {
         if (isFinishing() || (Build.VERSION.SDK_INT >= 17 && isDestroyed())) return;
         if (!updateDialogShowing.compareAndSet(false, true)) return;
 
@@ -322,14 +325,14 @@ public class MainActivity extends AppCompatActivity {
                     .putInt(KEY_SKIP_CODE, code)
                     .putLong(KEY_SKIP_UNTIL, System.currentTimeMillis() + 45L * 60L * 1000L)
                     .apply();
-            downloadAndInstall(apkUrl, name);
+            downloadAndInstall(apkUrl, name, sha256);
         });
         dlg.setOnCancelListener(d -> skip.run());
         dlg.show();
     }
 
-    /** Прямое скачивание APK с проверкой ZIP-сигнатуры — без битых файлов DownloadManager. */
-    private void downloadAndInstall(String apkUrl, String versionName) {
+    /** Прямое скачивание APK с проверкой ZIP-сигнатуры и SHA-256 — без битых файлов DownloadManager. */
+    private void downloadAndInstall(String apkUrl, String versionName, String expectedSha256) {
         if (!downloading.compareAndSet(false, true)) return;
         runOnUiThread(() -> {
             try {
@@ -427,6 +430,15 @@ public class MainActivity extends AppCompatActivity {
                     throw new IllegalStateException("Скачанный файл не APK. Возможно, релиз ещё не опубликован.");
                 }
 
+                if (expectedSha256 != null && !expectedSha256.trim().isEmpty()) {
+                    String got = sha256Hex(apk);
+                    if (!expectedSha256.trim().equalsIgnoreCase(got)) {
+                        //noinspection ResultOfMethodCallIgnored
+                        apk.delete();
+                        throw new IllegalStateException("Контрольная сумма APK не совпала. Обновление отменено.");
+                    }
+                }
+
                 runOnUiThread(() -> {
                     try { if (progressDlg != null && progressDlg.isShowing()) progressDlg.dismiss(); } catch (Exception ignored) {}
                     // небольшой delay — иначе на части устройств intent установщика глотается поверх диалога
@@ -453,6 +465,19 @@ public class MainActivity extends AppCompatActivity {
                 downloading.set(false);
             }
         });
+    }
+
+    private static String sha256Hex(File file) throws Exception {
+        MessageDigest md = MessageDigest.getInstance("SHA-256");
+        FileInputStream in = new FileInputStream(file);
+        byte[] buf = new byte[8192];
+        int n;
+        while ((n = in.read(buf)) != -1) md.update(buf, 0, n);
+        in.close();
+        byte[] dig = md.digest();
+        StringBuilder sb = new StringBuilder(dig.length * 2);
+        for (byte b : dig) sb.append(String.format("%02x", b));
+        return sb.toString();
     }
 
     private HttpURLConnection openFollowingRedirects(URL url) throws Exception {

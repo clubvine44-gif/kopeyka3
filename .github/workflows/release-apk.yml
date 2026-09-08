@@ -3,6 +3,9 @@ name: Release Fin APK
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'update.json'
+      - 'README.md'
   workflow_dispatch:
     inputs:
       version_name:
@@ -19,6 +22,7 @@ permissions:
 
 jobs:
   release:
+    if: ${{ github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'Update Fin release manifest') }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -110,6 +114,16 @@ jobs:
           import json,os
           from pathlib import Path
           vn=os.environ['RELEASE_VERSION_NAME']; vc=int(os.environ['RELEASE_VERSION_CODE'])
-          Path('update.json').write_text(json.dumps({'versionCode':vc,'versionName':vn,'apkUrl':f'https://github.com/clubvine44-gif/kopeyka3/releases/download/v{vn}/Fin.apk','notes':f'{vn} — сохранность данных, облако и логика кассы (versionCode {vc})'},ensure_ascii=False,indent=2)+'\n')
+          sha=''
+          p=Path('Fin.apk.sha256')
+          if p.exists():
+              sha=p.read_text(encoding='utf-8').split()[0].strip()
+          Path('update.json').write_text(json.dumps({
+              'versionCode':vc,
+              'versionName':vn,
+              'apkUrl':f'https://github.com/clubvine44-gif/kopeyka3/releases/download/v{vn}/Fin.apk',
+              'sha256':sha,
+              'notes':f'{vn} — касса, облако, сохранность данных (versionCode {vc})'
+          },ensure_ascii=False,indent=2)+'\n')
           PY
           git config user.name 'github-actions[bot]'; git config user.email '41898282+github-actions[bot]@users.noreply.github.com'; git add update.json; git commit -m "Update Fin release manifest to ${RELEASE_VERSION_NAME}" || true; git push origin HEAD:main

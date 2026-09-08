@@ -74,4 +74,61 @@ assert.strictEqual(aug.cash, 10000, 'previous empty month rolls back from anchor
 
 assert.ok(sandbox.window.kopeykaEngine.categories.indexOf('Транспорт') >= 0, 'transport category present');
 
-console.log('logic ok', JSON.stringify({ cash: c.cash, available: c.available, daily: c.daily, debt: c.debtRemaining, octOpen: oct.openingBalance }));
+// Closing a reserve: keep historical ops, add withdraw of remaining saved, mark reserve deleted.
+sandbox.window.STATE.reserves = [
+  { id: 'r1', saved: 0, target: 5000, deleted: true }
+];
+sandbox.window.STATE.reserveOps = [
+  { id: 'o1', amount: 3000, type: 'deposit', date: '2026-09-04' },
+  { id: 'ow', amount: 3000, type: 'withdraw', date: '2026-09-04' }
+];
+sandbox.window.STATE.income = [];
+sandbox.window.STATE.expenses = [];
+sandbox.window.STATE.debts = [];
+sandbox.window.STATE.obligations = [];
+sandbox.window.STATE.obligationPays = [];
+var closed = sandbox.window.kopeykaEngine.month('2026-09');
+assert.strictEqual(closed.cash, 10000, 'closing reserve returns cash');
+assert.strictEqual(closed.reservesTotal, 0, 'deleted reserve not in total');
+
+// Hard-delete of reserveOps (old bug) would inflate cash — ops must stay.
+sandbox.window.STATE.reserveOps = [];
+var stripped = sandbox.window.kopeykaEngine.month('2026-09');
+assert.strictEqual(stripped.cash, 10000, 'no ops → cash equals opening');
+
+sandbox.window.STATE.reserveOps = [
+  { id: 'o1', amount: 3000, type: 'deposit', date: '2026-09-04' }
+];
+sandbox.window.STATE.reserves = [{ id: 'r1', saved: 3000, target: 5000 }];
+var openRes = sandbox.window.kopeykaEngine.month('2026-09');
+assert.strictEqual(openRes.cash, 7000, 'deposit reduces cash');
+assert.strictEqual(openRes.reservesTotal, 3000, 'saved counts');
+
+// Syntax check critical modules
+['app.js', 'cloud.js', 'secure-store.js', 'fin-backup.js', 'engine.js', 'widget.html'].forEach(function (f) {
+  var p = path.join(__dirname, '..', f);
+  assert.ok(fs.existsSync(p), f + ' exists');
+});
+['app.js', 'cloud.js', 'secure-store.js', 'fin-backup.js', 'engine.js'].forEach(function (f) {
+  require('child_process').execFileSync(process.execPath, ['--check', path.join(__dirname, '..', f)]);
+});
+
+var appSrc = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+assert.ok(appSrc.indexOf("softDeleteIn('reserves'") >= 0, 'reserve delete must be soft');
+assert.ok(appSrc.indexOf("softDeleteIn('obligations'") >= 0, 'obligation delete must be soft');
+assert.ok(appSrc.indexOf('cmpMonth(st,cur)>0') >= 0, 'ensureMonth must not fold when clock goes backward');
+assert.ok(appSrc.indexOf('__FIN_LOAD_PENDING') >= 0, 'boot must flag decrypt-in-progress');
+
+var cloudSrc = fs.readFileSync(path.join(__dirname, '..', 'cloud.js'), 'utf8');
+assert.ok(cloudSrc.indexOf('localNotReady') >= 0, 'cloud must wait for local decrypt');
+assert.ok(cloudSrc.indexOf('__FIN_DECRYPT_FAILED') >= 0, 'cloud must not apply over locked blob');
+
+console.log('logic ok', JSON.stringify({
+  cash: c.cash,
+  available: c.available,
+  daily: c.daily,
+  debt: c.debtRemaining,
+  octOpen: oct.openingBalance,
+  closedCash: closed.cash,
+  depositCash: openRes.cash
+}));

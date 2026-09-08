@@ -198,9 +198,9 @@
   }
 
   function saveState(storageKey, stateObj) {
-    // Never overwrite a locked encrypted blob — decrypt failed or crypto missing.
+    // Never overwrite a locked encrypted blob — decrypt failed, still loading, or crypto missing.
     try {
-      if (global.__FIN_DECRYPT_FAILED || global.__FIN_CRYPTO_UNAVAILABLE) {
+      if (global.__FIN_DECRYPT_FAILED || global.__FIN_CRYPTO_UNAVAILABLE || global.__FIN_LOAD_PENDING) {
         return Promise.resolve(false);
       }
       var existing = localStorage.getItem(storageKey);

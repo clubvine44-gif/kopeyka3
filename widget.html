@@ -41,20 +41,29 @@ a.open{display:block;text-align:center;margin-top:10px;color:#E5A75E;font-size:1
   function load(){
     try{
       var raw=localStorage.getItem('kopeyka3_state_v1');
+      if(!raw){
+        try{raw=localStorage.getItem('kopeyka3_state_v1__raw_backup');}catch(e2){}
+      }
       if(!raw)return null;
+      if(String(raw).indexOf('FINENC1:')===0){
+        document.getElementById('cash').textContent='Открой Финну';
+        document.getElementById('sub').textContent='Данные зашифрованы';
+        return null;
+      }
       return JSON.parse(raw);
     }catch(e){return null;}
   }
   function monthOf(d){return String(d||'').slice(0,7);}
+  function alive(x){return !!(x&&!x.deleted);}
   function refresh(){
     var st=load();
-    if(!st){document.getElementById('cash').textContent='Нет данных';return;}
+    if(!st){if(document.getElementById('cash').textContent==='Открой Финну')return;document.getElementById('cash').textContent='Нет данных';return;}
     var month=(st.settings&&st.settings.month)||new Date().toISOString().slice(0,7);
     var open=Number(st.settings&&st.settings.openingBalance||0),inc=0,exp=0,dep=0,wd=0,resT=0;
-    (st.income||[]).forEach(function(i){if(monthOf(i.date)===month)inc+=Number(i.amount||0);});
-    (st.expenses||[]).forEach(function(e){if(monthOf(e.date)===month)exp+=Number(e.amount||0);});
-    (st.reserveOps||[]).forEach(function(o){if(monthOf(o.date)!==month)return;var a=Number(o.amount||0);if(o.type==='deposit')dep+=a;else wd+=a;});
-    (st.reserves||[]).forEach(function(r){resT+=Number(r.saved||0);});
+    (st.income||[]).forEach(function(i){if(!alive(i))return;if(monthOf(i.date)===month)inc+=Number(i.amount||0);});
+    (st.expenses||[]).forEach(function(e){if(!alive(e))return;if(monthOf(e.date)===month)exp+=Number(e.amount||0);});
+    (st.reserveOps||[]).forEach(function(o){if(!alive(o))return;if(monthOf(o.date)!==month)return;var a=Number(o.amount||0);if(o.type==='deposit')dep+=a;else wd+=a;});
+    (st.reserves||[]).forEach(function(r){if(!alive(r))return;resT+=Number(r.saved||0);});
     var cash=open+inc-exp-dep+wd;
     document.getElementById('cash').textContent=fmt(cash);
     document.getElementById('inc').textContent='+'+fmt(inc);
