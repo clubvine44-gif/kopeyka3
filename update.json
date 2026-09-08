@@ -1,6 +1,7 @@
 {
-  "versionCode": 154,
-  "versionName": "4.10.3",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.10.3/Fin.apk",
-  "notes": "4.10.3 — сохранность данных, облако и логика кассы (versionCode 154)"
+  "versionCode": 155,
+  "versionName": "4.10.4",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.10.4/Fin.apk",
+  "sha256": "d04401432a1b2efa019c04c8f67c557694d0ee6fffe45d98c89b7ea9e75bc758",
+  "notes": "4.10.4 — касса, облако, сохранность данных (versionCode 155)"
 }
