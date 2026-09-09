@@ -213,6 +213,8 @@
     return init().then(function () {
       if (!_cryptoKey) {
         try {
+          var existingPlain = localStorage.getItem(storageKey);
+          if (existingPlain && existingPlain.indexOf(ENC_PREFIX) === 0) return false;
           localStorage.setItem(storageKey, plain);
         } catch (e) {}
         return false;
@@ -225,6 +227,8 @@
         return true;
       }).catch(function () {
         try {
+          var existingEnc = localStorage.getItem(storageKey);
+          if (existingEnc && existingEnc.indexOf(ENC_PREFIX) === 0) return false;
           localStorage.setItem(storageKey, plain);
         } catch (e) {}
         return false;

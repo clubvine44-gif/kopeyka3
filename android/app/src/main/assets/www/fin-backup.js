@@ -20,7 +20,8 @@
   function isEmptyState(s) {
     if (!s || typeof s !== 'object') return true;
     var emptyCols = collections().every(function (k) {
-      return !Array.isArray(s[k]) || s[k].length === 0;
+      if (!Array.isArray(s[k])) return true;
+      return !s[k].some(function (x) { return x && !x.deleted; });
     });
     var bal = 0;
     try { bal = Number((s.settings && s.settings.openingBalance) || 0) || 0; } catch (e) {}

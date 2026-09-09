@@ -4,6 +4,22 @@ var assert = require('assert');
 var fs = require('fs');
 var path = require('path');
 var vm = require('vm');
+var ROOT = path.join(__dirname, '..');
+
+function loadEngine(state) {
+  var sandbox = {
+    window: { STATE: state || null },
+    document: {
+      getElementById: function () { return null; },
+      querySelector: function () { return null; }
+    },
+    navigator: { onLine: true }
+  };
+  sandbox.global = sandbox;
+  var src = fs.readFileSync(path.join(ROOT, 'engine.js'), 'utf8');
+  vm.runInNewContext(src, sandbox, { filename: 'engine.js' });
+  return sandbox.window.kopeykaEngine;
+}
 
 var sandbox = {
   window: { STATE: null },
@@ -15,7 +31,7 @@ var sandbox = {
 };
 sandbox.window = sandbox.window;
 sandbox.global = sandbox;
-var src = fs.readFileSync(path.join(__dirname, '..', 'engine.js'), 'utf8');
+var src = fs.readFileSync(path.join(ROOT, 'engine.js'), 'utf8');
 vm.runInNewContext(src, sandbox, { filename: 'engine.js' });
 assert(sandbox.window.kopeykaEngine, 'engine not exported');
 
@@ -104,24 +120,122 @@ var openRes = sandbox.window.kopeykaEngine.month('2026-09');
 assert.strictEqual(openRes.cash, 7000, 'deposit reduces cash');
 assert.strictEqual(openRes.reservesTotal, 3000, 'saved counts');
 
+// Soft-deleted deposit still counted if we accidentally drop the row from the array — keep the op.
+sandbox.window.STATE.reserveOps = [
+  { id: 'o1', amount: 3000, type: 'deposit', date: '2026-09-04' },
+  { id: 'ow', amount: 3000, type: 'withdraw', date: '2026-09-10' }
+];
+sandbox.window.STATE.reserves = [{ id: 'r1', saved: 0, target: 5000, deleted: true }];
+var closed2 = sandbox.window.kopeykaEngine.month('2026-09');
+assert.strictEqual(closed2.cash, 10000, 'withdraw offsets deposit after reserve close');
+
 // Syntax check critical modules
-['app.js', 'cloud.js', 'secure-store.js', 'fin-backup.js', 'engine.js', 'widget.html'].forEach(function (f) {
-  var p = path.join(__dirname, '..', f);
+['app.js', 'cloud.js', 'secure-store.js', 'fin-backup.js', 'engine.js', 'assistant-v2.js', 'assistant.js', 'widget.html'].forEach(function (f) {
+  var p = path.join(ROOT, f);
   assert.ok(fs.existsSync(p), f + ' exists');
 });
-['app.js', 'cloud.js', 'secure-store.js', 'fin-backup.js', 'engine.js'].forEach(function (f) {
-  require('child_process').execFileSync(process.execPath, ['--check', path.join(__dirname, '..', f)]);
+['app.js', 'cloud.js', 'secure-store.js', 'fin-backup.js', 'engine.js', 'assistant-v2.js', 'assistant.js'].forEach(function (f) {
+  require('child_process').execFileSync(process.execPath, ['--check', path.join(ROOT, f)]);
 });
 
-var appSrc = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+var appSrc = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
 assert.ok(appSrc.indexOf("softDeleteIn('reserves'") >= 0, 'reserve delete must be soft');
 assert.ok(appSrc.indexOf("softDeleteIn('obligations'") >= 0, 'obligation delete must be soft');
 assert.ok(appSrc.indexOf('cmpMonth(st,cur)>0') >= 0, 'ensureMonth must not fold when clock goes backward');
 assert.ok(appSrc.indexOf('__FIN_LOAD_PENDING') >= 0, 'boot must flag decrypt-in-progress');
+assert.ok(appSrc.indexOf("STATE.obligationPays=STATE.obligationPays.filter") < 0, 'obligation reset must not hard-delete pays');
+assert.ok(appSrc.indexOf("STATE.expenses=STATE.expenses.filter(function(e){return !(e.obligId") < 0, 'obligation reset must not hard-delete expenses');
+assert.ok(appSrc.indexOf("softDeleteIn('expenses',p.opId") >= 0, 'day-plan clear must soft-delete ops');
 
-var cloudSrc = fs.readFileSync(path.join(__dirname, '..', 'cloud.js'), 'utf8');
+var cloudSrc = fs.readFileSync(path.join(ROOT, 'cloud.js'), 'utf8');
 assert.ok(cloudSrc.indexOf('localNotReady') >= 0, 'cloud must wait for local decrypt');
 assert.ok(cloudSrc.indexOf('__FIN_DECRYPT_FAILED') >= 0, 'cloud must not apply over locked blob');
+assert.ok(cloudSrc.indexOf("if(b&&(l===undefined||r===undefined))") < 0, 'cloud must not tombstone missing-without-tombstone rows');
+
+var asstSrc = fs.readFileSync(path.join(ROOT, 'assistant-v2.js'), 'utf8');
+assert.ok(asstSrc.indexOf("s.reserveOps=s.reserveOps.filter") < 0, 'assistant must not strip reserveOps');
+assert.ok(asstSrc.indexOf('function softDel') >= 0, 'assistant must soft-delete');
+assert.ok(asstSrc.indexOf("type:'withdraw'") >= 0, 'assistant reserve delete must return cash');
+
+var storeSrc = fs.readFileSync(path.join(ROOT, 'secure-store.js'), 'utf8');
+assert.ok(storeSrc.indexOf('existingPlain') >= 0 || storeSrc.indexOf('existingEnc') >= 0, 'must not overwrite ciphertext with plaintext');
+
+var gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle'), 'utf8');
+assert.ok(/versionCode\s+156/.test(gradle), 'versionCode 156');
+assert.ok(/versionName\s+"4\.10\.5"/.test(gradle), 'versionName 4.10.5');
+
+var mainJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/MainActivity.java'), 'utf8');
+assert.ok(mainJava.indexOf('empty sha256') >= 0, 'auto-update requires sha256');
+assert.ok(mainJava.indexOf('if (expectedSha256 == null || expectedSha256.trim().isEmpty())') >= 0, 'install requires sha256');
+
+// Cloud three-way merge: missing-without-tombstone must KEEP the present copy.
+var cloudSandbox = {
+  window: {
+    defaultState: function () {
+      return {
+        version: 6,
+        settings: { openingBalance: 0, month: '', dayRate: 0, nightRate: 0 },
+        income: [], expenses: [], reserves: [], debts: [], reserveOps: [],
+        obligations: [], obligationPays: [], shiftsOverride: {}, dayPlans: {}, voiceMap: {}
+      };
+    },
+    addEventListener: function () {},
+    STATE: null
+  },
+  document: {
+    readyState: 'loading',
+    addEventListener: function () {},
+    getElementById: function () { return null; },
+    createElement: function () { return { textContent: '', onload: null, onerror: null }; },
+    head: { appendChild: function () {} },
+    body: { appendChild: function () {} }
+  },
+  navigator: { onLine: true },
+  localStorage: {
+    _d: {},
+    getItem: function (k) { return this._d[k] || null; },
+    setItem: function (k, v) { this._d[k] = String(v); },
+    removeItem: function (k) { delete this._d[k]; }
+  },
+  console: console,
+  setTimeout: setTimeout,
+  setInterval: setInterval,
+  clearTimeout: clearTimeout,
+  clearInterval: clearInterval,
+  Promise: Promise,
+  Date: Date,
+  Number: Number,
+  Object: Object,
+  Array: Array,
+  JSON: JSON,
+  Error: Error,
+  Math: Math
+};
+cloudSandbox.window = Object.assign(cloudSandbox.window, { localStorage: cloudSandbox.localStorage });
+cloudSandbox.global = cloudSandbox;
+vm.runInNewContext(cloudSrc, cloudSandbox, { filename: 'cloud.js' });
+assert(cloudSandbox.window.kopeykaCloud, 'cloud not exported');
+assert.strictEqual(typeof cloudSandbox.window.kopeykaCloud.threeWay, 'function', 'threeWay exported');
+
+var base = {
+  settings: { openingBalance: 10000, month: '2026-09' },
+  income: [], expenses: [], reserves: [{ id: 'r1', saved: 3000, target: 5000 }],
+  debts: [], reserveOps: [{ id: 'o1', amount: 3000, type: 'deposit', date: '2026-09-04' }],
+  obligations: [], obligationPays: []
+};
+var localKeep = JSON.parse(JSON.stringify(base));
+var remoteMissingOps = JSON.parse(JSON.stringify(base));
+remoteMissingOps.reserveOps = []; // stale cloud, no tombstone
+var merged = cloudSandbox.window.kopeykaCloud.threeWay(base, localKeep, remoteMissingOps);
+assert.strictEqual(merged.reserveOps.length, 1, 'stale cloud must not drop local reserveOps');
+assert.strictEqual(merged.reserveOps[0].id, 'o1');
+
+var localTomb = JSON.parse(JSON.stringify(base));
+localTomb.reserveOps = [];
+localTomb._deleted = { reserveOps: { o1: Date.now() } };
+var remoteStill = JSON.parse(JSON.stringify(base));
+var mergedDel = cloudSandbox.window.kopeykaCloud.threeWay(base, localTomb, remoteStill);
+assert.ok(!(mergedDel.reserveOps || []).some(function (x) { return x && x.id === 'o1'; }), 'explicit tombstone still wins');
 
 console.log('logic ok', JSON.stringify({
   cash: c.cash,
@@ -130,5 +244,7 @@ console.log('logic ok', JSON.stringify({
   debt: c.debtRemaining,
   octOpen: oct.openingBalance,
   closedCash: closed.cash,
-  depositCash: openRes.cash
+  depositCash: openRes.cash,
+  closed2: closed2.cash,
+  mergeKeptOps: merged.reserveOps.length
 }));

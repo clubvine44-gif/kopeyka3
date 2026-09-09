@@ -116,7 +116,7 @@ public class MainActivity extends AppCompatActivity {
         s.setBuiltInZoomControls(false);
         s.setDisplayZoomControls(false);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
-        s.setUserAgentString(s.getUserAgentString() + " FinApp/2.9.0");
+        s.setUserAgentString(s.getUserAgentString() + " FinApp/4.10.5");
         webView.addJavascriptInterface(new FinBridge(this), "FinBridge");
         final WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
@@ -265,6 +265,10 @@ public class MainActivity extends AppCompatActivity {
                 int localCode = getPackageManager().getPackageInfo(getPackageName(), 0).versionCode;
 
                 if (remoteCode <= localCode || apkUrl.isEmpty()) return;
+                if (sha256 == null || sha256.trim().isEmpty()) {
+                    android.util.Log.w("FinUpdate", "skip: empty sha256");
+                    return;
+                }
 
                 SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
                 int skipCode = prefs.getInt(KEY_SKIP_CODE, 0);
@@ -430,13 +434,14 @@ public class MainActivity extends AppCompatActivity {
                     throw new IllegalStateException("Скачанный файл не APK. Возможно, релиз ещё не опубликован.");
                 }
 
-                if (expectedSha256 != null && !expectedSha256.trim().isEmpty()) {
-                    String got = sha256Hex(apk);
-                    if (!expectedSha256.trim().equalsIgnoreCase(got)) {
-                        //noinspection ResultOfMethodCallIgnored
-                        apk.delete();
-                        throw new IllegalStateException("Контрольная сумма APK не совпала. Обновление отменено.");
-                    }
+                if (expectedSha256 == null || expectedSha256.trim().isEmpty()) {
+                    throw new IllegalStateException("Нет контрольной суммы обновления. Установка отменена.");
+                }
+                String got = sha256Hex(apk);
+                if (!expectedSha256.trim().equalsIgnoreCase(got)) {
+                    //noinspection ResultOfMethodCallIgnored
+                    apk.delete();
+                    throw new IllegalStateException("Контрольная сумма APK не совпала. Обновление отменено.");
                 }
 
                 runOnUiThread(() -> {

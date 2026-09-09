@@ -1308,8 +1308,24 @@ function describe(a){
 
 function clone(){return JSON.parse(JSON.stringify(window.STATE||{}));}
 function save(s){if(typeof window.setAppState!=='function')throw Error('Финна ещё не готова');window.setAppState(s);}
+function liveList(list){return (list||[]).filter(function(x){return x&&!x.deleted;});}
+function tomb(s,collection,id){
+  if(!s._deleted||typeof s._deleted!=='object')s._deleted={};
+  if(!s._deleted[collection]||typeof s._deleted[collection]!=='object')s._deleted[collection]={};
+  s._deleted[collection][String(id)]=Date.now();
+}
+function softDel(s,collection,id){
+  var arr=s[collection]||[];
+  var row=arr.find(function(x){return x&&x.id===id;});
+  if(!row||row.deleted)return null;
+  row.deleted=true;
+  row.deletedAt=new Date().toISOString();
+  tomb(s,collection,id);
+  return row;
+}
 function stem(s){var q=norm(s);return q.replace(/(иями|ами|ями|ого|ему|ому|ыми|ими|ее|ие|ые|ое|ей|ий|ый|ой|ем|ом|ам|ям|ах|ях|ою|ею|у|ю|а|я|ы|и|е|о)$/,'');}
 function find(list,name,amount){
+  list=liveList(list);
   var q=norm(name||''),st=stem(q),e;
   if(q)e=list.find(function(x){return norm(x.name)===q;});if(e)return e;
   if(q)e=list.find(function(x){var a=norm(x.name);return a.indexOf(q)!==-1||q.indexOf(a)!==-1;});if(e)return e;
@@ -1340,20 +1356,24 @@ function execute(a){
     s.reserveOps.push({id:id(),reserveId:r.id,type:t==='reserve_deposit'?'deposit':'withdraw',amount:amt,date:dateOf(a)});
   }
   else if(t==='add_obligation'){if(amt<=0)throw Error('Сумма > 0');var day=n(a.day||25);if(day<1||day>31)throw Error('День 1–31');s.obligations.push({id:id(),name:String(a.name||'Платёж'),amount:amt,day:day,active:true});}
-  else if(t==='delete_debt'){d=find(s.debts,a.name,0);if(!d)throw Error('Долг не найден: '+(a.name||'')+'. Есть: '+(s.debts.map(function(x){return x.name;}).join(', ')||'нет'));s.debts=s.debts.filter(function(x){return x.id!==d.id;});}
-  else if(t==='delete_reserve'){r=find(s.reserves,a.name||a.reserve,0);if(!r)throw Error('Резерв не найден');s.reserves=s.reserves.filter(function(x){return x.id!==r.id;});s.reserveOps=s.reserveOps.filter(function(x){return x.reserveId!==r.id;});}
-  else if(t==='delete_obligation'){o=find(s.obligations,a.name,a.amount);if(!o)throw Error('Обязательный не найден');s.obligations=s.obligations.filter(function(x){return x.id!==o.id;});s.obligationPays=s.obligationPays.filter(function(x){return x.obligId!==o.id;});}
-  else if(t==='delete_expense'){var q=norm(a.name||'');idx=-1;for(var i=s.expenses.length-1;i>=0;i--){if(!q||norm(s.expenses[i].note||s.expenses[i].category).indexOf(q)!==-1){idx=i;break;}}if(idx<0)throw Error('Расход не найден');s.expenses.splice(idx,1);}
-  else if(t==='delete_income'){var qi=norm(a.name||'');idx=-1;for(var j=s.income.length-1;j>=0;j--){if(!qi||norm(s.income[j].note).indexOf(qi)!==-1){idx=j;break;}}if(idx<0)throw Error('Доход не найден');s.income.splice(idx,1);}
+  else if(t==='delete_debt'){d=find(s.debts,a.name,0);if(!d)throw Error('Долг не найден: '+(a.name||'')+'. Есть: '+(liveList(s.debts).map(function(x){return x.name;}).join(', ')||'нет'));softDel(s,'debts',d.id);}
+  else if(t==='delete_reserve'){r=find(s.reserves,a.name||a.reserve,0);if(!r)throw Error('Резерв не найден');var back=n(r.saved);if(back>0){r.saved=0;s.reserveOps.push({id:id(),reserveId:r.id,type:'withdraw',amount:back,date:dateOf(a)});}softDel(s,'reserves',r.id);}
+  else if(t==='delete_obligation'){o=find(s.obligations,a.name,a.amount);if(!o)throw Error('Обязательный не найден');softDel(s,'obligations',o.id);}
+  else if(t==='delete_expense'){var q=norm(a.name||'');idx=-1;for(var i=s.expenses.length-1;i>=0;i--){if(s.expenses[i]&&s.expenses[i].deleted)continue;if(!q||norm(s.expenses[i].note||s.expenses[i].category).indexOf(q)!==-1){idx=i;break;}}if(idx<0)throw Error('Расход не найден');softDel(s,'expenses',s.expenses[idx].id);}
+  else if(t==='delete_income'){var qi=norm(a.name||'');idx=-1;for(var j=s.income.length-1;j>=0;j--){if(s.income[j]&&s.income[j].deleted)continue;if(!qi||norm(s.income[j].note).indexOf(qi)!==-1){idx=j;break;}}if(idx<0)throw Error('Доход не найден');softDel(s,'income',s.income[idx].id);}
   else if(t==='delete_last'){
     var removed=false, last=s.lastOp||null;
-    function newest(arr){if(!arr||!arr.length)return null;var best=null;for(var i=0;i<arr.length;i++){var x=arr[i];if(!x)continue;if(!best){best=x;continue;}var xd=String(x.date||''),bd=String(best.date||'');if(xd>bd||(xd===bd&&String(x.id||'')>String(best.id||'')))best=x;}return best;}
+    function newest(arr){if(!arr||!arr.length)return null;var best=null;for(var i=0;i<arr.length;i++){var x=arr[i];if(!x||x.deleted)continue;if(!best){best=x;continue;}var xd=String(x.date||''),bd=String(best.date||'');if(xd>bd||(xd===bd&&String(x.id||'')>String(best.id||'')))best=x;}return best;}
     if(last&&last.id&&last.kind){
-      if(last.kind==='expense'){var be=s.expenses.length;s.expenses=s.expenses.filter(function(x){return x.id!==last.id;});removed=s.expenses.length<be;}
-      else if(last.kind==='income'){var bi=s.income.length;s.income=s.income.filter(function(x){return x.id!==last.id;});removed=s.income.length<bi;}
-      else if(last.kind==='debt'){var bd=s.debts.length;s.debts=s.debts.filter(function(x){return x.id!==last.id;});removed=s.debts.length<bd;}
-      else if(last.kind==='reserve'){var br=s.reserves.length;s.reserves=s.reserves.filter(function(x){return x.id!==last.id;});s.reserveOps=(s.reserveOps||[]).filter(function(x){return x.reserveId!==last.id;});removed=s.reserves.length<br;}
-      else if(last.kind==='obligation'){var bo=s.obligations.length;s.obligations=s.obligations.filter(function(x){return x.id!==last.id;});removed=s.obligations.length<bo;}
+      if(last.kind==='expense')removed=!!softDel(s,'expenses',last.id);
+      else if(last.kind==='income')removed=!!softDel(s,'income',last.id);
+      else if(last.kind==='debt')removed=!!softDel(s,'debts',last.id);
+      else if(last.kind==='reserve'){
+        var rr=(s.reserves||[]).find(function(x){return x&&x.id===last.id;});
+        if(rr&&!rr.deleted){var rb=n(rr.saved);if(rb>0){rr.saved=0;s.reserveOps.push({id:id(),reserveId:rr.id,type:'withdraw',amount:rb,date:dateOf(a)});}}
+        removed=!!softDel(s,'reserves',last.id);
+      }
+      else if(last.kind==='obligation')removed=!!softDel(s,'obligations',last.id);
       s.lastOp=null;
     }
     if(!removed){
@@ -1367,12 +1387,12 @@ function execute(a){
         else if(ni){pick=ni;kind='income';}
       }
       if(!pick)throw Error('Нечего удалять');
-      if(kind==='expense')s.expenses=s.expenses.filter(function(x){return x.id!==pick.id;});
-      else s.income=s.income.filter(function(x){return x.id!==pick.id;});
+      if(kind==='expense')softDel(s,'expenses',pick.id);
+      else softDel(s,'income',pick.id);
       s.lastOp=null;
     }
   }
-  else if(t==='change_last'){var target2=a.target||'expense',arr=target2==='income'?s.income:s.expenses;if(!arr.length)throw Error('Нет операции');if(amt<=0)throw Error('Сумма > 0');arr[arr.length-1].amount=amt;if(a.name)arr[arr.length-1].note=String(a.name);}
+  else if(t==='change_last'){var target2=a.target||'expense',arr=target2==='income'?s.income:s.expenses;var lastLive=null;for(var ci=arr.length-1;ci>=0;ci--){if(arr[ci]&&!arr[ci].deleted){lastLive=arr[ci];break;}}if(!lastLive)throw Error('Нет операции');if(amt<=0)throw Error('Сумма > 0');lastLive.amount=amt;if(a.name)lastLive.note=String(a.name);}
   else if(t==='set_opening_balance'){s.settings=s.settings||{};s.settings.openingBalance=amt;}
   else if(t==='set_day_rate'){s.settings=s.settings||{};s.settings.dayRate=amt;}
   else if(t==='set_night_rate'){s.settings=s.settings||{};s.settings.nightRate=amt;}

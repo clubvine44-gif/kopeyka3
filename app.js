@@ -1,4 +1,4 @@
-(function(){/* v115 */'use strict';
+(function(){/* v116 */'use strict';
 var KEY='kopeyka3_state_v1',ANCHOR='2026-08-17',CYCLE=['day','day','night','night','off','off'];
 var CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье','Прочее'];
 var BUDGET_CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
@@ -528,7 +528,12 @@ var manualL=STATE.settings&&STATE.settings.manualDailyLimit;
 if(manualL!=null&&manualL!==''&&isFinite(Number(manualL)))daily=Math.max(0,Math.round(Number(manualL)));
 var spentTodayCalc=0;
 var td=today();
-(STATE.expenses||[]).forEach(function(e){if(e.deleted)return;if(e.date===td)spentTodayCalc+=num(e.amount);});
+(STATE.expenses||[]).forEach(function(e){
+  if(e.deleted)return;
+  if(e.date!==td)return;
+  if(e.category==='Долг'||e.category==='Обязательные')return;
+  spentTodayCalc+=num(e.amount);
+});
 var by={};
 (STATE.expenses||[]).forEach(function(e){
   if(e.deleted)return;
@@ -968,8 +973,8 @@ function dayPlanEditor(ds, onDone){
       pushUndo();
       (STATE.dayPlans[ds]||[]).forEach(function(p){
         if(!p||!p.opId)return;
-        STATE.expenses=(STATE.expenses||[]).filter(function(e){return e.id!==p.opId;});
-        STATE.income=(STATE.income||[]).filter(function(e){return e.id!==p.opId;});
+        softDeleteIn('expenses',p.opId,'expense');
+        softDeleteIn('income',p.opId,'income');
         if(p.type==='debt'&&p.debtId){
           var dd=(STATE.debts||[]).find(function(x){return x.id===p.debtId;});
           if(dd){dd.paid=Math.max(0,num(dd.paid)-num(p.amount));}
@@ -1593,7 +1598,7 @@ if(!window.__FIN_PERF&&c.available>0&&c.daysLeft>1){
 var homeHtml = '';
 
 // ===== Доп. данные для главного экрана =====
-var spentToday=0;(STATE.expenses||[]).forEach(function(e){if(e.deleted)return;if(e.date===t)spentToday+=num(e.amount);});
+var spentToday=0;(STATE.expenses||[]).forEach(function(e){if(e.deleted)return;if(e.date!==t)return;if(e.category==='Долг'||e.category==='Обязательные')return;spentToday+=num(e.amount);});
 var nearestObl = [];
 (STATE.obligations||[]).forEach(function(ob){
   if(!alive(ob)||ob.active===false)return;
@@ -2296,7 +2301,7 @@ if(k==='debt'){var d=STATE.debts.find(function(i){return i.id===id;});if(!d)retu
   });
 });return;}
 if(k==='obl'){var ob=STATE.obligations.find(function(i){return i.id===id;});if(!ob)return;
-if(t.dataset.paid==='1'){appConfirm('Сбросить оплату «'+ob.name+'» за этот месяц?','Сброс оплаты').then(function(ok){if(!ok)return;pushUndo();STATE.obligationPays=STATE.obligationPays.filter(function(p){return !(p.obligId===id&&p.month===month);});STATE.expenses=STATE.expenses.filter(function(e){return !(e.obligId===id&&inMonth(e.date,month));});save(true);render();toast('Оплата сброшена');});return;}
+if(t.dataset.paid==='1'){appConfirm('Сбросить оплату «'+ob.name+'» за этот месяц?','Сброс оплаты').then(function(ok){if(!ok)return;pushUndo();(STATE.obligationPays||[]).forEach(function(p){if(!p||p.deleted)return;if(p.obligId===id&&p.month===month){p.deleted=true;p.deletedAt=new Date().toISOString();tombstone('obligationPays',p.id);}});(STATE.expenses||[]).forEach(function(e){if(!e||e.deleted)return;if(e.obligId===id&&inMonth(e.date,month)){e.deleted=true;e.deletedAt=new Date().toISOString();tombstone('expenses',e.id);}});save(true);render();toast('Оплата сброшена');});return;}
 appChoice('«'+ob.name+'»',['Оплачено','Частичная оплата','Изменить','Удалить'],'Платёж').then(function(act){if(act===null)return;
 if(act===3){appConfirm('Удалить?','Удалить').then(function(ok){if(!ok)return;pushUndo();softDeleteIn('obligations',id,'obligation',ob.name);save(true);render();toast('Удалено');});}
 else if(act===2){appPrompt('Название',ob.name,'Изменить').then(function(nn){if(nn===null)return;appPrompt('Сумма',String(ob.amount),'Сумма').then(function(aa){appPrompt('День 1–31',String(ob.day),'День').then(function(dd){aa=num(aa);dd=num(dd);if(aa>0&&dd>=1&&dd<=31){pushUndo();ob.name=nn;ob.amount=aa;ob.day=dd;save(true);render();toast('Обновлено');}});});});}

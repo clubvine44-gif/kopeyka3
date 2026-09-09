@@ -198,9 +198,9 @@
   }
 
   function saveState(storageKey, stateObj) {
-    // Never overwrite a locked encrypted blob — decrypt failed or crypto missing.
+    // Never overwrite a locked encrypted blob — decrypt failed, still loading, or crypto missing.
     try {
-      if (global.__FIN_DECRYPT_FAILED || global.__FIN_CRYPTO_UNAVAILABLE) {
+      if (global.__FIN_DECRYPT_FAILED || global.__FIN_CRYPTO_UNAVAILABLE || global.__FIN_LOAD_PENDING) {
         return Promise.resolve(false);
       }
       var existing = localStorage.getItem(storageKey);
@@ -213,6 +213,8 @@
     return init().then(function () {
       if (!_cryptoKey) {
         try {
+          var existingPlain = localStorage.getItem(storageKey);
+          if (existingPlain && existingPlain.indexOf(ENC_PREFIX) === 0) return false;
           localStorage.setItem(storageKey, plain);
         } catch (e) {}
         return false;
@@ -225,6 +227,8 @@
         return true;
       }).catch(function () {
         try {
+          var existingEnc = localStorage.getItem(storageKey);
+          if (existingEnc && existingEnc.indexOf(ENC_PREFIX) === 0) return false;
           localStorage.setItem(storageKey, plain);
         } catch (e) {}
         return false;

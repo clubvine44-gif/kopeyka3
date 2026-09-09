@@ -99,7 +99,7 @@ jobs:
           "$BUILD_TOOLS/zipalign" -c -p -v 4 Fin.apk; "$BUILD_TOOLS/apksigner" verify --verbose Fin.apk
           unzip -l Fin.apk | grep -E 'assets/www/(fin-plan|fin-core|fin-design|engine)\.js' | tee packaged-fin-assets.txt
           for f in fin-plan fin-core fin-design engine; do test "$(grep -c "assets/www/$f.js" packaged-fin-assets.txt)" -eq 1; done
-          node --check fin-plan.js; node --check fin-core.js; node --check fin-design.js; node --check engine.js; node --check cloud.js; node --check app.js; node --check secure-store.js; node --check fin-backup.js
+          node --check fin-plan.js; node --check fin-core.js; node --check fin-design.js; node --check engine.js; node --check cloud.js; node --check app.js; node --check secure-store.js; node --check fin-backup.js; node --check assistant-v2.js; node tools/check-logic.cjs
           sha256sum Fin.apk | tee Fin.apk.sha256; ls -lh Fin.apk Fin.apk.sha256
       - name: Publish GitHub Release
         env:
