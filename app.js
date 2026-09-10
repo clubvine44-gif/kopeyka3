@@ -1482,7 +1482,9 @@ function showSettings(){
         if(el){
           var parts=[];
           parts.push('снимков: '+(st.slots||0));
-          if(st.lastExportDay)parts.push('файл: '+st.lastExportDay);
+          if(st.folder)parts.push(st.folder);
+          if(st.lastExportDay)parts.push('день: '+st.lastExportDay);
+          if(st.lastLatestAt)parts.push('latest: ок');
           if(st.cloudLoggedIn)parts.push('облако: ок');
           else parts.push('облако: выкл');
           el.textContent=parts.join(' · ');
@@ -2619,7 +2621,7 @@ function boot(){
           if(recovered&&hasLiveData(recovered)){
             STATE=norm(recovered);
             try{save(true);}catch(e){}
-            setTimeout(function(){toast('Восстановлено из локального снимка');},800);
+            setTimeout(function(){toast('Восстановлены данные из аварийной копии (полный снимок)');},800);
           }
         }
       }catch(e){}

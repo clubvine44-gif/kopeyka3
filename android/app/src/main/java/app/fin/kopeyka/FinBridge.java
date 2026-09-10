@@ -25,6 +25,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.lang.ref.WeakReference;
@@ -246,6 +247,212 @@ public class FinBridge {
 
     @JavascriptInterface public String getBackupFolderHint() {
         return "Загрузки / Finna";
+    }
+
+    /** Создаёт Загрузки/Finna + приватную копию и README. */
+    @JavascriptInterface public void ensureBackupFolder() {
+        try {
+            File priv = context.getExternalFilesDir("FinnaBackup");
+            if (priv == null) priv = new File(context.getFilesDir(), "FinnaBackup");
+            if (!priv.exists()) priv.mkdirs();
+        } catch (Exception ignored) {}
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // README через MediaStore один раз
+                String readme = emergencyReadmeText();
+                android.database.Cursor cur = context.getContentResolver().query(
+                        MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                        new String[]{MediaStore.Downloads._ID},
+                        MediaStore.Downloads.DISPLAY_NAME + "=? AND " + MediaStore.Downloads.RELATIVE_PATH + " LIKE ?",
+                        new String[]{"README-Finna.txt", "%/Finna/%"},
+                        null);
+                boolean exists = false;
+                if (cur != null) {
+                    exists = cur.moveToFirst();
+                    cur.close();
+                }
+                if (!exists) {
+                    ContentValues cv = new ContentValues();
+                    cv.put(MediaStore.Downloads.DISPLAY_NAME, "README-Finna.txt");
+                    cv.put(MediaStore.Downloads.MIME_TYPE, "text/plain");
+                    cv.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Finna");
+                    cv.put(MediaStore.Downloads.IS_PENDING, 1);
+                    Uri uri = context.getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv);
+                    if (uri != null) {
+                        OutputStream out = context.getContentResolver().openOutputStream(uri);
+                        if (out != null) {
+                            out.write(readme.getBytes(StandardCharsets.UTF_8));
+                            out.close();
+                        }
+                        cv.clear();
+                        cv.put(MediaStore.Downloads.IS_PENDING, 0);
+                        context.getContentResolver().update(uri, cv, null, null);
+                    }
+                }
+            } else {
+                File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Finna");
+                if (!dir.exists()) dir.mkdirs();
+                File rf = new File(dir, "README-Finna.txt");
+                if (!rf.exists()) {
+                    FileOutputStream out = new FileOutputStream(rf);
+                    out.write(emergencyReadmeText().getBytes(StandardCharsets.UTF_8));
+                    out.close();
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private String emergencyReadmeText() {
+        return "ПАПКА АВАРИЙНОГО ВОССТАНОВЛЕНИЯ ФИННЫ\n"
+                + "=====================================\n\n"
+                + "Сюда приложение само сохраняет полные копии всех данных.\n\n"
+                + "Файлы:\n"
+                + "  finna-latest.json  — самый свежий полный снимок (обновляется часто)\n"
+                + "  finna-day-ГГГГ-ММ-ДД.json — снимок за день\n"
+                + "  finna-month-ГГГГ-ММ.json — снимок на начало месяца\n\n"
+                + "ВАЖНО: каждый JSON — это ПОЛНАЯ копия данных на момент сохранения\n"
+                + "(доходы, расходы, долги, резервы, настройки, касса).\n"
+                + "При восстановлении подставляется целиком этот снимок, а не «свалка» кусков.\n\n"
+                + "После переустановки приложения Финна может подхватить finna-latest.json сама,\n"
+                + "если локальные данные пустые. Также: Настройки → восстановить из файла / импорт JSON.\n\n"
+                + "Не удаляйте эту папку, если хотите иметь запасной выход на полгода вперёд.\n";
+    }
+
+    /** Список JSON-бэкапов (приватная папка + Загрузки/Finna). JSON-массив строк. */
+    @JavascriptInterface public String listBackupFiles() {
+        org.json.JSONArray arr = new org.json.JSONArray();
+        java.util.LinkedHashSet<String> seen = new java.util.LinkedHashSet<>();
+        try {
+            File priv = context.getExternalFilesDir("FinnaBackup");
+            if (priv == null) priv = new File(context.getFilesDir(), "FinnaBackup");
+            if (priv.exists()) {
+                File[] files = priv.listFiles();
+                if (files != null) {
+                    java.util.Arrays.sort(files, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+                    for (File f : files) {
+                        if (f == null || !f.isFile()) continue;
+                        String name = f.getName();
+                        if (!name.toLowerCase().endsWith(".json")) continue;
+                        if (!seen.add(name)) continue;
+                        org.json.JSONObject o = new org.json.JSONObject();
+                        o.put("name", name);
+                        o.put("size", f.length());
+                        o.put("modified", f.lastModified());
+                        o.put("source", "private");
+                        arr.put(o);
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                android.database.Cursor cur = context.getContentResolver().query(
+                        MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                        new String[]{
+                                MediaStore.Downloads.DISPLAY_NAME,
+                                MediaStore.Downloads.SIZE,
+                                MediaStore.Downloads.DATE_MODIFIED
+                        },
+                        MediaStore.Downloads.RELATIVE_PATH + " LIKE ? AND " + MediaStore.Downloads.DISPLAY_NAME + " LIKE ?",
+                        new String[]{"%/Finna/%", "%.json"},
+                        MediaStore.Downloads.DATE_MODIFIED + " DESC");
+                if (cur != null) {
+                    while (cur.moveToNext()) {
+                        String name = cur.getString(0);
+                        if (name == null || !seen.add(name)) continue;
+                        org.json.JSONObject o = new org.json.JSONObject();
+                        o.put("name", name);
+                        o.put("size", cur.getLong(1));
+                        o.put("modified", cur.getLong(2) * 1000L);
+                        o.put("source", "downloads");
+                        arr.put(o);
+                    }
+                    cur.close();
+                }
+            } else {
+                File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Finna");
+                if (dir.exists()) {
+                    File[] files = dir.listFiles();
+                    if (files != null) {
+                        java.util.Arrays.sort(files, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+                        for (File f : files) {
+                            if (f == null || !f.isFile()) continue;
+                            String name = f.getName();
+                            if (!name.toLowerCase().endsWith(".json")) continue;
+                            if (!seen.add(name)) continue;
+                            org.json.JSONObject o = new org.json.JSONObject();
+                            o.put("name", name);
+                            o.put("size", f.length());
+                            o.put("modified", f.lastModified());
+                            o.put("source", "downloads");
+                            arr.put(o);
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+        return arr.toString();
+    }
+
+    /** Читает JSON бэкапа по имени файла (сначала приватная папка, потом Загрузки/Finna). */
+    @JavascriptInterface public String readBackupFile(String filename) {
+        if (filename == null) return "";
+        filename = filename.replace("\\", "/");
+        int slash = filename.lastIndexOf('/');
+        if (slash >= 0) filename = filename.substring(slash + 1);
+        if (filename.isEmpty()) return "";
+        // private
+        try {
+            File priv = context.getExternalFilesDir("FinnaBackup");
+            if (priv == null) priv = new File(context.getFilesDir(), "FinnaBackup");
+            File f = new File(priv, filename);
+            if (f.exists() && f.isFile()) {
+                byte[] b = new byte[(int) f.length()];
+                java.io.FileInputStream in = new java.io.FileInputStream(f);
+                int n = in.read(b);
+                in.close();
+                if (n > 0) return new String(b, 0, n, StandardCharsets.UTF_8);
+            }
+        } catch (Exception ignored) {}
+        // public Downloads/Finna
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                android.database.Cursor cur = context.getContentResolver().query(
+                        MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                        new String[]{MediaStore.Downloads._ID},
+                        MediaStore.Downloads.DISPLAY_NAME + "=? AND " + MediaStore.Downloads.RELATIVE_PATH + " LIKE ?",
+                        new String[]{filename, "%/Finna/%"},
+                        null);
+                if (cur != null) {
+                    if (cur.moveToFirst()) {
+                        long id = cur.getLong(0);
+                        Uri uri = Uri.withAppendedPath(MediaStore.Downloads.EXTERNAL_CONTENT_URI, String.valueOf(id));
+                        InputStream in = context.getContentResolver().openInputStream(uri);
+                        if (in != null) {
+                            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+                            byte[] buf = new byte[8192];
+                            int n;
+                            while ((n = in.read(buf)) != -1) bos.write(buf, 0, n);
+                            in.close();
+                            cur.close();
+                            return new String(bos.toByteArray(), StandardCharsets.UTF_8);
+                        }
+                    }
+                    cur.close();
+                }
+            } else {
+                File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Finna");
+                File f = new File(dir, filename);
+                if (f.exists()) {
+                    byte[] b = new byte[(int) f.length()];
+                    java.io.FileInputStream in = new java.io.FileInputStream(f);
+                    int n = in.read(b);
+                    in.close();
+                    if (n > 0) return new String(b, 0, n, StandardCharsets.UTF_8);
+                }
+            }
+        } catch (Exception ignored) {}
+        return "";
     }
 
     private void writeFinnaBackupFile(String json, String filename) {

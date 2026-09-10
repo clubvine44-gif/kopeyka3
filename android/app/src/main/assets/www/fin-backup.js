@@ -1,5 +1,6 @@
 /**
  * FinBackup — multi-layer safety net for Finna.
+ * Public folder: Downloads/Finna (finna-latest + day + month full snapshots).
  * Public folder: Download/Finna (latest + daily + monthly FULL state snapshots).
  */
 (function (global) {
@@ -162,6 +163,14 @@
   }
   function onSave(stateObj) {
     if (!stateObj || isEmptyState(stateObj)) return;
+    try {
+      if (global.FinBridge && typeof global.FinBridge.ensureBackupFolder === 'function') {
+        if (!onSave._folderOk) {
+          global.FinBridge.ensureBackupFolder();
+          onSave._folderOk = true;
+        }
+      }
+    } catch (e) {}
     var now = Date.now();
     var meta = readMeta();
     var items = countItems(stateObj);
@@ -192,6 +201,44 @@
     }
     writeMeta(meta);
   }
+    function readNativeBackup(filename) {
+    try {
+      if (!global.FinBridge || typeof global.FinBridge.readBackupFile !== 'function') return null;
+      var raw = global.FinBridge.readBackupFile(filename);
+      if (!raw || raw.length < 8) return null;
+      var st = parseBackupPayload(raw);
+      if (st && !isEmptyState(st)) return st;
+    } catch (e) {}
+    return null;
+  }
+  function restoreFromEmergencyFolder() {
+    // 1) latest
+    var st = readNativeBackup(LAST_JSON_NAME);
+    if (st) return st;
+    // 2) pick best from listed files by itemCount / date in name
+    try {
+      if (!global.FinBridge || typeof global.FinBridge.listBackupFiles !== 'function') return null;
+      var list = JSON.parse(global.FinBridge.listBackupFiles() || '[]');
+      if (!Array.isArray(list) || !list.length) return null;
+      // prefer finna-latest, then day, then month, by modified desc already
+      var names = list.map(function (x) { return x && x.name; }).filter(Boolean);
+      var order = names.slice().sort(function (a, b) {
+        var sa = a === LAST_JSON_NAME ? 0 : /^finna-day-/.test(a) ? 1 : /^finna-month-/.test(a) ? 2 : 3;
+        var sb = b === LAST_JSON_NAME ? 0 : /^finna-day-/.test(b) ? 1 : /^finna-month-/.test(b) ? 2 : 3;
+        if (sa !== sb) return sa - sb;
+        return String(b).localeCompare(String(a));
+      });
+      var bestState = null, bestCount = -1;
+      for (var i = 0; i < order.length; i++) {
+        var cand = readNativeBackup(order[i]);
+        if (!cand) continue;
+        var c = countItems(cand);
+        if (c > bestCount) { bestCount = c; bestState = cand; }
+      }
+      return bestState;
+    } catch (e) {}
+    return null;
+  }
   function restoreBest() {
     var best = bestSlot();
     if (best && best.state) return best.state;
@@ -201,6 +248,11 @@
         var st = parseBackupPayload(raw) || JSON.parse(raw);
         if (st && !isEmptyState(st)) return st;
       }
+    } catch (e) {}
+    // После переустановки localStorage пуст — читаем Загрузки/Finna
+    try {
+      var fromDisk = restoreFromEmergencyFolder();
+      if (fromDisk) return fromDisk;
     } catch (e) {}
     return null;
   }
@@ -242,6 +294,8 @@
   global.FinBackup = {
     onSave: onSave,
     restoreBest: restoreBest,
+    restoreFromEmergencyFolder: restoreFromEmergencyFolder,
+    readNativeBackup: readNativeBackup,
     status: status,
     forceSnapshot: forceSnapshot,
     forceFileBackup: forceFileBackup,

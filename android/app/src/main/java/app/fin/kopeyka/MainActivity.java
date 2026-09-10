@@ -117,7 +117,9 @@ public class MainActivity extends AppCompatActivity {
         s.setDisplayZoomControls(false);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
         s.setUserAgentString(s.getUserAgentString() + " FinApp/4.10.5");
-        webView.addJavascriptInterface(new FinBridge(this), "FinBridge");
+        FinBridge bridge = new FinBridge(this);
+        try { bridge.ensureBackupFolder(); } catch (Exception ignored) {}
+        webView.addJavascriptInterface(bridge, "FinBridge");
         final WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
                 .build();
