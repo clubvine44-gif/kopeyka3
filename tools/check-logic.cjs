@@ -161,8 +161,8 @@ var storeSrc = fs.readFileSync(path.join(ROOT, 'secure-store.js'), 'utf8');
 assert.ok(storeSrc.indexOf('existingPlain') >= 0 || storeSrc.indexOf('existingEnc') >= 0, 'must not overwrite ciphertext with plaintext');
 
 var gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle'), 'utf8');
-assert.ok(/versionCode\s+158/.test(gradle), 'versionCode 156');
-assert.ok(/versionName\s+"4\.10\.7"/.test(gradle), 'versionName 4.10.5');
+assert.ok(/versionCode\s+159/.test(gradle), 'versionCode 156');
+assert.ok(/versionName\s+"4\.10\.8"/.test(gradle), 'versionName 4.10.5');
 
 var mainJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/MainActivity.java'), 'utf8');
 assert.ok(mainJava.indexOf('empty sha256') >= 0, 'auto-update requires sha256');

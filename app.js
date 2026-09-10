@@ -539,7 +539,26 @@ if(month===t.slice(0,7)&&payday>=1&&payday<=31){
 // Горизонт лимита: payday | month
 var horizon=STATE.settings&&STATE.settings.limitHorizon==='month'?'month':'payday';
 if(horizon==='payday'&&!(payday>=1&&payday<=31))horizon='month';
+// Дни для деления лимита: от сегодня до конца выбранного периода (включительно)
 var leftDays=horizon==='payday'?daysToPayday:daysToMonthEnd;
+try{
+  if(month===t.slice(0,7)){
+    var br=budgetPeriodRange();
+    // budgetPeriodRange уже учитывает limitHorizon
+    if(br&&br.end){
+      var endS=String(br.end).slice(0,10);
+      var td0=t.slice(0,10);
+      if(endS>=td0){
+        var eP=endS.split('-').map(Number), tP=td0.split('-').map(Number);
+        var endD=new Date(eP[0],eP[1]-1,eP[2]), tdD=new Date(tP[0],tP[1]-1,tP[2]);
+        var diff=Math.round((endD-tdD)/86400000)+1;
+        if(diff>=1)leftDays=diff;
+      }else{
+        leftDays=1;
+      }
+    }
+  }
+}catch(e){}
 var horizonLabel=horizon==='payday'?(isPaydayToday?'день зарплаты':'до зарплаты'):'до конца месяца';
 // Для подписи «X дн.»: в день зарплаты показываем 0
 var daysLeftLabel=horizon==='payday'?(isPaydayToday?0:daysUntilPaydayDate):daysToMonthEnd;
@@ -2117,14 +2136,19 @@ if(hzNode){
     if(!STATE.settings)STATE.settings={};
     var prevH=STATE.settings.limitHorizon||'payday';
     STATE.settings.limitHorizon=horizon;
+    // Смена горизонта = снова авто-лимит (ручной больше не перекрывает)
+    STATE.settings.manualDailyLimit=null;
+    try{pinCurrentMonth();}catch(e){}
     // при смене горизонта — новый отсчёт «потрачено» с сегодня
     if(prevH!==horizon){
       ensureBudgetPeriodTrack(true);
     }else{
       ensureBudgetPeriodTrack(false);
     }
-    save(true);render();
-    toast(horizon==='payday'?'До зарплаты · траты с сегодня':'До конца месяца · траты с сегодня');
+    save(true);
+    var ccH=compute();
+    render();
+    toast((horizon==='payday'?'До зарплаты':'До конца месяца')+' · '+fmt(ccH.daily)+'/день · '+ccH.daysLeft+' дн.');
     return;
   }
 }
@@ -2143,10 +2167,19 @@ if(t.id==='limitCard'||t.closest('#limitCard')){
   var hzEl=t.closest('[data-horizon]')||t;
   var horizon=hzEl.dataset&&hzEl.dataset.horizon;
   if(horizon==='payday'||horizon==='month'){
+    if(horizon==='payday'){
+      var pd2=STATE.settings&&STATE.settings.paydayDay!=null?num(STATE.settings.paydayDay):0;
+      if(!(pd2>=1&&pd2<=31)){toast('Сначала укажи день зарплаты в настройках');return;}
+    }
     if(!STATE.settings)STATE.settings={};
     STATE.settings.limitHorizon=horizon;
-    save(true);render();
-    toast(horizon==='payday'?'Лимит до зарплаты':'Лимит до конца месяца');
+    STATE.settings.manualDailyLimit=null;
+    try{pinCurrentMonth();}catch(e){}
+    ensureBudgetPeriodTrack(true);
+    save(true);
+    var ccHz=compute();
+    render();
+    toast((horizon==='payday'?'До зарплаты':'До конца месяца')+' · '+fmt(ccHz.daily)+'/день · '+ccHz.daysLeft+' дн.');
     return;
   }
   var mode=t.dataset&&t.dataset.mode;
