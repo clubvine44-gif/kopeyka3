@@ -24,9 +24,9 @@ function injectCss(){
   s.id='finTourStyle';
   s.textContent=''+
     '#finTour{position:fixed;inset:0;z-index:5000;pointer-events:none;}'+
-    '#finTour .tour-dim{position:absolute;inset:0;background:rgba(4,8,18,.4);pointer-events:none;}'+
+    '#finTour .tour-dim{position:absolute;inset:0;background:rgba(8,6,4,.4);pointer-events:none;}'+
     '#finTour .tour-card{position:absolute;left:12px;right:12px;max-width:400px;margin:0 auto;'+
-      'background:rgba(14,22,40,.98);border:1px solid rgba(120,180,255,.3);border-radius:18px;'+
+      'background:rgba(26,20,14,.98);border:1px solid rgba(224,168,96,.3);border-radius:18px;'+
       'padding:16px 14px 12px;box-shadow:0 16px 40px rgba(0,0,0,.55);color:#E8F0FF;'+
       'pointer-events:auto;z-index:5002;opacity:0;transition:opacity .25s,transform .3s;}'+
     '#finTour .tour-card.show{opacity:1;}'+
@@ -38,11 +38,11 @@ function injectCss(){
     '#finTour p{font-size:13.5px;line-height:1.45;color:#B8C8E0;margin:0 0 12px;}'+
     '#finTour .tour-meta{display:flex;align-items:center;gap:10px;margin-bottom:10px;}'+
     '#finTour .tour-progress{flex:1;height:4px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden;}'+
-    '#finTour .tour-progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,#5EC8FF,#3A8FE8);transition:width .35s;}'+
+    '#finTour .tour-progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,#E8A657,#B5722E);transition:width .35s;}'+
     '#finTour .tour-count{font-size:12px;color:#8BA0C0;min-width:40px;text-align:right;}'+
     '#finTour .tour-actions{display:flex;gap:8px;}'+
     '#finTour .tour-actions button{flex:1;padding:11px 8px;border-radius:12px;font-size:13.5px;font-weight:700;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.06);color:#E8F0FF;}'+
-    '#finTour .tour-next{background:linear-gradient(135deg,#5EC8FF,#3A8FE8)!important;color:#0A101C!important;border:none!important;}';
+    '#finTour .tour-next{background:linear-gradient(135deg,#E8A657,#B5722E)!important;color:#0A101C!important;border:none!important;}';
   document.head.appendChild(s);
 }
 
