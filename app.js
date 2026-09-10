@@ -504,23 +504,45 @@ function debtActiveInMonth(d,month){
 function computeForMonth(month){month=String(month||today().slice(0,7));var ops=monthOps(month);var open=openingForMonth(month);var cash=open+ops.delta;var resT=0;(STATE.reserves||[]).forEach(function(r){if(!alive(r))return;resT+=num(r.saved);});var debt=0;(STATE.debts||[]).forEach(function(d){if(!debtActiveInMonth(d,month))return;debt+=Math.max(0,num(d.total)-num(d.paid));});var obligDue=0,obligPaid=0;(STATE.obligations||[]).forEach(function(ob){if(!alive(ob)||ob.active===false)return;var paid=0;(STATE.obligationPays||[]).forEach(function(p){if(!alive(p))return;if(p.obligId===ob.id&&p.month===month)paid+=num(p.amount);});obligPaid+=paid;obligDue+=Math.max(0,num(ob.amount)-paid);});var avail=cash-debt-obligDue;var t=today(),p=month.split('-').map(Number);var last=new Date(p[0],p[1],0).getDate();var dayNum=Number(t.slice(8));
 var payday=STATE.settings&&STATE.settings.paydayDay!=null?num(STATE.settings.paydayDay):0;
 var daysToMonthEnd=month===t.slice(0,7)?Math.max(1,last-dayNum+1):last;
+// Календарные дни до даты зарплаты (0 = сегодня день зарплаты)
+var daysUntilPaydayDate=daysToMonthEnd;
+// Дни горизонта для деления лимита (всегда >=1 в текущем периоде)
 var daysToPayday=daysToMonthEnd;
+var isPaydayToday=false;
 if(month===t.slice(0,7)&&payday>=1&&payday<=31){
-  if(dayNum<=payday)daysToPayday=Math.max(1,payday-dayNum+1);
-  else{
+  var payThis=Math.min(payday,last);
+  if(dayNum===payThis||(payday>last&&dayNum===last)){
+    // Сегодня зарплата — новый период с сегодня до дня перед следующей зарплатой
+    isPaydayToday=true;
+    daysUntilPaydayDate=0;
+    var nm0=nextMonth(month),np0=nm0.split('-').map(Number);
+    var nlast0=new Date(np0[0],np0[1],0).getDate();
+    var pdNext0=Math.min(payday,nlast0);
+    // включительно: сегодня .. (след. зарплата − 1)
+    daysToPayday=Math.max(1,(last-dayNum+1)+(pdNext0-1));
+  }else if(dayNum<payThis){
+    // До зарплаты в этом месяце. Период «нужных трат» кончается в (payday−1).
+    daysUntilPaydayDate=payThis-dayNum;
+    daysToPayday=Math.max(1,payThis-dayNum);
+  }else{
+    // После зарплаты — до следующей
     var nm=nextMonth(month),np=nm.split('-').map(Number);
     var nlast=new Date(np[0],np[1],0).getDate();
     var pd2=Math.min(payday,nlast);
-    daysToPayday=Math.max(1,(last-dayNum+1)+pd2);
+    daysUntilPaydayDate=(last-dayNum)+pd2;
+    daysToPayday=Math.max(1,(last-dayNum+1)+(pd2-1));
   }
 }else if(payday>=1&&payday<=31){
+  daysUntilPaydayDate=Math.max(0,Math.min(payday,last));
   daysToPayday=Math.max(1,Math.min(payday,last));
 }
 // Горизонт лимита: payday | month
 var horizon=STATE.settings&&STATE.settings.limitHorizon==='month'?'month':'payday';
 if(horizon==='payday'&&!(payday>=1&&payday<=31))horizon='month';
 var leftDays=horizon==='payday'?daysToPayday:daysToMonthEnd;
-var horizonLabel=horizon==='payday'?'до зарплаты':'до конца месяца';
+var horizonLabel=horizon==='payday'?(isPaydayToday?'день зарплаты':'до зарплаты'):'до конца месяца';
+// Для подписи «X дн.»: в день зарплаты показываем 0
+var daysLeftLabel=horizon==='payday'?(isPaydayToday?0:daysUntilPaydayDate):daysToMonthEnd;
 // Лимит: свободные / дни горизонта. Ручной лимит перекрывает авто.
 var daily=0;
 if(avail>0&&leftDays>0)daily=Math.floor(avail/leftDays);
@@ -543,7 +565,7 @@ var by={};
   by[cat]=(by[cat]||0)+num(e.amount);
 });
 var cats=Object.keys(by).map(function(k){return{name:k,amount:by[k]};}).sort(function(a,b){return b.amount-a.amount;});
-return{open:open,cash:cash,available:avail,incomeSum:ops.inc,expenseSum:ops.exp,depSum:ops.dep,wdSum:ops.wd,debtLeft:debt,reservesTotal:resT,obligDue:obligDue,obligPaid:obligPaid,daily:daily,daysLeft:leftDays,daysToMonthEnd:daysToMonthEnd,daysToPayday:daysToPayday,horizon:horizon,horizonLabel:horizonLabel,hasPayday:payday>=1&&payday<=31,spentToday:spentTodayCalc,cats:cats,month:month};}
+return{open:open,cash:cash,available:avail,incomeSum:ops.inc,expenseSum:ops.exp,depSum:ops.dep,wdSum:ops.wd,debtLeft:debt,reservesTotal:resT,obligDue:obligDue,obligPaid:obligPaid,daily:daily,daysLeft:leftDays,daysLeftLabel:daysLeftLabel,daysUntilPayday:daysUntilPaydayDate,isPaydayToday:!!isPaydayToday,daysToMonthEnd:daysToMonthEnd,daysToPayday:daysToPayday,horizon:horizon,horizonLabel:horizonLabel,hasPayday:payday>=1&&payday<=31,spentToday:spentTodayCalc,cats:cats,month:month};}
 function compute(){return computeForMonth(getViewMonth());}
 window.ensureMonth=ensureMonth;
 function ensureMonth(){
@@ -1808,7 +1830,9 @@ homeHtml += '<button type="button" class="mode'+(hz==='payday'?' active':'')+(c.
 homeHtml += '<button type="button" class="mode'+(hz==='month'?' active':'')+'" data-horizon="month">До конца месяца</button>';
 homeHtml += '</div>';
 if(c.hasPayday){
-  homeHtml += '<div class="hero-horizon-sub muted">'+esc((c.horizonLabel||'')+' · '+c.daysLeft+' дн.')+'</div>';
+  var dShow=(c.daysLeftLabel!=null?c.daysLeftLabel:c.daysLeft);
+  var dTxt=c.isPaydayToday?'сегодня':(dShow===0?'сегодня':(dShow+' дн.'));
+  homeHtml += '<div class="hero-horizon-sub muted">'+esc((c.horizonLabel||'')+' · '+dTxt)+'</div>';
 }else{
   homeHtml += '<div class="hero-horizon-sub muted">День зарплаты не задан · считаем до конца месяца</div>';
 }
@@ -2127,7 +2151,8 @@ if(t.id==='limitCard'||t.closest('#limitCard')){
   if(mode==='auto'){if(STATE.settings){STATE.settings.manualDailyLimit=null;}save(true);render();toast('Автоматический лимит');return;}
   if(mode==='manual'){var cur=compute().daily;appPrompt('Лимит на день (₽)',String(cur),'Ручной лимит').then(function(v){if(v===null)return;if(!STATE.settings)STATE.settings={};STATE.settings.manualDailyLimit=num(v);save(true);render();toast('Ручной лимит: '+fmt(num(v)));});return;}
   var cc2=compute();
-  var det2='Горизонт — '+(cc2.horizonLabel||'')+'\nДней осталось — '+cc2.daysLeft+'\nДоступно — '+fmt(cc2.available)+'\nОбязательства — '+fmt((cc2.obligDue||0)+(cc2.debtLeft||0))+'\nЛимит на день — '+fmt(cc2.daily);
+  var dLab=(cc2.isPaydayToday?'сегодня (день зарплаты)':(cc2.daysLeftLabel!=null?cc2.daysLeftLabel:cc2.daysLeft));
+  var det2='Горизонт — '+(cc2.horizonLabel||'')+'\nДо даты зарплаты — '+dLab+'\nДней в периоде (для лимита) — '+cc2.daysLeft+'\nДоступно — '+fmt(cc2.available)+'\nОбязательства — '+fmt((cc2.obligDue||0)+(cc2.debtLeft||0))+'\nЛимит на день — '+fmt(cc2.daily);
   appAlert(det2,'Лимит на сегодня');
   return;
 }
