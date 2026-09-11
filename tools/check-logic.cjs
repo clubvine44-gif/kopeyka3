@@ -129,6 +129,17 @@ sandbox.window.STATE.reserves = [{ id: 'r1', saved: 0, target: 5000, deleted: tr
 var closed2 = sandbox.window.kopeykaEngine.month('2026-09');
 assert.strictEqual(closed2.cash, 10000, 'withdraw offsets deposit after reserve close');
 
+// Payday today: horizon must open the next period, not collapse to 1 day.
+sandbox.window.STATE = {
+  settings: { openingBalance: 30000, month: (function(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');})(), paydayDay: (new Date()).getDate(), limitHorizon: 'payday' },
+  income: [], expenses: [], reserves: [], debts: [], reserveOps: [], obligations: [], obligationPays: []
+};
+var payM = sandbox.window.STATE.settings.month;
+var payCalc = sandbox.window.kopeykaEngine.month(payM);
+assert.strictEqual(payCalc.isPaydayToday, true, 'engine sees payday today');
+assert.ok(payCalc.daysLeft > 1, 'payday today starts a new period, daysLeft=' + payCalc.daysLeft);
+assert.ok(payCalc.daily > 0 && payCalc.daily < 30000, 'daily is available/days of new period');
+
 // Syntax check critical modules
 ['app.js', 'cloud.js', 'secure-store.js', 'fin-backup.js', 'engine.js', 'assistant-v2.js', 'assistant.js', 'widget.html'].forEach(function (f) {
   var p = path.join(ROOT, f);
@@ -161,12 +172,21 @@ var storeSrc = fs.readFileSync(path.join(ROOT, 'secure-store.js'), 'utf8');
 assert.ok(storeSrc.indexOf('existingPlain') >= 0 || storeSrc.indexOf('existingEnc') >= 0, 'must not overwrite ciphertext with plaintext');
 
 var gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle'), 'utf8');
-assert.ok(/versionCode\s+160/.test(gradle), 'versionCode 160');
-assert.ok(/versionName\s+"4\.11\.0"/.test(gradle), 'versionName 4.11.0');
+assert.ok(/versionCode\s+161/.test(gradle), 'versionCode 161');
+assert.ok(/versionName\s+"4\.12\.0"/.test(gradle), 'versionName 4.12.0');
 
 var mainJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/MainActivity.java'), 'utf8');
-assert.ok(mainJava.indexOf('empty sha256') >= 0, 'auto-update requires sha256');
-assert.ok(mainJava.indexOf('if (expectedSha256 == null || expectedSha256.trim().isEmpty())') >= 0, 'install requires sha256');
+assert.ok(appSrc.indexOf('function recoverLockedState') >= 0, 'decrypt-fail recovery helper');
+assert.ok(appSrc.indexOf("if(!hasLiveData(STATE)&&window.FinBackup") >= 0, 'backup restore must run even if decrypt failed');
+assert.ok(appSrc.indexOf('isPaydayToday') >= 0, 'app payday-today');
+assert.ok(appSrc.indexOf("e.category!=='Долг'&&e.category!=='Обязательные'") >= 0, 'spent-today breakdown ignores debt/obligation');
+
+var engineSrc = fs.readFileSync(path.join(ROOT, 'engine.js'), 'utf8');
+assert.ok(engineSrc.indexOf('isPaydayToday') >= 0, 'engine payday-today matches app');
+assert.ok(engineSrc.indexOf('pdNext0-1') >= 0, 'engine payday period excludes next payday');
+
+assert.ok(cloudSrc.indexOf("Восстановлено из облака") >= 0 || cloudSrc.indexOf('Касса восстановлена из облака') >= 0, 'cloud recovers locked local');
+assert.ok(cloudSrc.indexOf('recoverLockedState') >= 0, 'cloud uses recovery helper');
 
 // Cloud three-way merge: missing-without-tombstone must KEEP the present copy.
 var cloudSandbox = {

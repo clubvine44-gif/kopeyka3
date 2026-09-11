@@ -26,24 +26,32 @@ function debtActiveInMonth(d,month){
 }
 function calc(m){var s=state(),o=monthOps(m),cash=opening(m)+o.delta,debt=0,res=0,obDue=0,obPaid=0;(s.debts||[]).forEach(function(d){if(!debtActiveInMonth(d,m))return;debt+=Math.max(0,n(d.total)-n(d.paid));});(s.reserves||[]).forEach(function(r){if(!alive(r))return;res+=n(r.saved);});(s.obligations||[]).forEach(function(ob){if(ob.active===false||ob.deleted)return;var p=0;(s.obligationPays||[]).forEach(function(x){if(!alive(x))return;if(x.obligId===ob.id&&x.month===m)p+=n(x.amount);});obPaid+=p;obDue+=Math.max(0,n(ob.amount)-p);});var available=cash-debt-obDue,p=m.split('-').map(Number),last=new Date(p[0],p[1],0).getDate(),cur=today().slice(0,7),dayNum=Number(today().slice(8)),left=m===cur?Math.max(1,last-dayNum+1):last;
 var payday=s.settings&&s.settings.paydayDay!=null?n(s.settings.paydayDay):0;
-var daysToPayday=left;
+var daysToMonthEnd=m===cur?Math.max(1,last-dayNum+1):last;
+var daysToPayday=daysToMonthEnd;
+var isPaydayToday=false;
 if(m===cur&&payday>=1&&payday<=31){
-  if(dayNum<=payday)daysToPayday=Math.max(1,payday-dayNum+1);
-  else{
+  var payThis=Math.min(payday,last);
+  if(dayNum===payThis||(payday>last&&dayNum===last)){
+    isPaydayToday=true;
+    var nm0=next(m),np0=nm0.split('-').map(Number),nlast0=new Date(np0[0],np0[1],0).getDate(),pdNext0=Math.min(payday,nlast0);
+    daysToPayday=Math.max(1,(last-dayNum+1)+(pdNext0-1));
+  }else if(dayNum<payThis){
+    daysToPayday=Math.max(1,payThis-dayNum);
+  }else{
     var nm=next(m),np=nm.split('-').map(Number),nlast=new Date(np[0],np[1],0).getDate(),pd2=Math.min(payday,nlast);
-    daysToPayday=Math.max(1,(last-dayNum+1)+pd2);
+    daysToPayday=Math.max(1,(last-dayNum+1)+(pd2-1));
   }
 }else if(payday>=1&&payday<=31){
   daysToPayday=Math.max(1,Math.min(payday,last));
 }
 var horizon=s.settings&&s.settings.limitHorizon==='month'?'month':'payday';
 if(horizon==='payday'&&!(payday>=1&&payday<=31))horizon='month';
-var leftDays=horizon==='payday'?daysToPayday:left;
+var leftDays=horizon==='payday'?daysToPayday:daysToMonthEnd;
 var daily=available>0&&leftDays>0?Math.floor(available/leftDays):0;
 var manualL=s.settings&&s.settings.manualDailyLimit;
 if(manualL!=null&&manualL!==''&&isFinite(Number(manualL)))daily=Math.max(0,Math.round(Number(manualL)));
 var by={};(s.expenses||[]).forEach(function(e){if(!alive(e))return;if(monthOf(e.date)!==m)return;var c=e.category||'Прочее';if(c==='Долг'&&e.note)c=e.note;by[c]=(by[c]||0)+n(e.amount);});var cats=Object.keys(by).map(function(k){return{name:k,amount:by[k]};}).sort(function(a,b){return b.amount-a.amount;});
-return{month:m,openingBalance:opening(m),cash:cash,available:available,dailyBudget:daily,daily:daily,daysLeft:leftDays,income:o.income,expenses:o.expenses,reserveDeposits:o.deposits,reserveWithdrawals:o.withdrawals,reservesTotal:res,debtRemaining:debt,obligationsRemaining:obDue,obligationsPaid:obPaid,expenseByCategory:cats};}
+return{month:m,openingBalance:opening(m),cash:cash,available:available,dailyBudget:daily,daily:daily,daysLeft:leftDays,isPaydayToday:!!isPaydayToday,horizon:horizon,income:o.income,expenses:o.expenses,reserveDeposits:o.deposits,reserveWithdrawals:o.withdrawals,reservesTotal:res,debtRemaining:debt,obligationsRemaining:obDue,obligationsPaid:obPaid,expenseByCategory:cats};}
 function shifts(m){var s=state(),p=m.split('-').map(Number),dim=new Date(p[0],p[1],0).getDate(),out={day:0,night:0,off:0};for(var d=1;d<=dim;d++){var ds=m+'-'+String(d).padStart(2,'0'),v=s.shiftsOverride&&s.shiftsOverride[ds];if(v!=='day'&&v!=='night'&&v!=='off')v=CYCLE[((days(ANCHOR,ds)%6)+6)%6];out[v]++;}return out;}
 function clone(x){try{return JSON.parse(JSON.stringify(x));}catch(e){return x;}}
 function classifyName(name,fallback){var q=String(name||'').toLowerCase().replace(/ё/g,'е'),map=window.KOPEYKA_PRODUCTS||[];for(var i=0;i<map.length;i++){var words=map[i][1]||[];for(var j=0;j<words.length;j++){var w=String(words[j]).toLowerCase().replace(/ё/g,'е');if(q.indexOf(w)!==-1)return map[i][0];}}return CATS.indexOf(fallback)>=0?fallback:'Прочее';}

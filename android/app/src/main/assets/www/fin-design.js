@@ -5,16 +5,16 @@ function inject(){
   if(document.getElementById('finDesignStyle'))return;
   var s=document.createElement('style');s.id='finDesignStyle';s.textContent=`
 :root{
-  --fin-bg:#070B12;--fin-surface:#101722;--fin-surface-2:#141D2A;
+  --fin-bg:#0B0906;--fin-surface:#1A140F;--fin-surface-2:#1F1812;
   --fin-line:rgba(255,255,255,.075);--fin-text:#F4F7FB;--fin-muted:#8D9AAC;
-  --fin-accent:#65C7FF;--fin-good:#54D68A;--fin-warn:#F4C86A;--fin-bad:#FF7373;--fin-radius:18px;
+  --fin-accent:#E8A657;--fin-good:#54D68A;--fin-warn:#F4C86A;--fin-bad:#FF7373;--fin-radius:18px;
 }
 html,body{background:var(--fin-bg);color:var(--fin-text)}
-body{background:linear-gradient(180deg,#070B12 0%,#0A1019 58%,#0B111A 100%)}
+body{background:linear-gradient(180deg,#0A0805 0%,#0F0B07 58%,#12100A 100%)}
 .wrap{max-width:560px;padding:8px 14px 28px}
 
 /* HEADER: quiet navigation, no competition with the financial state. */
-.topbar{padding:8px 12px;background:rgba(7,11,18,.985);border-bottom:1px solid rgba(255,255,255,.06)}
+.topbar{padding:8px 12px;background:rgba(19,14,9,.985);border-bottom:1px solid rgba(255,255,255,.06)}
 .top-title{font-size:16px;letter-spacing:0}.top-title .tt-model{display:none}
 .icon-btn{width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.045);border-color:rgba(255,255,255,.07)}
 .finn-avatar{width:42px;height:42px}
@@ -22,13 +22,13 @@ body{background:linear-gradient(180deg,#070B12 0%,#0A1019 58%,#0B111A 100%)}
 /* PRIMARY OBJECT: the original hero, enlarged and clarified — no second financial card. */
 .card.hero{
   padding:20px 18px 17px;margin:6px 0 15px;border-radius:22px;
-  background:radial-gradient(620px 280px at 10% 0%,rgba(101,199,255,.17),transparent 63%),linear-gradient(145deg,#192A43 0%,#111C2B 62%,#0F1824 100%);
-  border:1px solid rgba(101,199,255,.27);box-shadow:0 13px 34px rgba(0,0,0,.30);
+  background:radial-gradient(620px 280px at 10% 0%,rgba(232,166,87,.17),transparent 63%),linear-gradient(145deg,#192A43 0%,#111C2B 62%,#0F1824 100%);
+  border:1px solid rgba(232,166,87,.27);box-shadow:0 13px 34px rgba(0,0,0,.30);
 }
-.card.hero::before{background:linear-gradient(115deg,rgba(101,199,255,.065),transparent 48%)}
+.card.hero::before{background:linear-gradient(115deg,rgba(232,166,87,.065),transparent 48%)}
 .hero-main{gap:18px;align-items:center}
 .orbit-wrap,.orbit-svg{width:124px;height:124px}
-.orbit-val{font-size:24px;font-weight:900;letter-spacing:-.05em;text-shadow:0 0 16px rgba(101,199,255,.30)}
+.orbit-val{font-size:24px;font-weight:900;letter-spacing:-.05em;text-shadow:0 0 16px rgba(232,166,87,.30)}
 .orbit-sub{font-size:10px;color:rgba(244,247,251,.58)}
 .hero-stats{padding-top:0}
 .hero-shift{margin-bottom:8px;padding:5px 9px;font-size:12px;border-radius:10px}
@@ -41,19 +41,19 @@ body{background:linear-gradient(180deg,#070B12 0%,#0A1019 58%,#0B111A 100%)}
 .card.hero .hero-kpis b{font-size:15px;font-variant-numeric:tabular-nums}
 
 /* SECONDARY CONTENT: compact, consistent, clearly below the hero. */
-.card{border-radius:var(--fin-radius);background:linear-gradient(145deg,rgba(18,27,40,.98),rgba(13,20,30,.98));border-color:var(--fin-line);box-shadow:0 5px 18px rgba(0,0,0,.18);margin-bottom:10px;padding:15px}
+.card{border-radius:var(--fin-radius);background:linear-gradient(145deg,rgba(30,23,16,.98),rgba(21,16,11,.98));border-color:var(--fin-line);box-shadow:0 5px 18px rgba(0,0,0,.18);margin-bottom:10px;padding:15px}
 .card.tight{padding:14px}
-.sec{border-radius:16px!important;border-color:var(--fin-line)!important;background:rgba(15,23,34,.82)!important;box-shadow:none!important;overflow:hidden}
+.sec{border-radius:16px!important;border-color:var(--fin-line)!important;background:rgba(28,21,15,.82)!important;box-shadow:none!important;overflow:hidden}
 .sec-head{padding:13px 14px!important;min-height:48px}
 .sec-title{font-size:13px;font-weight:700;letter-spacing:-.01em}
 .sec-right{font-size:12px;color:var(--fin-muted)}
 .sec-chev{font-size:20px;color:rgba(255,255,255,.32)}
-.sec.open{border-color:rgba(101,199,255,.12)!important}
+.sec.open{border-color:rgba(232,166,87,.12)!important}
 .sec-body{padding:0 14px 14px!important}
 .sec-title-sm{font-size:10px;letter-spacing:.09em;font-weight:800;color:var(--fin-muted)}
 
 /* Budget / necessary spending: useful information, but visually subordinate. */
-.budget-card{background:rgba(14,21,31,.82)!important;box-shadow:none!important}
+.budget-card{background:rgba(26,19,13,.82)!important;box-shadow:none!important}
 .budget-card .sec-title-sm{margin-bottom:9px}
 .limit-card,.today-card{border-radius:15px!important;background:rgba(255,255,255,.028)!important;border-color:rgba(255,255,255,.055)!important;box-shadow:none!important}
 .limit-card .limit-head{margin-bottom:5px}
@@ -68,7 +68,7 @@ body{background:linear-gradient(180deg,#070B12 0%,#0A1019 58%,#0B111A 100%)}
 
 /* ACTIONS: make the existing primary action obvious, not decorative. */
 .fab{width:58px!important;height:58px!important;border-radius:18px!important;box-shadow:0 8px 24px rgba(0,0,0,.30)!important}
-.bottom-nav{height:70px;border-top:1px solid rgba(255,255,255,.075);background:rgba(7,11,18,.985)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.bottom-nav{height:70px;border-top:1px solid rgba(255,255,255,.075);background:rgba(19,14,9,.985)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 .bottom-nav button,.bottom-nav .nav-item{min-height:52px;border-radius:14px}
 
 /* State colors remain semantic and restrained. */
@@ -92,12 +92,12 @@ body{background:linear-gradient(180deg,#070B12 0%,#0A1019 58%,#0B111A 100%)}
   transform:scale(.985);
 }
 .budget-row.selected{
-  border-color:rgba(102,200,255,.22)!important;
-  background:rgba(102,200,255,.07)!important;
-  box-shadow:inset 3px 0 0 #66c8ff, 0 6px 16px rgba(0,0,0,.14);
+  border-color:rgba(232,166,87,.22)!important;
+  background:rgba(232,166,87,.07)!important;
+  box-shadow:inset 3px 0 0 #E8A657, 0 6px 16px rgba(0,0,0,.14);
 }
 .budget-row.selected .budget-row-top b{
-  color:#c8ecff;
+  color:#FFE8C2;
 }
 `;
   document.head.appendChild(s);

@@ -1,4 +1,4 @@
-(function(){/* v116 */'use strict';
+(function(){/* v117 4.12.0 */'use strict';
 var KEY='kopeyka3_state_v1',ANCHOR='2026-08-17',CYCLE=['day','day','night','night','off','off'];
 var CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье','Прочее'];
 var BUDGET_CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
@@ -416,6 +416,23 @@ function save(skipUndo){
   try{if(window.FinBackup&&typeof window.FinBackup.onSave==='function')window.FinBackup.onSave(STATE);}catch(e){}
   syncReminders();
 }
+/** Явное восстановление, когда AES-снимок не открылся.
+ *  Снимает блокировку записи и сохраняет живое состояние поверх повреждённого блоба. */
+function recoverLockedState(stateObj, source){
+  if(!stateObj||typeof stateObj!=='object')return false;
+  var n=norm(stateObj);
+  if(!hasLiveData(n))return false;
+  try{
+    window.__FIN_DECRYPT_FAILED=false;
+    window.__FIN_LOCKED_RAW=null;
+    window.__FIN_LOAD_PENDING=false;
+  }catch(e){}
+  STATE=n;
+  try{save(true);}catch(e){}
+  try{if(typeof render==='function')render();}catch(e){}
+  return true;
+}
+window.recoverLockedState=recoverLockedState;
 function computeReminders(){
   var out=[],t=today(),day=Number(t.slice(8)),month=(STATE.settings&&STATE.settings.month)||t.slice(0,7);
   (STATE.obligations||[]).forEach(function(ob){
@@ -480,7 +497,7 @@ function computeReminders(){
 }
 function syncReminders(){try{if(window.FinBridge&&window.FinBridge.scheduleReminders)window.FinBridge.scheduleReminders(JSON.stringify(computeReminders()));}catch(e){}}
 function exportData(){try{if(window.FinBackup&&window.FinBackup.forceFileBackup){window.FinBackup.forceSnapshot(STATE);window.FinBackup.forceFileBackup(STATE);var fold='Загрузки / Finna';try{if(window.FinBridge&&window.FinBridge.getBackupFolderHint)fold=window.FinBridge.getBackupFolderHint();}catch(e){}toast('Копия сохранена: '+fold);return;}var data=JSON.stringify(STATE,null,2),filename='finna-backup-'+today()+'.json';if(window.FinBridge&&window.FinBridge.saveBackup){window.FinBridge.saveBackup(data,filename);}else{var blob=new Blob([data],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(function(){URL.revokeObjectURL(url);},2000);}toast('Экспорт запущен');}catch(e){toast('Не удалось сделать экспорт');}}
-function importData(){var inp=document.getElementById('importFileInput');if(!inp){inp=document.createElement('input');inp.type='file';inp.accept='.json,application/json';inp.style.display='none';inp.id='importFileInput';document.body.appendChild(inp);inp.onchange=function(){var f=inp.files&&inp.files[0];if(!f){return;}var reader=new FileReader();reader.onload=function(){try{var parsed=JSON.parse(reader.result);var stateObj=parsed;try{if(window.FinBackup&&window.FinBackup.parseBackupPayload){var un=window.FinBackup.parseBackupPayload(parsed);if(un)stateObj=un;}}catch(e){}if(!stateObj||typeof stateObj!=='object')throw new Error('bad');appConfirm('Заменить текущие данные данными из файла?\nБудет восстановлен полный снимок (все операции, долги, резервы).\nТекущие можно вернуть через «Отменить».','Импорт').then(function(ok){if(!ok)return;pushUndo();STATE=norm(stateObj);save(true);render();toast('Данные восстановлены из копии');});}catch(e){toast('Файл повреждён или не в формате Финны');}};reader.readAsText(f);inp.value='';};}inp.click();}
+function importData(){var inp=document.getElementById('importFileInput');if(!inp){inp=document.createElement('input');inp.type='file';inp.accept='.json,application/json';inp.style.display='none';inp.id='importFileInput';document.body.appendChild(inp);inp.onchange=function(){var f=inp.files&&inp.files[0];if(!f){return;}var reader=new FileReader();reader.onload=function(){try{var parsed=JSON.parse(reader.result);var stateObj=parsed;try{if(window.FinBackup&&window.FinBackup.parseBackupPayload){var un=window.FinBackup.parseBackupPayload(parsed);if(un)stateObj=un;}}catch(e){}if(!stateObj||typeof stateObj!=='object')throw new Error('bad');appConfirm('Заменить текущие данные данными из файла?\nБудет восстановлен полный снимок (все операции, долги, резервы).\nТекущие можно вернуть через «Отменить».','Импорт').then(function(ok){if(!ok)return;pushUndo();if(window.__FIN_DECRYPT_FAILED){if(!recoverLockedState(stateObj,'import')){STATE=norm(stateObj);} }else{STATE=norm(stateObj);save(true);}render();toast('Данные восстановлены из копии');});}catch(e){toast('Файл повреждён или не в формате Финны');}};reader.readAsText(f);inp.value='';};}inp.click();}
 window.kopeykaExport=exportData;window.kopeykaImport=importData;
 window.defaultState=def;window.setAppState=function(s){pushUndo();STATE=norm(s);ensureMonth();save(true);render();};window.saveState=function(){save(true);};
 Object.defineProperty(window,'STATE',{get:function(){return STATE;},set:function(v){STATE=norm(v);}});
@@ -1602,7 +1619,7 @@ function sec(id,title,right,body){var on=!!openSecs[id];return '<div class="sec'
 var dailyStr=fmt(c.daily);
 var whyDaily=c.available<=0?'<div class="hint">Свободных денег нет — сначала закрой долги или обязательные.</div>':'';
 var r=50,circ=2*Math.PI*r;
-var segs=[{label:'Свободно',val:Math.max(0,c.available),color:'#F0C060'},{label:'Обязательные',val:Math.max(0,c.obligDue),color:'#5EC8FF'},{label:'Долг',val:Math.max(0,c.debtLeft),color:'#F87171'}].filter(function(s){return s.val>0;});
+var segs=[{label:'Свободно',val:Math.max(0,c.available),color:'#F0C060'},{label:'Обязательные',val:Math.max(0,c.obligDue),color:'#E8A657'},{label:'Долг',val:Math.max(0,c.debtLeft),color:'#F87171'}].filter(function(s){return s.val>0;});
 var ringArcs='',legendHtml='';
 if(c.cash<0){
   ringArcs='<circle cx="64" cy="64" r="'+r+'" fill="none" stroke="#F87171" stroke-width="8" stroke-linecap="round"/>';
@@ -1639,6 +1656,9 @@ if(!window.__FIN_PERF&&c.available>0&&c.daysLeft>1){
 
 /* view-aware main render */
 var homeHtml = '';
+if(window.__FIN_DECRYPT_FAILED){
+  homeHtml += '<div class="card tight" id="lockedBanner"><div class="sec-title-sm">ДАННЫЕ ЗАБЛОКИРОВАНЫ</div><div class="hint" style="margin:0">Локальный снимок не открылся. Касса не стёрта — открой облако ☁ или импортируй JSON из Загрузки/Finna (Настройки → Для разработчика).</div></div>';
+}
 
 // ===== Доп. данные для главного экрана =====
 var spentToday=0;(STATE.expenses||[]).forEach(function(e){if(e.deleted)return;if(e.date!==t)return;if(e.category==='Долг'||e.category==='Обязательные')return;spentToday+=num(e.amount);});
@@ -2046,8 +2066,13 @@ if(currentView==='home'){
   htmlOut = '<div class="view-title-bar"><h2>'+viewTitle+'</h2></div><div class="card"><div class="list">'+ (viewBody||'<div class="empty">Пусто</div>') +'</div></div>';
 }
 var prevScroll=(currentView==='home'&&window.__homeScroll)?window.__homeScroll:0;
-app.innerHTML = htmlOut;
-if(currentView==='home'&&prevScroll>0){requestAnimationFrame(function(){window.scrollTo(0,prevScroll);requestAnimationFrame(function(){window.scrollTo(0,prevScroll);});});}
+if(app.__lastHtml===htmlOut){
+  // Ничего не изменилось визуально — не трогаем DOM, чтобы не было вспышки/скачка скролла.
+}else{
+  app.__lastHtml=htmlOut;
+  app.innerHTML = htmlOut;
+  if(currentView==='home'&&prevScroll>0){requestAnimationFrame(function(){window.scrollTo(0,prevScroll);requestAnimationFrame(function(){window.scrollTo(0,prevScroll);});});}
+}
 
 try{if(window.FinBridge){if(window.FinBridge.updateWidgetDataFull){window.FinBridge.updateWidgetDataFull(fmt(c.daily),fmt(c.cash),fmt(c.available),sl,String(c.daysLeft));}else if(window.FinBridge.updateWidgetData){window.FinBridge.updateWidgetData(fmt(c.daily),fmt(c.cash),sl);}}}catch(e){}
 if(!app._bound){app._bound=true;app.addEventListener('click',function(e){var t=e.target.closest('[data-date],.item[data-id],.sec-head,#mPrev,#mNext,#btnShiftPay,.quick-nav,[data-view],#btnAddMain,.qcat,#limitCard,#ringTap,#limitRingTap,#finnTipCard,#btnFullCal,.link-more,.mode,[data-budget-edit],.budget-lim,[data-horizon],.hero-horizon,.budget-row,[data-budget-cat]');if(!t||!app.contains(t))return;if(t.classList&&t.classList.contains('quick-nav')||t.dataset.view){goView(t.dataset.view);return;}
@@ -2113,7 +2138,7 @@ if(t.id==='limitRingTap'||t.closest&&t.closest('#limitRingTap')){
       var ci=categoryDailyLimit(__budgetFocusCat,ccL.daysLeft||1);
       appAlert('Категория — '+__budgetFocusCat+'\nЛимит периода — '+fmt(ci.lim)+'\nПотрачено за период — '+fmt(ci.spent)+'\nОстаток — '+fmt(ci.left)+'\nДней ('+(ccL.horizonLabel||'')+') — '+(ccL.daysLeft||1)+'\n\nЛимит на день — '+fmt(ci.daily)+'\nПотрачено сегодня — '+fmt(ci.spentToday)+'\nОсталось сегодня — '+fmt(Math.max(0,ci.daily-ci.spentToday)),'Лимит · '+__budgetFocusCat);
     }else{
-      var st=0;(STATE.expenses||[]).forEach(function(e){if(!e.deleted&&e.date===today())st+=num(e.amount);});
+      var st=0;(STATE.expenses||[]).forEach(function(e){if(!e.deleted&&e.date===today()&&e.category!=='Долг'&&e.category!=='Обязательные')st+=num(e.amount);});
       appAlert('Лимит — '+fmt(ccL.daily)+'\nПотрачено сегодня — '+fmt(st)+'\nОсталось сегодня — '+fmt(Math.max(0,(ccL.daily||0)-st)),'Лимит на день');
     }
   });
@@ -2647,14 +2672,21 @@ function boot(){
           window.dispatchEvent(new Event('fin-app-ready'));
         }catch(e){}
       }
-      // Recover from rotating snapshots only if primary is empty AND encrypted blob is not locked.
+      // Recover from rotating snapshots / Downloads/Finna.
+      // If the AES blob is locked, plaintext slots and the emergency folder are the way back.
       try{
-        if(!window.__FIN_DECRYPT_FAILED&&!hasLiveData(STATE)&&window.FinBackup&&typeof window.FinBackup.restoreBest==='function'){
+        if(!hasLiveData(STATE)&&window.FinBackup&&typeof window.FinBackup.restoreBest==='function'){
           var recovered=window.FinBackup.restoreBest();
           if(recovered&&hasLiveData(recovered)){
-            STATE=norm(recovered);
-            try{save(true);}catch(e){}
-            setTimeout(function(){toast('Восстановлены данные из аварийной копии (полный снимок)');},800);
+            if(window.__FIN_DECRYPT_FAILED){
+              if(recoverLockedState(recovered,'backup')){
+                setTimeout(function(){toast('Восстановлены данные из аварийной копии (полный снимок)');},800);
+              }
+            }else{
+              STATE=norm(recovered);
+              try{save(true);}catch(e){}
+              setTimeout(function(){toast('Восстановлены данные из аварийной копии (полный снимок)');},800);
+            }
           }
         }
       }catch(e){}
@@ -2663,7 +2695,7 @@ function boot(){
       try{
         if(window.__FIN_DECRYPT_FAILED){
           setTimeout(function(){
-            toast('Данные зашифрованы, но не удалось открыть. Не переустанавливай приложение. Зайди в облако или импорт JSON.');
+            toast('Данные зашифрованы и не открылись. Не переустанавливай приложение. Открой облако ☁ или импорт JSON из Загрузки/Finna.');
           },900);
         }
       }catch(e){}
