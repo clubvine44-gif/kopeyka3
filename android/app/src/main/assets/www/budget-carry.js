@@ -1,6 +1,7 @@
 (function(){
-/* v118 budget leftovers carry-over for Нужные траты */
+/* v118.2 budget leftovers = накопления (учёт экономии), лимит НЕ увеличивается */
 'use strict';
+
 function budgetSavingsOf(cat){
   var bs=(STATE.settings&&STATE.settings.budgetSavings)||{};
   return Math.max(0,num(bs[cat]));
@@ -14,14 +15,13 @@ function addBudgetSaving(cat,amount){
 window.budgetSavingsOf=budgetSavingsOf;
 window.addBudgetSaving=addBudgetSaving;
 
-// override categoryDailyLimit
 if(typeof categoryDailyLimit==='function'||typeof window.categoryDailyLimit==='function'){
   window.categoryDailyLimit=function(cat,leftDays){
     cat=String(cat||'');
     var baseLim=budgetLimitOf(cat);
     var saved=budgetSavingsOf(cat);
-    var lim=baseLim+saved;
-    if(lim<=0)return{lim:0,baseLim:0,saved:0,spent:0,left:0,daily:0,spentToday:0};
+    var lim=baseLim;
+    if(lim<=0)return{lim:0,baseLim:0,saved:saved,spent:0,left:0,daily:0,spentToday:0};
     var spent=spentInCat(cat);
     var left=Math.max(0,lim-spent);
     var days=Math.max(1,num(leftDays)||1);
@@ -37,7 +37,6 @@ if(typeof categoryDailyLimit==='function'||typeof window.categoryDailyLimit==='f
   };
 }
 
-// override archiveBudgetPeriodReport
 if(typeof archiveBudgetPeriodReport==='function'||typeof window.archiveBudgetPeriodReport==='function'){
   window.archiveBudgetPeriodReport=function(){
     if(!STATE.settings)return null;
@@ -52,12 +51,15 @@ if(typeof archiveBudgetPeriodReport==='function'||typeof window.archiveBudgetPer
       byCat[cat]={spent:spent,limit:lim,leftover:leftover,savedBefore:budgetSavingsOf(cat)};
       total+=spent;
       if(leftover>0){addBudgetSaving(cat,leftover);totalSaved+=leftover;}
-      if(spent>0||lim>0||leftover>0)parts.push(cat+': '+fmt(spent)+(lim>0?(' / '+fmt(lim)):'')+(leftover>0?(' → +'+fmt(leftover)+' накопл.'):''));
+      if(spent>0||lim>0||leftover>0){
+        parts.push(cat+': '+fmt(spent)+(lim>0?(' / '+fmt(lim)):'')+(leftover>0?(' → сэкономлено '+fmt(leftover)):''));
+      }
     });
     var report={
       id:'pr_'+from+'_'+end,from:from,end:end,
       mode:(STATE.settings.limitHorizon==='month')?'month':'payday',
-      closedAt:new Date().toISOString(),totalSpent:total,totalSaved:totalSaved,
+      closedAt:new Date().toISOString(),
+      totalSpent:total,totalSaved:totalSaved,
       byCat:byCat,parts:parts.slice(0,12),cashSnapshot:null
     };
     try{
@@ -71,7 +73,6 @@ if(typeof archiveBudgetPeriodReport==='function'||typeof window.archiveBudgetPer
       if(STATE.settings.periodReports.length>36)STATE.settings.periodReports=STATE.settings.periodReports.slice(0,36);
     }
     STATE.settings.lastPeriodReport=report;
-    // НЕ обнуляем budgetSavings
     try{
       var fname='finna-period-'+from+'_'+end+'.json';
       var json=JSON.stringify(report,null,2);
@@ -81,5 +82,45 @@ if(typeof archiveBudgetPeriodReport==='function'||typeof window.archiveBudgetPer
   };
 }
 
-console.log('[FINNA v118] budget leftovers carry-over patch loaded');
+(function patchBudgetUI(){
+  function injectSavingsLabels(){
+    try{
+      var card=document.getElementById('budgetCard');
+      if(!card)return;
+      var rows=card.querySelectorAll('.budget-row[data-budget-cat]');
+      rows.forEach(function(row){
+        var cat=row.getAttribute('data-budget-cat');
+        if(!cat)return;
+        var saved=budgetSavingsOf(cat);
+        var sub=row.querySelector('.budget-row-sub');
+        if(!sub)return;
+        var exist=sub.querySelector('.budget-saved-label');
+        if(saved>0){
+          if(exist){exist.textContent='накоплено '+fmt(saved);}
+          else{
+            var span=document.createElement('span');
+            span.className='muted budget-saved-label';
+            span.style.color='#5ED9B0';
+            span.textContent='накоплено '+fmt(saved);
+            sub.appendChild(span);
+          }
+        }else if(exist){exist.remove();}
+      });
+    }catch(e){}
+  }
+  var _origRender=window.render;
+  if(typeof _origRender==='function'){
+    window.render=function(){
+      var r=_origRender.apply(this,arguments);
+      setTimeout(injectSavingsLabels,30);
+      setTimeout(injectSavingsLabels,150);
+      return r;
+    };
+  }
+  setTimeout(injectSavingsLabels,500);
+  setTimeout(injectSavingsLabels,1500);
+  setTimeout(injectSavingsLabels,3000);
+})();
+
+console.log('[FINNA v118.2] накопления = учёт экономии, лимит не растёт');
 })();
