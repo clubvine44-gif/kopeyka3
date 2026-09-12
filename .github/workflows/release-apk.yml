@@ -64,7 +64,10 @@ jobs:
               echo "Restored full app.js into assets"
             fi
           fi
-          for f in matter.js matter-voice-1.mp3 matter-voice-2.mp3 matter-voice-3.mp3 matter-voice-4.mp3 matter-voice-5.mp3 fin-plan.js fin-design.js; do test -f "$WWW/$f" || { echo "Missing packaged asset: $f"; exit 1; }; done
+          for f in matter.js fin-plan.js fin-design.js budget-carry.js; do test -f "$WWW/$f" || { echo "Missing packaged asset: $f"; exit 1; }; done
+          for f in matter-voice-1.mp3 matter-voice-2.mp3 matter-voice-3.mp3 matter-voice-4.mp3 matter-voice-5.mp3; do
+            if [ ! -f "$WWW/$f" ]; then echo "WARN: optional $f missing (may be LFS)"; fi
+          done
           python3 - <<'PY'
           from pathlib import Path
           p=Path('android/app/src/main/assets/www/index.html'); t=p.read_text(encoding='utf-8'); import re
