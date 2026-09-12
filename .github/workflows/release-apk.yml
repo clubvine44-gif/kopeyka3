@@ -53,8 +53,15 @@ jobs:
         run: |
           set -euo pipefail
           WWW="android/app/src/main/assets/www"; mkdir -p "$WWW"
-          for f in index.html app.js ai.js assistant-v2.js assistant.js cloud.js engine.js fin-core.js fin-plan.js fin-design.js secure-store.js fin-backup.js finn-char.js finn3d.js finn-wake.js matter.js matter-finn.js matter-room.jpg matter-room.mp3 matter-tour-1.mp3 matter-tour-2.mp3 matter-tour-3.mp3 matter-tour-4.mp3 matter-tour-5.mp3 voice.js onboard.js profile.js products.js sw.js manifest.json icon.svg widget.html ai-bootstrap.js; do if [ -f "$f" ]; then cp -f "$f" "$WWW/"; fi; done
-          for f in matter.js matter-tour-1.mp3 matter-tour-2.mp3 matter-tour-3.mp3 matter-tour-4.mp3 matter-tour-5.mp3 fin-plan.js fin-design.js; do test -f "$WWW/$f" || { echo "Missing packaged asset: $f"; exit 1; }; done
+          for f in index.html app.js ai.js assistant-v2.js assistant.js cloud.js engine.js fin-core.js fin-plan.js fin-design.js secure-store.js fin-backup.js finn-char.js finn3d.js finn-wake.js matter.js matter-finn.js matter-room.jpg matter-room.mp3 matter-voice-1.mp3 matter-voice-2.mp3 matter-voice-3.mp3 matter-voice-4.mp3 matter-voice-5.mp3 voice.js onboard.js profile.js products.js sw.js manifest.json icon.svg widget.html ai-bootstrap.js budget-carry.js; do if [ -f "$f" ]; then cp -f "$f" "$WWW/"; fi; done
+          if [ -f app.js ] && [ $(wc -c < app.js) -lt 20000 ]; then
+            echo "Root app.js is bootstrap — keeping assets version"
+            if [ -f android/app/src/main/assets/www/app.js ] && [ $(wc -c < android/app/src/main/assets/www/app.js) -gt 50000 ]; then
+              cp -f android/app/src/main/assets/www/app.js "$WWW/app.js"
+              echo "Restored full app.js from assets"
+            fi
+          fi
+          for f in matter.js matter-voice-1.mp3 matter-voice-2.mp3 matter-voice-3.mp3 matter-voice-4.mp3 matter-voice-5.mp3 fin-plan.js fin-design.js; do test -f "$WWW/$f" || { echo "Missing packaged asset: $f"; exit 1; }; done
           python3 - <<'PY'
           from pathlib import Path
           p=Path('android/app/src/main/assets/www/index.html'); t=p.read_text(encoding='utf-8'); import re
@@ -62,6 +69,11 @@ jobs:
           t=re.sub(r"if\('serviceWorker' in navigator\)navigator\.serviceWorker\.register\('sw\.js\?v=\d+'\)\.catch\(function\(\)\{\}\);", '', t)
           if 'window.__FIN_NATIVE=true' not in t: t=t.replace('window.__FIN_NATIVE=!!(window.FinBridge);','window.__FIN_NATIVE=true;',1)
           if 'window.__FIN_NATIVE' not in t: t=t.replace('<script>','<script>window.__FIN_NATIVE=true;',1)
+          # ensure budget-carry.js is loaded after app.js
+          if 'budget-carry.js' not in t and 'app.js' in t:
+              t=t.replace('</script><script src="profile.js', '</script><script src="budget-carry.js?v=2026091301"></script><script src="profile.js', 1)
+              if 'budget-carry.js' not in t:
+                  t=t.replace('app.js?v=2026091201"></script>', 'app.js?v=2026091201"></script><script src="budget-carry.js?v=2026091301"></script>', 1)
           p.write_text(t,encoding='utf-8')
           PY
       - name: Set version
@@ -106,7 +118,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG="v${RELEASE_VERSION_NAME}"; if gh release view "$TAG" >/dev/null 2>&1; then gh release upload "$TAG" Fin.apk Fin.apk.sha256 --clobber; else gh release create "$TAG" Fin.apk Fin.apk.sha256 --title "Финн ${RELEASE_VERSION_NAME}" --notes "Подписанный APK Финна ${RELEASE_VERSION_NAME} (versionCode ${RELEASE_VERSION_CODE})."; fi
+          TAG="v${RELEASE_VERSION_NAME}"; if gh release view "$TAG" >/dev/null 2>&1; then gh release upload "$TAG" Fin.apk Fin.apk.sha256 --clobber; else gh release create "$TAG" Fin.apk Fin.apk.sha256 --title "Финн ${RELEASE_VERSION_NAME}" --notes "Подписанный APK Финна ${RELEASE_VERSION_NAME} (versionCode ${RELEASE_VERSION_CODE}). budget leftovers carry-over."; fi
       - name: Update public update manifest
         run: |
           set -euo pipefail
@@ -123,7 +135,7 @@ jobs:
               'versionName':vn,
               'apkUrl':f'https://github.com/clubvine44-gif/kopeyka3/releases/download/v{vn}/Fin.apk',
               'sha256':sha,
-              'notes':f'{vn} — касса, облако, сохранность данных (versionCode {vc})'
+              'notes':f'{vn} — перенос остатков нужных трат, касса, облако (versionCode {vc})'
           },ensure_ascii=False,indent=2)+'\n')
           PY
           git config user.name 'github-actions[bot]'; git config user.email '41898282+github-actions[bot]@users.noreply.github.com'; git add update.json; git commit -m "Update Fin release manifest to ${RELEASE_VERSION_NAME}" || true; git push origin HEAD:main
