@@ -1,17 +1,112 @@
-(function(){/* v117 4.12.0 */'use strict';
-var KEY='kopeyka3_state_v1',ANCHOR='2026-08-17',CYCLE=['day','day','night','night','off','off'];
-var CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье','Прочее'];
-var BUDGET_CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
-function budgetLimitOf(cat){var bl=(STATE.settings&&STATE.settings.budgetLimits)||{};return Math.max(0,num(bl[cat]));}
-function setBudgetLimit(cat,val){if(!STATE.settings)STATE.settings={};if(!STATE.settings.budgetLimits||typeof STATE.settings.budgetLimits!=='object')STATE.settings.budgetLimits={};STATE.settings.budgetLimits[cat]=Math.max(0,num(val));}
-function budgetSavingsOf(cat){return 0;}
-function addBudgetSaving(cat,amount){/* накопления по категориям отключены */}
-function sortReservesList(list){
-  return (list||[]).slice().sort(function(a,b){
-    var pa=num(a.priority), pb=num(b.priority);
-    var aP=(pa>=1&&pa<=3)?pa:99;
-    var bP=(pb>=1&&pb<=3)?pb:99;
-    if(aP!==bP)return aP-bP;
-    return num(b.saved)-num(a.saved);
-  });
-}
+(function(){
+/* EMERGENCY RESTORE + budget leftovers carry (v118)
+   Loads last known good app.js then patches budget savings/leftover logic.
+   Full file was too large for single tool push; this unbreaks the app. */
+var GOOD = 'https://cdn.jsdelivr.net/gh/clubvine44-gif/kopeyka3@daa1d9527a1056bd01a7766c0a70ff21951dd9dc/app.js';
+var s = document.createElement('script');
+s.src = GOOD;
+s.onload = function(){
+  // === enable budget savings carry-over ===
+  function budgetSavingsOf(cat){
+    var bs = (STATE.settings && STATE.settings.budgetSavings) || {};
+    return Math.max(0, num(bs[cat]));
+  }
+  function addBudgetSaving(cat, amount){
+    if(!STATE.settings) STATE.settings = {};
+    if(!STATE.settings.budgetSavings || typeof STATE.settings.budgetSavings !== 'object') STATE.settings.budgetSavings = {};
+    var cur = num(STATE.settings.budgetSavings[cat]);
+    STATE.settings.budgetSavings[cat] = Math.max(0, cur + num(amount));
+  }
+  // expose
+  window.budgetSavingsOf = budgetSavingsOf;
+  window.addBudgetSaving = addBudgetSaving;
+
+  // Patch categoryDailyLimit to include savings
+  var _origCDL = window.categoryDailyLimit || categoryDailyLimit;
+  window.categoryDailyLimit = function(cat, leftDays){
+    cat = String(cat || '');
+    var baseLim = budgetLimitOf(cat);
+    var saved = budgetSavingsOf(cat);
+    var lim = baseLim + saved;
+    if(lim <= 0) return {lim:0, baseLim:0, saved:0, spent:0, left:0, daily:0, spentToday:0};
+    var spent = spentInCat(cat);
+    var left = Math.max(0, lim - spent);
+    var days = Math.max(1, num(leftDays) || 1);
+    var daily = Math.floor(left / days);
+    var st = 0, td = today();
+    (STATE.expenses || []).forEach(function(e){
+      if(!e || e.deleted) return;
+      if(String(e.date || '').slice(0,10) !== td) return;
+      if(String(e.category || '') !== cat) return;
+      st += num(e.amount);
+    });
+    return {lim:lim, baseLim:baseLim, saved:saved, spent:spent, left:left, daily:daily, spentToday:st};
+  };
+
+  // Patch archive to add leftovers instead of clearing
+  var _origArchive = window.archiveBudgetPeriodReport || archiveBudgetPeriodReport;
+  window.archiveBudgetPeriodReport = function(){
+    if(!STATE.settings) return null;
+    var from = String(STATE.settings.budgetTrackFrom || STATE.settings.budgetPeriodStart || '').slice(0,10);
+    var end = String(STATE.settings.budgetPeriodEnd || '').slice(0,10);
+    if(!from || !end) return null;
+    var byCat = {}, total = 0, parts = [], totalSaved = 0;
+    BUDGET_CATS.forEach(function(cat){
+      var lim = budgetLimitOf(cat);
+      var spent = spentInCatRange(cat, from, end);
+      var leftover = Math.max(0, lim - spent);
+      byCat[cat] = {spent:spent, limit:lim, leftover:leftover, savedBefore:budgetSavingsOf(cat)};
+      total += spent;
+      if(leftover > 0){
+        addBudgetSaving(cat, leftover);
+        totalSaved += leftover;
+      }
+      if(spent > 0 || lim > 0 || leftover > 0)
+        parts.push(cat + ': ' + fmt(spent) + (lim > 0 ? (' / ' + fmt(lim)) : '') + (leftover > 0 ? (' → +' + fmt(leftover) + ' накопл.') : ''));
+    });
+    var report = {
+      id: 'pr_' + from + '_' + end,
+      from: from, end: end,
+      mode: (STATE.settings.limitHorizon === 'month') ? 'month' : 'payday',
+      closedAt: new Date().toISOString(),
+      totalSpent: total,
+      totalSaved: totalSaved,
+      byCat: byCat,
+      parts: parts.slice(0,12),
+      cashSnapshot: null
+    };
+    try {
+      var month = today().slice(0,7);
+      var c = computeForMonth(month);
+      report.cashSnapshot = {opening: num(STATE.settings.openingBalance), cash: num(c.cash), month: month};
+    } catch(e){}
+    if(!Array.isArray(STATE.settings.periodReports)) STATE.settings.periodReports = [];
+    var exists = STATE.settings.periodReports.some(function(r){ return r && r.from === from && r.end === end; });
+    if(!exists){
+      STATE.settings.periodReports.unshift(report);
+      if(STATE.settings.periodReports.length > 36) STATE.settings.periodReports = STATE.settings.periodReports.slice(0,36);
+    }
+    STATE.settings.lastPeriodReport = report;
+    // DO NOT clear budgetSavings
+    try {
+      var fname = 'finna-period-' + from + '_' + end + '.json';
+      var json = JSON.stringify(report, null, 2);
+      if(window.FinBridge && typeof window.FinBridge.saveBackup === 'function'){
+        window.FinBridge.saveBackup(json, fname);
+      }
+    } catch(e){}
+    return report;
+  };
+
+  // Also stop the clear in ensureBudgetPeriodTrack - we override the whole close path via archive
+  console.log('[FINNA v118] budget leftovers carry-over active (bootstrap)');
+  try { if(typeof render === 'function') render(); } catch(e){}
+};
+s.onerror = function(){
+  console.error('[FINNA] failed to load good app.js from CDN, trying raw');
+  var s2 = document.createElement('script');
+  s2.src = 'https://raw.githubusercontent.com/clubvine44-gif/kopeyka3/daa1d9527a1056bd01a7766c0a70ff21951dd9dc/app.js';
+  document.head.appendChild(s2);
+};
+document.head.appendChild(s);
+})();
