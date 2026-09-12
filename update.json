@@ -1,7 +1,7 @@
 {
-  "versionCode": 161,
-  "versionName": "4.12.0",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.12.0/Fin.apk",
-  "sha256": "b96d4b4bcff176915cf9f66717a2bdc08aa769951e718c3a29c10fc3eb0a63eb",
-  "notes": "4.12.0 — касса, облако, сохранность данных (versionCode 161)"
+  "versionCode": 162,
+  "versionName": "4.12.1",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.12.1/Fin.apk",
+  "sha256": "8b0338ee786e905e9729723edf09bbb5434b1a9de0ed19e99b9be2dfd747dd6b",
+  "notes": "4.12.1 — перенос остатков нужных трат, касса, облако (versionCode 162)"
 }
