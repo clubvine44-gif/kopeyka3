@@ -1,11 +1,22 @@
-(function(){/* v117 4.12.0 */'use strict';
+(function(){/* v118.3 4.12.3 */'use strict';
 var KEY='kopeyka3_state_v1',ANCHOR='2026-08-17',CYCLE=['day','day','night','night','off','off'];
 var CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье','Прочее'];
 var BUDGET_CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
 function budgetLimitOf(cat){var bl=(STATE.settings&&STATE.settings.budgetLimits)||{};return Math.max(0,num(bl[cat]));}
 function setBudgetLimit(cat,val){if(!STATE.settings)STATE.settings={};if(!STATE.settings.budgetLimits||typeof STATE.settings.budgetLimits!=='object')STATE.settings.budgetLimits={};STATE.settings.budgetLimits[cat]=Math.max(0,num(val));}
-function budgetSavingsOf(cat){return 0;}
-function addBudgetSaving(cat,amount){/* накопления по категориям отключены */}
+function budgetSavingsOf(cat){
+  var bs=(STATE.settings&&STATE.settings.budgetSavings)||{};
+  return Math.max(0,num(bs[cat]));
+}
+function addBudgetSaving(cat,amount){
+  amount=num(amount);
+  if(amount<=0)return budgetSavingsOf(cat);
+  if(!STATE.settings)STATE.settings={};
+  if(!STATE.settings.budgetSavings||typeof STATE.settings.budgetSavings!=='object'||Array.isArray(STATE.settings.budgetSavings))STATE.settings.budgetSavings={};
+  var cur=num(STATE.settings.budgetSavings[cat]);
+  STATE.settings.budgetSavings[cat]=Math.max(0,cur+amount);
+  return STATE.settings.budgetSavings[cat];
+}
 function sortReservesList(list){
   return (list||[]).slice().sort(function(a,b){
     var pa=num(a.priority), pb=num(b.priority);
@@ -84,19 +95,34 @@ function spentInCatRange(cat,from,end){
   });
   return s;
 }
-/** Закрытие периода «нужных трат»: локальный отчёт по категориям, без накоплений. */
+/** Закрытие периода «нужных трат»: остаток лимита → накопления (учёт экономии). Лимит следующего периода НЕ растёт. */
 function archiveBudgetPeriodReport(){
   if(!STATE.settings)return null;
   var from=String(STATE.settings.budgetTrackFrom||STATE.settings.budgetPeriodStart||'').slice(0,10);
   var end=String(STATE.settings.budgetPeriodEnd||'').slice(0,10);
   if(!from||!end)return null;
-  var byCat={}, total=0, parts=[];
+  if(!Array.isArray(STATE.settings.periodReports))STATE.settings.periodReports=[];
+  var exists=null;
+  for(var i=0;i<STATE.settings.periodReports.length;i++){
+    var pr=STATE.settings.periodReports[i];
+    if(pr&&pr.from===from&&pr.end===end){exists=pr;break;}
+  }
+  if(exists)return exists;
+  var byCat={}, total=0, parts=[], totalSaved=0;
   BUDGET_CATS.forEach(function(cat){
     var lim=budgetLimitOf(cat);
     var spent=spentInCatRange(cat,from,end);
-    byCat[cat]={spent:spent,limit:lim};
+    var leftover=Math.max(0,lim-spent);
+    var savedBefore=budgetSavingsOf(cat);
+    if(leftover>0){
+      addBudgetSaving(cat,leftover);
+      totalSaved+=leftover;
+    }
+    byCat[cat]={spent:spent,limit:lim,leftover:leftover,savedBefore:savedBefore,savedAfter:budgetSavingsOf(cat)};
     total+=spent;
-    if(spent>0||lim>0)parts.push(cat+': '+fmt(spent)+(lim>0?(' / '+fmt(lim)):'') );
+    if(spent>0||lim>0||leftover>0){
+      parts.push(cat+': '+fmt(spent)+(lim>0?(' / '+fmt(lim)):'')+(leftover>0?(' → сэкономлено '+fmt(leftover)):''));
+    }
   });
   var report={
     id:'pr_'+from+'_'+end,
@@ -105,6 +131,7 @@ function archiveBudgetPeriodReport(){
     mode:(STATE.settings.limitHorizon==='month')?'month':'payday',
     closedAt:new Date().toISOString(),
     totalSpent:total,
+    totalSaved:totalSaved,
     byCat:byCat,
     parts:parts.slice(0,12),
     cashSnapshot:null
@@ -114,14 +141,9 @@ function archiveBudgetPeriodReport(){
     var c=computeForMonth(month);
     report.cashSnapshot={opening:num(STATE.settings.openingBalance),cash:num(c.cash),month:month};
   }catch(e){}
-  if(!Array.isArray(STATE.settings.periodReports))STATE.settings.periodReports=[];
-  var exists=STATE.settings.periodReports.some(function(r){return r&&r.from===from&&r.end===end;});
-  if(!exists){
-    STATE.settings.periodReports.unshift(report);
-    if(STATE.settings.periodReports.length>36)STATE.settings.periodReports=STATE.settings.periodReports.slice(0,36);
-  }
+  STATE.settings.periodReports.unshift(report);
+  if(STATE.settings.periodReports.length>36)STATE.settings.periodReports=STATE.settings.periodReports.slice(0,36);
   STATE.settings.lastPeriodReport=report;
-  try{STATE.settings.budgetSavings={};}catch(e){}
   try{
     var fname='finna-period-'+from+'_'+end+'.json';
     var json=JSON.stringify(report,null,2);
@@ -149,7 +171,7 @@ function ensureBudgetPeriodTrack(forceToday){
     return range;
   }
   if(prev!==key){
-    // Смена периода: 1-е (месяц) или день зарплаты — отчёт + обнуление учёта трат
+    // Смена периода: отчёт + накопления (экономия). Лимит не трогаем, накопления НЕ обнуляем.
     var closed=null;
     if(prev){
       try{closed=archiveBudgetPeriodReport();}catch(e){closed=null;}
@@ -158,11 +180,14 @@ function ensureBudgetPeriodTrack(forceToday){
     STATE.settings.budgetTrackFrom=range.start;
     STATE.settings.budgetPeriodStart=range.start;
     STATE.settings.budgetPeriodEnd=range.end;
-    try{STATE.settings.budgetSavings={};}catch(e){}
+    try{save(true);}catch(e){}
     if(closed){
       try{
         setTimeout(function(){
-          try{toast('Период закрыт. Отчёт: '+fmt(closed.totalSpent)+' по категориям');}catch(e){}
+          try{
+            var extra=(closed.totalSaved>0)?('. Сэкономлено '+fmt(closed.totalSaved)+' — в накоплениях, лимит не увеличен'):'';
+            toast('Период закрыт. Отчёт: '+fmt(closed.totalSpent)+' по категориям'+extra);
+          }catch(e2){}
         },400);
       }catch(e){}
     }
@@ -182,8 +207,10 @@ function spentInCat(cat,month){
 /** Остаток лимита категории на текущий период и дневной лимит по ней */
 function categoryDailyLimit(cat,leftDays){
   cat=String(cat||'');
-  var lim=budgetLimitOf(cat);
-  if(lim<=0)return {lim:0,spent:0,left:0,daily:0,spentToday:0};
+  var baseLim=budgetLimitOf(cat);
+  var saved=budgetSavingsOf(cat);
+  var lim=baseLim; // накопления = учёт экономии, лимит категории НЕ увеличивается
+  if(lim<=0)return {lim:0,baseLim:0,saved:saved,spent:0,left:0,daily:0,spentToday:0};
   var spent=spentInCat(cat);
   var left=Math.max(0,lim-spent);
   var days=Math.max(1,num(leftDays)||1);
@@ -195,7 +222,7 @@ function categoryDailyLimit(cat,leftDays){
     if(String(e.category||'')!==cat)return;
     st+=num(e.amount);
   });
-  return {lim:lim,spent:spent,left:left,daily:daily,spentToday:st};
+  return {lim:lim,baseLim:baseLim,saved:saved,spent:spent,left:left,daily:daily,spentToday:st};
 }
 
 
@@ -261,6 +288,7 @@ function norm(raw){
   if(o.settings.paydayDay!=null&&o.settings.paydayDay!==''){var pd=num(o.settings.paydayDay);o.settings.paydayDay=(pd>=1&&pd<=31)?pd:null;}else o.settings.paydayDay=null;
   if(o.settings.limitHorizon!=='month'&&o.settings.limitHorizon!=='payday')o.settings.limitHorizon=(o.settings.paydayDay? 'payday':'month');
   if(!Array.isArray(o.settings.periodReports))o.settings.periodReports=[];
+  if(!o.settings.budgetSavings||typeof o.settings.budgetSavings!=='object'||Array.isArray(o.settings.budgetSavings))o.settings.budgetSavings={};
   if(o.settings.shiftNotifHour==null||o.settings.shiftNotifHour==='')o.settings.shiftNotifHour=20;else o.settings.shiftNotifHour=Math.min(23,Math.max(0,num(o.settings.shiftNotifHour)));
   if(o.settings.shiftNotifMinute==null||o.settings.shiftNotifMinute==='')o.settings.shiftNotifMinute=0;else o.settings.shiftNotifMinute=Math.min(59,Math.max(0,num(o.settings.shiftNotifMinute)));
   if(o.settings.shiftNotifEnabled==null)o.settings.shiftNotifEnabled=true;
@@ -1892,7 +1920,7 @@ homeHtml += '<div class="budget-period">'+esc(bPeriod.mode==='payday'?'До за
 try{
   var lr=STATE.settings&&STATE.settings.lastPeriodReport;
   if(lr&&lr.closedAt&&String(lr.closedAt).slice(0,10)===today()){
-    homeHtml += '<div class="budget-period budget-roll">Закрыт прошлый период: '+fmt(lr.totalSpent)+' по категориям (отчёт сохранён)</div>';
+    homeHtml += '<div class="budget-period budget-roll">Закрыт прошлый период: '+fmt(lr.totalSpent)+' по категориям'+(lr.totalSaved?(' · сэкономлено '+fmt(lr.totalSaved)):'')+' (отчёт сохранён)</div>';
   }
 }catch(e){}
 BUDGET_CATS.forEach(function(cat){
@@ -1905,7 +1933,9 @@ BUDGET_CATS.forEach(function(cat){
   homeHtml += '<div class="budget-row'+(isFocus?' selected':'')+'" data-budget-cat="'+esc(cat)+'" role="button" tabindex="0">';
   homeHtml += '<div class="budget-row-top"><b>'+esc(cat)+'</b>';
   homeHtml += '<button type="button" class="budget-lim" data-budget-edit="'+esc(cat)+'">'+fmt(lim)+'</button></div>';
+  var saved=budgetSavingsOf(cat);
   homeHtml += '<div class="budget-row-sub"><span class="'+(over?'neg':'')+'">'+fmt(spent)+' из '+fmt(lim)+'</span>';
+  if(saved>0)homeHtml += '<span class="muted budget-saved-label" style="color:#5ED9B0">накоплено '+fmt(saved)+'</span>';
   homeHtml += '<span class="muted">'+(lim>0?(pct+'%'):'лимит не задан')+'</span></div>';
   homeHtml += '<div class="limit-bar"><div class="limit-fill" style="width:'+pct+'%;background:'+barCol+'"></div></div>';
     homeHtml += '</div>';
@@ -2729,5 +2759,8 @@ function boot(){
 }
 boot();
 window.goView=goView;window.goHome=goHome;window.render=render;window.compute=compute;window.ensureMonth=ensureMonth;window.syncReminders=typeof syncReminders==="function"?syncReminders:function(){};
+window.BUDGET_CATS=BUDGET_CATS;window.budgetLimitOf=budgetLimitOf;window.budgetSavingsOf=budgetSavingsOf;window.addBudgetSaving=addBudgetSaving;
+window.categoryDailyLimit=categoryDailyLimit;window.archiveBudgetPeriodReport=archiveBudgetPeriodReport;window.ensureBudgetPeriodTrack=ensureBudgetPeriodTrack;
+window.spentInCat=spentInCat;window.spentInCatRange=spentInCatRange;window.computeForMonth=computeForMonth;
 Object.defineProperty(window,'currentView',{get:function(){return currentView;},set:function(v){currentView=v||'home';window.__finView=currentView;}});
 })();

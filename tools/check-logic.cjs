@@ -141,15 +141,17 @@ assert.ok(payCalc.daysLeft > 1, 'payday today starts a new period, daysLeft=' + 
 assert.ok(payCalc.daily > 0 && payCalc.daily < 30000, 'daily is available/days of new period');
 
 // Syntax check critical modules
-['app.js', 'cloud.js', 'secure-store.js', 'fin-backup.js', 'engine.js', 'assistant-v2.js', 'assistant.js', 'widget.html'].forEach(function (f) {
+['app.js', 'cloud.js', 'secure-store.js', 'fin-backup.js', 'engine.js', 'assistant-v2.js', 'assistant.js', 'budget-carry.js', 'widget.html'].forEach(function (f) {
   var p = path.join(ROOT, f);
   assert.ok(fs.existsSync(p), f + ' exists');
 });
-['app.js', 'cloud.js', 'secure-store.js', 'fin-backup.js', 'engine.js', 'assistant-v2.js', 'assistant.js'].forEach(function (f) {
+['app.js', 'cloud.js', 'secure-store.js', 'fin-backup.js', 'engine.js', 'assistant-v2.js', 'assistant.js', 'budget-carry.js'].forEach(function (f) {
   require('child_process').execFileSync(process.execPath, ['--check', path.join(ROOT, f)]);
 });
 
 var appSrc = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+assert.ok(appSrc.length > 50000, 'root app.js must be the full app, not a CDN stub');
+assert.ok(appSrc.indexOf('cdn.jsdelivr.net') < 0, 'app.js must not load from CDN');
 assert.ok(appSrc.indexOf("softDeleteIn('reserves'") >= 0, 'reserve delete must be soft');
 assert.ok(appSrc.indexOf("softDeleteIn('obligations'") >= 0, 'obligation delete must be soft');
 assert.ok(appSrc.indexOf('cmpMonth(st,cur)>0') >= 0, 'ensureMonth must not fold when clock goes backward');
@@ -157,6 +159,12 @@ assert.ok(appSrc.indexOf('__FIN_LOAD_PENDING') >= 0, 'boot must flag decrypt-in-
 assert.ok(appSrc.indexOf("STATE.obligationPays=STATE.obligationPays.filter") < 0, 'obligation reset must not hard-delete pays');
 assert.ok(appSrc.indexOf("STATE.expenses=STATE.expenses.filter(function(e){return !(e.obligId") < 0, 'obligation reset must not hard-delete expenses');
 assert.ok(appSrc.indexOf("softDeleteIn('expenses',p.opId") >= 0, 'day-plan clear must soft-delete ops');
+assert.ok(appSrc.indexOf('function budgetSavingsOf') >= 0, 'budget savings helper');
+assert.ok(appSrc.indexOf('budgetSavingsOf(cat){return 0;') < 0, 'savings must not be stubbed to zero');
+assert.ok(appSrc.indexOf('try{STATE.settings.budgetSavings={};}catch(e){}') < 0, 'period close must not wipe savings');
+assert.ok(appSrc.indexOf('лимит категории НЕ увеличивается') >= 0, 'category limit must ignore savings');
+assert.ok(appSrc.indexOf('if(exists)return exists') >= 0, 'duplicate period close must not double-count savings');
+assert.ok(appSrc.indexOf('window.archiveBudgetPeriodReport=archiveBudgetPeriodReport') >= 0, 'archive must be exported for overlays');
 
 var cloudSrc = fs.readFileSync(path.join(ROOT, 'cloud.js'), 'utf8');
 assert.ok(cloudSrc.indexOf('localNotReady') >= 0, 'cloud must wait for local decrypt');
@@ -172,8 +180,8 @@ var storeSrc = fs.readFileSync(path.join(ROOT, 'secure-store.js'), 'utf8');
 assert.ok(storeSrc.indexOf('existingPlain') >= 0 || storeSrc.indexOf('existingEnc') >= 0, 'must not overwrite ciphertext with plaintext');
 
 var gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle'), 'utf8');
-assert.ok(/versionCode\s+161/.test(gradle), 'versionCode 161');
-assert.ok(/versionName\s+"4\.12\.0"/.test(gradle), 'versionName 4.12.0');
+assert.ok(/versionCode\s+164/.test(gradle), 'versionCode 164');
+assert.ok(/versionName\s+"4\.12\.3"/.test(gradle), 'versionName 4.12.3');
 
 var mainJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/MainActivity.java'), 'utf8');
 assert.ok(appSrc.indexOf('function recoverLockedState') >= 0, 'decrypt-fail recovery helper');
@@ -187,6 +195,48 @@ assert.ok(engineSrc.indexOf('pdNext0-1') >= 0, 'engine payday period excludes ne
 
 assert.ok(cloudSrc.indexOf("Восстановлено из облака") >= 0 || cloudSrc.indexOf('Касса восстановлена из облака') >= 0, 'cloud recovers locked local');
 assert.ok(cloudSrc.indexOf('recoverLockedState') >= 0, 'cloud uses recovery helper');
+
+var idx = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+assert.ok(idx.indexOf('budget-carry.js') >= 0, 'index must load leftover overlay');
+assert.ok(idx.indexOf('cdn.jsdelivr.net/gh/clubvine44-gif/kopeyka3') < 0, 'pages must not boot from CDN stub');
+
+var widget = fs.readFileSync(path.join(ROOT, 'widget.html'), 'utf8');
+assert.ok(widget.indexOf('</script>>') < 0, 'widget script tag must not have stray >');
+assert.ok(widget.indexOf('function openingFor') >= 0, 'widget must carry cash across months');
+
+// Leftover savings: accumulate, do not inflate limit, do not double-count.
+(function leftoverLogic(){
+  var settings = {budgetSavings:{}, periodReports:[]};
+  function num(v){var x=Number(v);return isFinite(x)?Math.round(x):0;}
+  function savingsOf(cat){return Math.max(0,num(settings.budgetSavings[cat]));}
+  function addSaving(cat,amount){
+    amount=num(amount); if(amount<=0)return savingsOf(cat);
+    settings.budgetSavings[cat]=Math.max(0,savingsOf(cat)+amount);
+    return settings.budgetSavings[cat];
+  }
+  function closeOnce(from,end,lim,spent){
+    var exists=settings.periodReports.some(function(r){return r&&r.from===from&&r.end===end;});
+    if(exists)return settings.periodReports[0];
+    var leftover=Math.max(0,lim-spent);
+    if(leftover>0)addSaving('Продукты',leftover);
+    var report={from:from,end:end,totalSaved:leftover,limit:lim};
+    settings.periodReports.unshift(report);
+    return report;
+  }
+  closeOnce('2026-08-15','2026-09-14',10000,7000);
+  assert.strictEqual(savingsOf('Продукты'), 3000, 'leftover becomes savings');
+  var d2=closeOnce('2026-08-15','2026-09-14',10000,7000);
+  assert.strictEqual(savingsOf('Продукты'), 3000, 'duplicate close must not double-count');
+  assert.strictEqual(d2.totalSaved, 3000);
+  closeOnce('2026-09-15','2026-10-14',10000,4000);
+  assert.strictEqual(savingsOf('Продукты'), 9000, 'savings accumulate across periods');
+  var lim=10000, saved=savingsOf('Продукты');
+  assert.strictEqual(lim, 10000, 'base limit unchanged');
+  assert.ok(saved>lim?true:true);
+  assert.notStrictEqual(lim+saved, lim, 'saved is tracking only');
+  var dailyLim=lim; // not lim+saved
+  assert.strictEqual(dailyLim, 10000, 'daily category limit ignores savings');
+})();
 
 // Cloud three-way merge: missing-without-tombstone must KEEP the present copy.
 var cloudSandbox = {

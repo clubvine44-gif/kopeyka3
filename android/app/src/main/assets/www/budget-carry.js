@@ -1,25 +1,37 @@
 (function(){
-/* v118.2 budget leftovers = накопления (учёт экономии), лимит НЕ увеличивается */
+/* v118.3 — страховочный слой. Ядро уже в app.js 4.12.3.
+   Патчит только если сборка без встроенных накоплений или функции не экспортированы. */
 'use strict';
 
-function budgetSavingsOf(cat){
+function savingsOf(cat){
   var bs=(STATE.settings&&STATE.settings.budgetSavings)||{};
   return Math.max(0,num(bs[cat]));
 }
-function addBudgetSaving(cat,amount){
+function addSaving(cat,amount){
+  amount=num(amount);
+  if(amount<=0)return savingsOf(cat);
   if(!STATE.settings)STATE.settings={};
-  if(!STATE.settings.budgetSavings||typeof STATE.settings.budgetSavings!=='object')STATE.settings.budgetSavings={};
+  if(!STATE.settings.budgetSavings||typeof STATE.settings.budgetSavings!=='object'||Array.isArray(STATE.settings.budgetSavings))STATE.settings.budgetSavings={};
   var cur=num(STATE.settings.budgetSavings[cat]);
-  STATE.settings.budgetSavings[cat]=Math.max(0,cur+num(amount));
+  STATE.settings.budgetSavings[cat]=Math.max(0,cur+amount);
+  return STATE.settings.budgetSavings[cat];
 }
-window.budgetSavingsOf=budgetSavingsOf;
-window.addBudgetSaving=addBudgetSaving;
 
-if(typeof categoryDailyLimit==='function'||typeof window.categoryDailyLimit==='function'){
+window.budgetSavingsOf=window.budgetSavingsOf||savingsOf;
+window.addBudgetSaving=window.addBudgetSaving||addSaving;
+
+function nativeHasSavings(){
+  try{
+    var src=String(window.archiveBudgetPeriodReport||'');
+    return src.indexOf('addBudgetSaving')>=0 || src.indexOf('totalSaved')>=0;
+  }catch(e){return false;}
+}
+
+if(!nativeHasSavings()){
   window.categoryDailyLimit=function(cat,leftDays){
     cat=String(cat||'');
     var baseLim=budgetLimitOf(cat);
-    var saved=budgetSavingsOf(cat);
+    var saved=(window.budgetSavingsOf||savingsOf)(cat);
     var lim=baseLim;
     if(lim<=0)return{lim:0,baseLim:0,saved:saved,spent:0,left:0,daily:0,spentToday:0};
     var spent=spentInCat(cat);
@@ -35,22 +47,31 @@ if(typeof categoryDailyLimit==='function'||typeof window.categoryDailyLimit==='f
     });
     return{lim:lim,baseLim:baseLim,saved:saved,spent:spent,left:left,daily:daily,spentToday:st};
   };
-}
 
-if(typeof archiveBudgetPeriodReport==='function'||typeof window.archiveBudgetPeriodReport==='function'){
   window.archiveBudgetPeriodReport=function(){
     if(!STATE.settings)return null;
     var from=String(STATE.settings.budgetTrackFrom||STATE.settings.budgetPeriodStart||'').slice(0,10);
     var end=String(STATE.settings.budgetPeriodEnd||'').slice(0,10);
     if(!from||!end)return null;
+    if(!Array.isArray(STATE.settings.periodReports))STATE.settings.periodReports=[];
+    var exists=null;
+    for(var i=0;i<STATE.settings.periodReports.length;i++){
+      var pr=STATE.settings.periodReports[i];
+      if(pr&&pr.from===from&&pr.end===end){exists=pr;break;}
+    }
+    if(exists)return exists;
     var byCat={},total=0,parts=[],totalSaved=0;
-    BUDGET_CATS.forEach(function(cat){
+    (window.BUDGET_CATS||[]).forEach(function(cat){
       var lim=budgetLimitOf(cat);
       var spent=spentInCatRange(cat,from,end);
       var leftover=Math.max(0,lim-spent);
-      byCat[cat]={spent:spent,limit:lim,leftover:leftover,savedBefore:budgetSavingsOf(cat)};
+      var savedBefore=(window.budgetSavingsOf||savingsOf)(cat);
+      if(leftover>0){
+        (window.addBudgetSaving||addSaving)(cat,leftover);
+        totalSaved+=leftover;
+      }
+      byCat[cat]={spent:spent,limit:lim,leftover:leftover,savedBefore:savedBefore,savedAfter:(window.budgetSavingsOf||savingsOf)(cat)};
       total+=spent;
-      if(leftover>0){addBudgetSaving(cat,leftover);totalSaved+=leftover;}
       if(spent>0||lim>0||leftover>0){
         parts.push(cat+': '+fmt(spent)+(lim>0?(' / '+fmt(lim)):'')+(leftover>0?(' → сэкономлено '+fmt(leftover)):''));
       }
@@ -67,11 +88,8 @@ if(typeof archiveBudgetPeriodReport==='function'||typeof window.archiveBudgetPer
       var c=computeForMonth(month);
       report.cashSnapshot={opening:num(STATE.settings.openingBalance),cash:num(c.cash),month:month};
     }catch(e){}
-    if(!Array.isArray(STATE.settings.periodReports))STATE.settings.periodReports=[];
-    if(!STATE.settings.periodReports.some(function(r){return r&&r.from===from&&r.end===end;})){
-      STATE.settings.periodReports.unshift(report);
-      if(STATE.settings.periodReports.length>36)STATE.settings.periodReports=STATE.settings.periodReports.slice(0,36);
-    }
+    STATE.settings.periodReports.unshift(report);
+    if(STATE.settings.periodReports.length>36)STATE.settings.periodReports=STATE.settings.periodReports.slice(0,36);
     STATE.settings.lastPeriodReport=report;
     try{
       var fname='finna-period-'+from+'_'+end+'.json';
@@ -82,45 +100,5 @@ if(typeof archiveBudgetPeriodReport==='function'||typeof window.archiveBudgetPer
   };
 }
 
-(function patchBudgetUI(){
-  function injectSavingsLabels(){
-    try{
-      var card=document.getElementById('budgetCard');
-      if(!card)return;
-      var rows=card.querySelectorAll('.budget-row[data-budget-cat]');
-      rows.forEach(function(row){
-        var cat=row.getAttribute('data-budget-cat');
-        if(!cat)return;
-        var saved=budgetSavingsOf(cat);
-        var sub=row.querySelector('.budget-row-sub');
-        if(!sub)return;
-        var exist=sub.querySelector('.budget-saved-label');
-        if(saved>0){
-          if(exist){exist.textContent='накоплено '+fmt(saved);}
-          else{
-            var span=document.createElement('span');
-            span.className='muted budget-saved-label';
-            span.style.color='#5ED9B0';
-            span.textContent='накоплено '+fmt(saved);
-            sub.appendChild(span);
-          }
-        }else if(exist){exist.remove();}
-      });
-    }catch(e){}
-  }
-  var _origRender=window.render;
-  if(typeof _origRender==='function'){
-    window.render=function(){
-      var r=_origRender.apply(this,arguments);
-      setTimeout(injectSavingsLabels,30);
-      setTimeout(injectSavingsLabels,150);
-      return r;
-    };
-  }
-  setTimeout(injectSavingsLabels,500);
-  setTimeout(injectSavingsLabels,1500);
-  setTimeout(injectSavingsLabels,3000);
-})();
-
-console.log('[FINNA v118.2] накопления = учёт экономии, лимит не растёт');
+console.log('[FINNA v118.3] накопления = учёт экономии, лимит не растёт, снимок не затирается');
 })();
