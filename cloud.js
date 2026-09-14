@@ -1,4 +1,4 @@
-/* cloud.js v20 — encrypted-aware local, no logout wipe, wait-for-app — field-aware merge, conflict preservation, tombstones, optimistic locking, safe offline/logout */
+/* cloud.js v21 — encrypted-aware local, nested budget merge, no logout wipe, wait-for-app — field-aware merge, conflict preservation, tombstones, optimistic locking, safe offline/logout */
 (function(){
 'use strict';
 const URL='https://cqslrfphsjllhltsvvuq.supabase.co';
@@ -25,7 +25,7 @@ function writeBase(s){try{if(s)localStorage.setItem(SYNC_BASE,JSON.stringify(sta
 function clearIntent(){try{return Number(localStorage.getItem(CLEAR_INTENT)||0)||0;}catch(_){return 0;}}
 function setClearIntent(){try{if(!clearIntent())localStorage.setItem(CLEAR_INTENT,String(Date.now()));}catch(_){} }
 function clearClearIntent(){try{localStorage.removeItem(CLEAR_INTENT);}catch(_){} }
-function isEmptyState(s){if(!s)return true;function live(arr){return Array.isArray(arr)&&arr.some(function(x){return x&&!x.deleted;});}return !COLLECTIONS.some(function(k){return live(s[k]);})&&(!s.shiftsOverride||Object.keys(s.shiftsOverride).length===0)&&(!s.dayPlans||Object.keys(s.dayPlans).length===0)&&(!s.settings||(!Number(s.settings.openingBalance)&&!Number(s.settings.dayRate)&&!Number(s.settings.nightRate)));}
+function isEmptyState(s){if(!s)return true;function live(arr){return Array.isArray(arr)&&arr.some(function(x){return x&&!x.deleted;});}if(COLLECTIONS.some(function(k){return live(s[k]);}))return false;if(s.shiftsOverride&&Object.keys(s.shiftsOverride).length)return false;if(s.dayPlans&&Object.keys(s.dayPlans).length)return false;var st=s.settings||{};if(Number(st.openingBalance)||Number(st.dayRate)||Number(st.nightRate)||Number(st.paydayDay))return false;if(st.userName)return false;function mapLive(o){if(!o||typeof o!=='object'||Array.isArray(o))return false;return Object.keys(o).some(function(k){return Number(o[k])>0;});}if(mapLive(st.budgetSavings)||mapLive(st.budgetLimits))return false;if(Array.isArray(st.periodReports)&&st.periodReports.length)return false;return true;}
 function same(a,b){if(a===b)return true;var x=a&&typeof a==='object'?Object.assign({},a):a,y=b&&typeof b==='object'?Object.assign({},b):b;if(x&&typeof x==='object'){delete x.updatedAt;delete x.app;}if(y&&typeof y==='object'){delete y.updatedAt;delete y.app;}return JSON.stringify(x)===JSON.stringify(y);}
 function mapById(a){var m={};(Array.isArray(a)?a:[]).forEach(function(x){if(x&&x.id)m[x.id]=x;});return m;}
 function deletedMap(s,k){return s&&s._deleted&&s._deleted[k]&&typeof s._deleted[k]==='object'?s._deleted[k]:{};}
@@ -43,7 +43,66 @@ function mergeArray(base,local,remote,k,conflicts,bd,ld,rd){var bm=mapById(base)
   if(v)out.push(v);
 });Object.keys(deleted).forEach(function(id){if(!lm[id]&&!rm[id]&&!bm[id])delete deleted[id];});return{items:out,deleted:deleted};}
 function mergeObject(base,local,remote,kind,conflicts){var out={},keys={};[base,local,remote].forEach(function(o){if(o&&typeof o==='object')Object.keys(o).forEach(function(k){keys[k]=1;});});Object.keys(keys).forEach(function(k){var b=base&&base[k],l=local&&local[k],r=remote&&remote[k],lc=!same(l,b),rc=!same(r,b);if(lc&&!rc)out[k]=l;else if(!lc&&rc)out[k]=r;else if(lc&&rc){if(same(l,r))out[k]=l;else{out[k]=l;conflict(conflicts,kind,'state',k,l,r);}}else if(r!==undefined)out[k]=r;else if(l!==undefined)out[k]=l;});return out;}
-function threeWay(base,local,remote){base=normalize(base||{});local=normalize(local||{});remote=normalize(remote||{});var out=Object.assign({},remote),allDeleted={},conflicts=[];COLLECTIONS.forEach(function(k){var m=mergeArray(base[k],local[k],remote[k],k,conflicts,deletedMap(base,k),deletedMap(local,k),deletedMap(remote,k));out[k]=m.items;allDeleted[k]=m.deleted;});out._deleted=allDeleted;out.shiftsOverride=mergeObject(base.shiftsOverride||{},local.shiftsOverride||{},remote.shiftsOverride||{},'shiftsOverride',conflicts);out.dayPlans=mergeObject(base.dayPlans||{},local.dayPlans||{},remote.dayPlans||{},'dayPlans',conflicts);out.voiceMap=mergeObject(base.voiceMap||{},local.voiceMap||{},remote.voiceMap||{},'voiceMap',conflicts);out.settings=mergeObject(base.settings||{},local.settings||{},remote.settings||{},'settings',conflicts);out._conflicts=(remote._conflicts||[]).concat(local._conflicts||[],conflicts).slice(-100);out.version=Math.max(Number(local.version)||0,Number(remote.version)||0,6);out.app='kopeyka3';out.updatedAt=new Date().toISOString();return normalize(out);}
+function num0(v){var x=Number(v);return isFinite(x)?x:0;}
+function mergeNumericMap(base,local,remote){
+  var out={},keys={};
+  [base,local,remote].forEach(function(o){if(o&&typeof o==='object'&&!Array.isArray(o))Object.keys(o).forEach(function(k){keys[k]=1;});});
+  Object.keys(keys).forEach(function(k){
+    var b=base&&base[k],l=local&&local[k],r=remote&&remote[k];
+    var lc=!same(l,b),rc=!same(r,b);
+    if(lc&&!rc)out[k]=l;
+    else if(!lc&&rc)out[k]=r;
+    else if(lc&&rc){
+      if(same(l,r))out[k]=l;
+      else out[k]=Math.max(num0(l),num0(r),num0(b));
+    }else if(r!==undefined)out[k]=r;
+    else if(l!==undefined)out[k]=l;
+    if(out[k]==null||out[k]==='')delete out[k];
+    else out[k]=num0(out[k]);
+  });
+  return out;
+}
+function mergePeriodReports(local,remote){
+  var map={};
+  function add(arr){
+    (arr||[]).forEach(function(r){
+      if(!r||typeof r!=='object')return;
+      var k=String(r.from||'')+'|'+String(r.end||'');
+      if(k==='|')k=String(r.id||'');
+      if(!k)return;
+      var prev=map[k];
+      if(!prev){map[k]=r;return;}
+      if(num0(r.totalSaved)>num0(prev.totalSaved))map[k]=r;
+    });
+  }
+  add(local);add(remote);
+  return Object.keys(map).map(function(k){return map[k];}).sort(function(a,b){return String(b.from||'').localeCompare(String(a.from||''));}).slice(0,36);
+}
+function savingsFromReports(reports){
+  var s={};
+  (reports||[]).forEach(function(r){
+    if(!r||!r.byCat||typeof r.byCat!=='object')return;
+    Object.keys(r.byCat).forEach(function(cat){
+      var leftover=r.byCat[cat]&&r.byCat[cat].leftover!=null?num0(r.byCat[cat].leftover):0;
+      if(leftover>0)s[cat]=(s[cat]||0)+leftover;
+    });
+  });
+  return s;
+}
+function mergeSettings(base,local,remote,conflicts){
+  var out=mergeObject(base,local,remote,'settings',conflicts);
+  var reports=mergePeriodReports(local&&local.periodReports, remote&&remote.periodReports);
+  out.periodReports=reports;
+  var sav=mergeNumericMap(base&&base.budgetSavings, local&&local.budgetSavings, remote&&remote.budgetSavings);
+  var rec=savingsFromReports(reports);
+  Object.keys(rec).forEach(function(cat){sav[cat]=Math.max(num0(sav[cat]), rec[cat]);});
+  out.budgetSavings=sav;
+  out.budgetLimits=mergeNumericMap(base&&base.budgetLimits, local&&local.budgetLimits, remote&&remote.budgetLimits);
+  if(local&&local.lastPeriodReport)out.lastPeriodReport=local.lastPeriodReport;
+  else if(remote&&remote.lastPeriodReport)out.lastPeriodReport=remote.lastPeriodReport;
+  return out;
+}
+function threeWay(base,local,remote){base=normalize(base||{});local=normalize(local||{});remote=normalize(remote||{});var out=Object.assign({},remote),allDeleted={},conflicts=[];COLLECTIONS.forEach(function(k){var m=mergeArray(base[k],local[k],remote[k],k,conflicts,deletedMap(base,k),deletedMap(local,k),deletedMap(remote,k));out[k]=m.items;allDeleted[k]=m.deleted;});out._deleted=allDeleted;out.shiftsOverride=mergeObject(base.shiftsOverride||{},local.shiftsOverride||{},remote.shiftsOverride||{},'shiftsOverride',conflicts);out.dayPlans=mergeObject(base.dayPlans||{},local.dayPlans||{},remote.dayPlans||{},'dayPlans',conflicts);out.voiceMap=mergeObject(base.voiceMap||{},local.voiceMap||{},remote.voiceMap||{},'voiceMap',conflicts);out.settings=mergeSettings(base.settings||{},local.settings||{},remote.settings||{},conflicts);out._conflicts=(remote._conflicts||[]).concat(local._conflicts||[],conflicts).slice(-100);out.version=Math.max(Number(local.version)||0,Number(remote.version)||0,6);out.app='kopeyka3';out.updatedAt=new Date().toISOString();return normalize(out);}
 function localChanged(base,local){return !same(normalize(base||{}),normalize(local||{}));}
 function hasPendingChanges(){var base=readBase(),local=readLocal();return !!clearIntent()||(!base&&!!local&&!isEmptyState(local))||(!!base&&localChanged(base,local));}
 function applyState(s,label){if(localNotReady()){if(label)toast('Локальные данные ещё открываются — облако подождёт');return;}var n=stamp(s);if(isEmptyState(n)){var live=liveState();if(live&&!isEmptyState(live)){if(label)toast('Локальные данные сохранены, пустое облако не применено');return;}try{var existing=localStorage.getItem(LOCAL_BASE);if(existing&&String(existing).indexOf('FINENC1:')===0){if(label)toast('Зашифрованные данные на устройстве сохранены');return;}}catch(_){}}var prev=null;try{prev=window.STATE?JSON.stringify(window.STATE):null;}catch(_){}

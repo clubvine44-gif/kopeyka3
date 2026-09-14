@@ -1,6 +1,7 @@
 {
-  "versionCode": 70,
-  "versionName": "4.0.0-stable",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.0.0-stable/Fin.apk",
-  "notes": "4.0.0 Stable — operations appear instantly, critical push for urgent reserves, boot-safe reminders"
+  "versionCode": 164,
+  "versionName": "4.12.3",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.12.3/Fin.apk",
+  "sha256": "e7236bccf1901da2683ff7ee2d7b0aaba6e14ec1ef8dcdaa0558252a27ec211b",
+  "notes": "4.12.3 — накопления нужных трат без роста лимита, полный app.js, касса, облако (versionCode 164)"
 }

@@ -1,4 +1,4 @@
-(function(){/* v118.3 4.12.3 */'use strict';
+(function(){/* v118.4 4.12.4 */'use strict';
 var KEY='kopeyka3_state_v1',ANCHOR='2026-08-17',CYCLE=['day','day','night','night','off','off'];
 var CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье','Прочее'];
 var BUDGET_CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
@@ -78,6 +78,46 @@ function budgetPeriodRange(){
     label:'01.'+pad2(mo)+'–'+pad2(last)+'.'+pad2(mo),
     mode:'month'
   };
+}
+function addDaysISO(iso,delta){
+  var p=String(iso||'').slice(0,10).split('-').map(Number);
+  if(p.length<3||!p[0])return iso;
+  var d=new Date(p[0],p[1]-1,p[2]);
+  d.setDate(d.getDate()+delta);
+  return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());
+}
+/** Следующий период «нужных трат» после закрытого from–end. Нужен, если приложение не открывали несколько циклов. */
+function nextBudgetRangeAfter(from,end,mode){
+  from=String(from||'').slice(0,10);
+  end=String(end||'').slice(0,10);
+  mode=mode==='month'?'month':'payday';
+  if(!from||!end)return null;
+  if(mode==='month'){
+    var p=end.split('-').map(Number);
+    var y=p[0], m=p[1]+1;
+    if(m>12){m=1;y++;}
+    var last=daysInMonthNum(y,m);
+    return {start:y+'-'+pad2(m)+'-01', end:y+'-'+pad2(m)+'-'+pad2(last), mode:'month'};
+  }
+  var ns=addDaysISO(end,1);
+  var payday=STATE.settings&&STATE.settings.paydayDay!=null?num(STATE.settings.paydayDay):0;
+  if(!(payday>=1&&payday<=31)){
+    var np=ns.split('-').map(Number);
+    var last2=daysInMonthNum(np[0],np[1]);
+    return {start:np[0]+'-'+pad2(np[1])+'-01', end:np[0]+'-'+pad2(np[1])+'-'+pad2(last2), mode:'month'};
+  }
+  var nsp=ns.split('-').map(Number);
+  var y2=nsp[0], m2=nsp[1], d2=nsp[2];
+  var paydayThis=Math.min(payday, daysInMonthNum(y2,m2));
+  var ey=y2, em=m2;
+  if(d2>=paydayThis){
+    em+=1; if(em>12){em=1;ey++;}
+  }
+  var ed=Math.min(payday, daysInMonthNum(ey,em))-1;
+  if(ed<1){
+    ey=y2; em=m2; ed=daysInMonthNum(ey,em);
+  }
+  return {start:ns, end:ey+'-'+pad2(em)+'-'+pad2(ed), mode:'payday'};
 }
 function spentInCatRange(cat,from,end){
   from=String(from||'').slice(0,10);
@@ -159,6 +199,9 @@ function rolloverBudgetLeftovers(){
 }
 function ensureBudgetPeriodTrack(forceToday){
   if(!STATE.settings)STATE.settings={};
+  if(window.__FIN_DECRYPT_FAILED||window.__FIN_LOAD_PENDING){
+    try{return budgetPeriodRange();}catch(e){return null;}
+  }
   var range=budgetPeriodRange();
   var key=range.mode+'_'+range.start+'_'+range.end;
   var prev=STATE.settings.budgetPeriodKey||'';
@@ -171,10 +214,29 @@ function ensureBudgetPeriodTrack(forceToday){
     return range;
   }
   if(prev!==key){
-    // Смена периода: отчёт + накопления (экономия). Лимит не трогаем, накопления НЕ обнуляем.
-    var closed=null;
+    // Смена периода: закрываем сохранённый и все пропущенные циклы. Лимит не трогаем.
+    var closed=null, totalSaved=0, guard=0;
     if(prev){
-      try{closed=archiveBudgetPeriodReport();}catch(e){closed=null;}
+      while(guard++<24){
+        var from0=String(STATE.settings.budgetTrackFrom||STATE.settings.budgetPeriodStart||'').slice(0,10);
+        var end0=String(STATE.settings.budgetPeriodEnd||'').slice(0,10);
+        var mode0=(STATE.settings.limitHorizon==='month')?'month':'payday';
+        if(!from0||!end0)break;
+        var storedKey=mode0+'_'+from0+'_'+end0;
+        if(storedKey===key)break;
+        if(from0>=range.start&&end0>=range.end)break;
+        try{
+          var r=archiveBudgetPeriodReport();
+          if(r){closed=r;totalSaved+=num(r.totalSaved);}
+        }catch(e){}
+        var nxt=nextBudgetRangeAfter(from0,end0,mode0);
+        if(!nxt||!nxt.start||nxt.start<=from0)break;
+        if(nxt.start>range.start)break;
+        STATE.settings.budgetTrackFrom=nxt.start;
+        STATE.settings.budgetPeriodStart=nxt.start;
+        STATE.settings.budgetPeriodEnd=nxt.end;
+        STATE.settings.budgetPeriodKey=mode0+'_'+nxt.start+'_'+nxt.end;
+      }
     }
     STATE.settings.budgetPeriodKey=key;
     STATE.settings.budgetTrackFrom=range.start;
@@ -185,7 +247,7 @@ function ensureBudgetPeriodTrack(forceToday){
       try{
         setTimeout(function(){
           try{
-            var extra=(closed.totalSaved>0)?('. Сэкономлено '+fmt(closed.totalSaved)+' — в накоплениях, лимит не увеличен'):'';
+            var extra=(totalSaved>0)?('. Сэкономлено '+fmt(totalSaved)+' — в накоплениях, лимит не увеличен'):'';
             toast('Период закрыт. Отчёт: '+fmt(closed.totalSpent)+' по категориям'+extra);
           }catch(e2){}
         },400);
@@ -270,11 +332,24 @@ function hasLiveData(s){
   if(s.settings&&Number(s.settings.openingBalance))return true;
   if(s.settings&&Number(s.settings.dayRate))return true;
   if(s.settings&&Number(s.settings.nightRate))return true;
+  if(s.settings&&Number(s.settings.paydayDay))return true;
+  if(s.settings&&s.settings.userName)return true;
+  try{
+    var bs=s.settings&&s.settings.budgetSavings;
+    if(bs&&typeof bs==='object'){
+      for(var bk in bs){if(Object.prototype.hasOwnProperty.call(bs,bk)&&Number(bs[bk]))return true;}
+    }
+    var bl=s.settings&&s.settings.budgetLimits;
+    if(bl&&typeof bl==='object'){
+      for(var lk in bl){if(Object.prototype.hasOwnProperty.call(bl,lk)&&Number(bl[lk]))return true;}
+    }
+    if(s.settings&&Array.isArray(s.settings.periodReports)&&s.settings.periodReports.length)return true;
+  }catch(e){}
   if(s.shiftsOverride&&Object.keys(s.shiftsOverride).length)return true;
   if(s.dayPlans&&Object.keys(s.dayPlans).length)return true;
   return false;
 }
-function def(){return{version:6,settings:{openingBalance:0,month:today().slice(0,7),dayRate:0,nightRate:0,paydayDay:null,limitHorizon:'payday',shiftNotifHour:20,shiftNotifMinute:0,shiftNotifEnabled:true,userName:''},income:[],expenses:[],reserves:[],debts:[],reserveOps:[],obligations:[],obligationPays:[],voiceMap:{},shiftsOverride:{},dayPlans:{},updatedAt:new Date().toISOString()};}
+function def(){return{version:6,settings:{openingBalance:0,month:today().slice(0,7),dayRate:0,nightRate:0,paydayDay:null,limitHorizon:'payday',shiftNotifHour:20,shiftNotifMinute:0,shiftNotifEnabled:true,userName:'',budgetLimits:{},budgetSavings:{},periodReports:[]},income:[],expenses:[],reserves:[],debts:[],reserveOps:[],obligations:[],obligationPays:[],voiceMap:{},shiftsOverride:{},dayPlans:{},updatedAt:new Date().toISOString()};}
 function norm(raw){
   var b=def();if(!raw||typeof raw!=='object')return b;
   var o=Object.assign({},b,raw);o.settings=Object.assign({},b.settings,raw.settings||{});
@@ -633,6 +708,7 @@ return{open:open,cash:cash,available:avail,incomeSum:ops.inc,expenseSum:ops.exp,
 function compute(){return computeForMonth(getViewMonth());}
 window.ensureMonth=ensureMonth;
 function ensureMonth(){
+  if(window.__FIN_DECRYPT_FAILED||window.__FIN_LOAD_PENDING)return;
   var cur=today().slice(0,7);
   var st=(STATE.settings&&STATE.settings.month)||cur;
   if(!STATE.settings)STATE.settings={};
@@ -2672,10 +2748,12 @@ function runAppBoot(){
     },{passive:true});
   }
   try{
-    STATE=norm(STATE);
-    ensureMonth();
-    try{if(typeof maybeRepairCarryCash==='function')maybeRepairCarryCash();}catch(e){}
-    var c=compute();
+    if(!window.__FIN_DECRYPT_FAILED){
+      STATE=norm(STATE);
+      ensureMonth();
+      try{if(typeof maybeRepairCarryCash==='function')maybeRepairCarryCash();}catch(e){}
+      var c=compute();
+    }
     // NEVER auto-wipe storage here — empty UI may mean decrypt-locked data still on disk
   }catch(e){console.error(e);}
   setup();
@@ -2694,8 +2772,9 @@ function boot(){
       if(st){
         STATE=st;
         try{window.__FIN_DECRYPT_FAILED=false;window.__FIN_LOCKED_RAW=null;}catch(e){}
+      }else if(!window.__FIN_DECRYPT_FAILED){
+        STATE=def();
       }
-      else{STATE=def();}
       function markAppReady(){
         try{
           window.__FIN_APP_READY=true;
@@ -2761,6 +2840,7 @@ boot();
 window.goView=goView;window.goHome=goHome;window.render=render;window.compute=compute;window.ensureMonth=ensureMonth;window.syncReminders=typeof syncReminders==="function"?syncReminders:function(){};
 window.BUDGET_CATS=BUDGET_CATS;window.budgetLimitOf=budgetLimitOf;window.budgetSavingsOf=budgetSavingsOf;window.addBudgetSaving=addBudgetSaving;
 window.categoryDailyLimit=categoryDailyLimit;window.archiveBudgetPeriodReport=archiveBudgetPeriodReport;window.ensureBudgetPeriodTrack=ensureBudgetPeriodTrack;
+window.nextBudgetRangeAfter=nextBudgetRangeAfter;window.hasLiveData=hasLiveData;
 window.spentInCat=spentInCat;window.spentInCatRange=spentInCatRange;window.computeForMonth=computeForMonth;
 Object.defineProperty(window,'currentView',{get:function(){return currentView;},set:function(v){currentView=v||'home';window.__finView=currentView;}});
 })();

@@ -32,7 +32,25 @@
     } catch (e) {}
     var shifts = s.shiftsOverride && Object.keys(s.shiftsOverride).length;
     var plans = s.dayPlans && Object.keys(s.dayPlans).length;
-    return emptyCols && !bal && !rates && !shifts && !plans;
+    if (emptyCols && !bal && !rates && !shifts && !plans) {
+      try {
+        var st = s.settings || {};
+        if (st.userName) return false;
+        if (Number(st.paydayDay)) return false;
+        var bs = st.budgetSavings, liveSav = false;
+        if (bs && typeof bs === 'object') {
+          for (var k in bs) { if (Object.prototype.hasOwnProperty.call(bs, k) && Number(bs[k])) { liveSav = true; break; } }
+        }
+        var bl = st.budgetLimits, liveLim = false;
+        if (bl && typeof bl === 'object') {
+          for (var k2 in bl) { if (Object.prototype.hasOwnProperty.call(bl, k2) && Number(bl[k2])) { liveLim = true; break; } }
+        }
+        if (liveSav || liveLim) return false;
+        if (Array.isArray(st.periodReports) && st.periodReports.length) return false;
+      } catch (e) {}
+      return true;
+    }
+    return false;
   }
   function countItems(s) {
     if (!s) return 0;

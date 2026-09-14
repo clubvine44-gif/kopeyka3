@@ -126,6 +126,20 @@
     if (bal || rates) return false;
     if (obj.shiftsOverride && Object.keys(obj.shiftsOverride).length) return false;
     if (obj.dayPlans && Object.keys(obj.dayPlans).length) return false;
+    try {
+      var st = obj.settings || {};
+      if (st.userName) return false;
+      if (Number(st.paydayDay)) return false;
+      var bs = st.budgetSavings;
+      if (bs && typeof bs === 'object') {
+        for (var k in bs) { if (Object.prototype.hasOwnProperty.call(bs, k) && Number(bs[k])) return false; }
+      }
+      var bl = st.budgetLimits;
+      if (bl && typeof bl === 'object') {
+        for (var k2 in bl) { if (Object.prototype.hasOwnProperty.call(bl, k2) && Number(bl[k2])) return false; }
+      }
+      if (Array.isArray(st.periodReports) && st.periodReports.length) return false;
+    } catch (e3) {}
     return true;
   }
 

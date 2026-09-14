@@ -165,11 +165,16 @@ assert.ok(appSrc.indexOf('try{STATE.settings.budgetSavings={};}catch(e){}') < 0,
 assert.ok(appSrc.indexOf('лимит категории НЕ увеличивается') >= 0, 'category limit must ignore savings');
 assert.ok(appSrc.indexOf('if(exists)return exists') >= 0, 'duplicate period close must not double-count savings');
 assert.ok(appSrc.indexOf('window.archiveBudgetPeriodReport=archiveBudgetPeriodReport') >= 0, 'archive must be exported for overlays');
+assert.ok(appSrc.indexOf('function nextBudgetRangeAfter') >= 0, 'skipped periods must be closable');
+assert.ok(appSrc.indexOf('while(guard++<24)') >= 0, 'skipped period loop');
+assert.ok(appSrc.indexOf('Number(s.settings.paydayDay)') >= 0, 'hasLiveData must see payday and budget maps');
 
 var cloudSrc = fs.readFileSync(path.join(ROOT, 'cloud.js'), 'utf8');
 assert.ok(cloudSrc.indexOf('localNotReady') >= 0, 'cloud must wait for local decrypt');
 assert.ok(cloudSrc.indexOf('__FIN_DECRYPT_FAILED') >= 0, 'cloud must not apply over locked blob');
 assert.ok(cloudSrc.indexOf("if(b&&(l===undefined||r===undefined))") < 0, 'cloud must not tombstone missing-without-tombstone rows');
+assert.ok(cloudSrc.indexOf('function mergeSettings') >= 0, 'settings must deep-merge budget maps');
+assert.ok(cloudSrc.indexOf('savingsFromReports') >= 0, 'cloud savings merge uses period reports');
 
 var asstSrc = fs.readFileSync(path.join(ROOT, 'assistant-v2.js'), 'utf8');
 assert.ok(asstSrc.indexOf("s.reserveOps=s.reserveOps.filter") < 0, 'assistant must not strip reserveOps');
@@ -178,10 +183,11 @@ assert.ok(asstSrc.indexOf("type:'withdraw'") >= 0, 'assistant reserve delete mus
 
 var storeSrc = fs.readFileSync(path.join(ROOT, 'secure-store.js'), 'utf8');
 assert.ok(storeSrc.indexOf('existingPlain') >= 0 || storeSrc.indexOf('existingEnc') >= 0, 'must not overwrite ciphertext with plaintext');
+assert.ok(storeSrc.indexOf('budgetSavings') >= 0, 'empty-state must treat savings as live data');
 
 var gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle'), 'utf8');
-assert.ok(/versionCode\s+164/.test(gradle), 'versionCode 164');
-assert.ok(/versionName\s+"4\.12\.3"/.test(gradle), 'versionName 4.12.3');
+assert.ok(/versionCode\s+165/.test(gradle), 'versionCode 165');
+assert.ok(/versionName\s+"4\.12\.4"/.test(gradle), 'versionName 4.12.4');
 
 var mainJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/MainActivity.java'), 'utf8');
 assert.ok(appSrc.indexOf('function recoverLockedState') >= 0, 'decrypt-fail recovery helper');
@@ -305,7 +311,66 @@ localTomb.reserveOps = [];
 localTomb._deleted = { reserveOps: { o1: Date.now() } };
 var remoteStill = JSON.parse(JSON.stringify(base));
 var mergedDel = cloudSandbox.window.kopeykaCloud.threeWay(base, localTomb, remoteStill);
-assert.ok(!(mergedDel.reserveOps || []).some(function (x) { return x && x.id === 'o1'; }), 'explicit tombstone still wins');
+assert.ok(mergedDel.reserveOps.length === 0 || !(mergedDel.reserveOps || []).some(function (x) { return x && x.id === 'o1'; }), 'explicit tombstone still wins');
+
+var bootJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/BootReceiver.java'), 'utf8');
+assert.ok(bootJava.indexOf('UpdateCheckReceiver.scheduleSoon') >= 0, 'reboot must reschedule auto-update');
+assert.ok(bootJava.indexOf('QUICKBOOT_POWERON') >= 0, 'xiaomi/realme quickboot must reschedule');
+
+// Cloud merge of budget savings from different devices/periods must KEEP both.
+var base2 = JSON.parse(JSON.stringify(base));
+base2.settings = { openingBalance: 10000, month: '2026-09', budgetSavings: {}, budgetLimits: { 'Продукты': 10000, 'Транспорт': 5000 }, periodReports: [] };
+var localSav = JSON.parse(JSON.stringify(base2));
+localSav.settings.budgetSavings = { 'Продукты': 3000 };
+localSav.settings.periodReports = [{ from: '2026-07-15', end: '2026-08-14', totalSaved: 3000, byCat: { 'Продукты': { leftover: 3000 } } }];
+var remoteSav = JSON.parse(JSON.stringify(base2));
+remoteSav.settings.budgetSavings = { 'Транспорт': 2000 };
+remoteSav.settings.periodReports = [{ from: '2026-08-15', end: '2026-09-14', totalSaved: 2000, byCat: { 'Транспорт': { leftover: 2000 } } }];
+var mergedSav = cloudSandbox.window.kopeykaCloud.threeWay(base2, localSav, remoteSav);
+assert.strictEqual(Number(mergedSav.settings.budgetSavings['Продукты']), 3000, 'local period leftover kept');
+assert.strictEqual(Number(mergedSav.settings.budgetSavings['Транспорт']), 2000, 'remote period leftover kept');
+assert.strictEqual((mergedSav.settings.periodReports || []).length, 2, 'period reports unioned');
+assert.strictEqual(cloudSandbox.window.kopeykaCloud.isEmptyState({ settings: { budgetSavings: { 'Продукты': 1500 } } }), false, 'savings-only state is live');
+assert.strictEqual(cloudSandbox.window.kopeykaCloud.isEmptyState({ settings: { budgetLimits: { 'Продукты': 8000 } } }), false, 'limits-only state is live');
+
+// Skipped period leftover: two closed cycles accumulate without inflating limit.
+(function skippedPeriods(){
+  function pad2(n){return String(n).padStart(2,'0');}
+  function daysInMonthNum(y,m){return new Date(y,m,0).getDate();}
+  function addDaysISO(iso,delta){
+    var p=String(iso).split('-').map(Number);
+    var d=new Date(p[0],p[1]-1,p[2]);
+    d.setDate(d.getDate()+delta);
+    return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());
+  }
+  function nextAfter(from,end,mode,payday){
+    if(mode==='month'){
+      var p=end.split('-').map(Number);
+      var y=p[0], m=p[1]+1;
+      if(m>12){m=1;y++;}
+      var last=daysInMonthNum(y,m);
+      return {start:y+'-'+pad2(m)+'-01', end:y+'-'+pad2(m)+'-'+pad2(last), mode:'month'};
+    }
+    var ns=addDaysISO(end,1);
+    var nsp=ns.split('-').map(Number);
+    var y2=nsp[0], m2=nsp[1], d2=nsp[2];
+    var paydayThis=Math.min(payday, daysInMonthNum(y2,m2));
+    var ey=y2, em=m2;
+    if(d2>=paydayThis){ em+=1; if(em>12){em=1;ey++;} }
+    var ed=Math.min(payday, daysInMonthNum(ey,em))-1;
+    if(ed<1){ ey=y2; em=m2; ed=daysInMonthNum(ey,em); }
+    return {start:ns, end:ey+'-'+pad2(em)+'-'+pad2(ed), mode:'payday'};
+  }
+  var n1=nextAfter('2026-07-15','2026-08-14','payday',15);
+  assert.strictEqual(n1.start, '2026-08-15');
+  assert.strictEqual(n1.end, '2026-09-14');
+  var n2=nextAfter(n1.start,n1.end,'payday',15);
+  assert.strictEqual(n2.start, '2026-09-15');
+  assert.strictEqual(n2.end, '2026-10-14');
+  var m1=nextAfter('2026-07-01','2026-07-31','month',0);
+  assert.strictEqual(m1.start, '2026-08-01');
+  assert.strictEqual(m1.end, '2026-08-31');
+})();
 
 console.log('logic ok', JSON.stringify({
   cash: c.cash,
