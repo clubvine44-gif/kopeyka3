@@ -1,4 +1,4 @@
-(function(){/* v118.4 4.12.4 */'use strict';
+(function(){/* v118.5 4.12.5 */'use strict';
 var KEY='kopeyka3_state_v1',ANCHOR='2026-08-17',CYCLE=['day','day','night','night','off','off'];
 var CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье','Прочее'];
 var BUDGET_CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
@@ -220,7 +220,8 @@ function ensureBudgetPeriodTrack(forceToday){
       while(guard++<24){
         var from0=String(STATE.settings.budgetTrackFrom||STATE.settings.budgetPeriodStart||'').slice(0,10);
         var end0=String(STATE.settings.budgetPeriodEnd||'').slice(0,10);
-        var mode0=(STATE.settings.limitHorizon==='month')?'month':'payday';
+        var storedKeyNow=String(STATE.settings.budgetPeriodKey||prev||'');
+        var mode0=storedKeyNow.indexOf('month_')===0?'month':(storedKeyNow.indexOf('payday_')===0?'payday':((STATE.settings.limitHorizon==='month')?'month':'payday'));
         if(!from0||!end0)break;
         var storedKey=mode0+'_'+from0+'_'+end0;
         if(storedKey===key)break;

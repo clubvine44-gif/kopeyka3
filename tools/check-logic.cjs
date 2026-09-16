@@ -168,6 +168,7 @@ assert.ok(appSrc.indexOf('window.archiveBudgetPeriodReport=archiveBudgetPeriodRe
 assert.ok(appSrc.indexOf('function nextBudgetRangeAfter') >= 0, 'skipped periods must be closable');
 assert.ok(appSrc.indexOf('while(guard++<24)') >= 0, 'skipped period loop');
 assert.ok(appSrc.indexOf('Number(s.settings.paydayDay)') >= 0, 'hasLiveData must see payday and budget maps');
+assert.ok(appSrc.indexOf("storedKeyNow.indexOf('month_')===0") >= 0, 'skipped periods use stored horizon mode');
 
 var cloudSrc = fs.readFileSync(path.join(ROOT, 'cloud.js'), 'utf8');
 assert.ok(cloudSrc.indexOf('localNotReady') >= 0, 'cloud must wait for local decrypt');
@@ -186,8 +187,8 @@ assert.ok(storeSrc.indexOf('existingPlain') >= 0 || storeSrc.indexOf('existingEn
 assert.ok(storeSrc.indexOf('budgetSavings') >= 0, 'empty-state must treat savings as live data');
 
 var gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle'), 'utf8');
-assert.ok(/versionCode\s+165/.test(gradle), 'versionCode 165');
-assert.ok(/versionName\s+"4\.12\.4"/.test(gradle), 'versionName 4.12.4');
+assert.ok(/versionCode\s+166/.test(gradle), 'versionCode 166');
+assert.ok(/versionName\s+"4\.12\.5"/.test(gradle), 'versionName 4.12.5');
 
 var mainJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/MainActivity.java'), 'utf8');
 assert.ok(appSrc.indexOf('function recoverLockedState') >= 0, 'decrypt-fail recovery helper');
@@ -317,6 +318,13 @@ var bootJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fi
 assert.ok(bootJava.indexOf('UpdateCheckReceiver.scheduleSoon') >= 0, 'reboot must reschedule auto-update');
 assert.ok(bootJava.indexOf('QUICKBOOT_POWERON') >= 0, 'xiaomi/realme quickboot must reschedule');
 
+var updJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/UpdateCheckReceiver.java'), 'utf8');
+assert.ok(updJava.indexOf('UPDATE_URL + "?t="') >= 0, 'background update check must cache-bust update.json');
+assert.ok(updJava.indexOf('setExactAndAllowWhileIdle') >= 0, 'auto-update alarm must be exact');
+
+var manifestXml = fs.readFileSync(path.join(ROOT, 'android/app/src/main/AndroidManifest.xml'), 'utf8');
+assert.ok(manifestXml.indexOf('com.htc.intent.action.QUICKBOOT_POWERON') >= 0, 'manifest must listen for htc/realme quickboot');
+
 // Cloud merge of budget savings from different devices/periods must KEEP both.
 var base2 = JSON.parse(JSON.stringify(base));
 base2.settings = { openingBalance: 10000, month: '2026-09', budgetSavings: {}, budgetLimits: { 'Продукты': 10000, 'Транспорт': 5000 }, periodReports: [] };
@@ -371,6 +379,10 @@ assert.strictEqual(cloudSandbox.window.kopeykaCloud.isEmptyState({ settings: { b
   assert.strictEqual(m1.start, '2026-08-01');
   assert.strictEqual(m1.end, '2026-08-31');
 })();
+
+var relYml = fs.readFileSync(path.join(ROOT, '.github/workflows/release-apk.yml'), 'utf8');
+assert.ok(relYml.indexOf('android-sdk-license') >= 0, 'CI must pre-accept android licenses');
+assert.ok(relYml.indexOf('yes | sdkmanager "platforms;android-34"') >= 0, 'CI package install must not wait for license prompt');
 
 console.log('logic ok', JSON.stringify({
   cash: c.cash,

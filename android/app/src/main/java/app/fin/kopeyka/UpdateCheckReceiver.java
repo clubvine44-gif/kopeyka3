@@ -50,39 +50,43 @@ public class UpdateCheckReceiver extends BroadcastReceiver {
     }
 
     static void scheduleNext(Context context) {
-        AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
-        if (am == null) return;
-        Intent i = new Intent(context, UpdateCheckReceiver.class);
-        PendingIntent pi = PendingIntent.getBroadcast(context, 77001, i,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        long at = System.currentTimeMillis() + INTERVAL_MS;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi);
-        } else {
-            am.set(AlarmManager.RTC_WAKEUP, at, pi);
-        }
+        scheduleAt(context, System.currentTimeMillis() + INTERVAL_MS);
     }
 
     static void scheduleSoon(Context context) {
+        scheduleAt(context, System.currentTimeMillis() + 15_000L);
+    }
+
+    private static void scheduleAt(Context context, long at) {
         AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         if (am == null) return;
         Intent i = new Intent(context, UpdateCheckReceiver.class);
         PendingIntent pi = PendingIntent.getBroadcast(context, 77001, i,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        long at = System.currentTimeMillis() + 15_000L;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi);
-        } else {
-            am.set(AlarmManager.RTC_WAKEUP, at, pi);
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi);
+            } else {
+                am.set(AlarmManager.RTC_WAKEUP, at, pi);
+            }
+        } catch (SecurityException se) {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi);
+                } else {
+                    am.set(AlarmManager.RTC_WAKEUP, at, pi);
+                }
+            } catch (Exception ignored) {}
         }
     }
 
     private void check(Context context) throws Exception {
-        HttpURLConnection c = (HttpURLConnection) new URL(UPDATE_URL).openConnection();
+        HttpURLConnection c = (HttpURLConnection) new URL(UPDATE_URL + "?t=" + System.currentTimeMillis()).openConnection();
         c.setConnectTimeout(12000);
         c.setReadTimeout(12000);
         c.setUseCaches(false);
         c.setRequestProperty("Cache-Control", "no-cache");
+        c.setRequestProperty("Pragma", "no-cache");
         if (c.getResponseCode() != 200) return;
         InputStream in = c.getInputStream();
         StringBuilder sb = new StringBuilder();

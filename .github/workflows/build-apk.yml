@@ -59,8 +59,13 @@ jobs:
       - name: Accept Android licenses
         run: |
           set -euo pipefail
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          test -n "$SDK"
+          mkdir -p "$SDK/licenses"
+          printf '%s\n' '24333f8a63b6825ea9c5514f21c17bae089c7cd3' 'd56f5187479451eabf01fb78af6dfcb131a6481e' '24333f8a63b6825ea9c5514f21c17bae089c7cd3' > "$SDK/licenses/android-sdk-license"
+          printf '%s\n' '84831b9409646161da1e653efbec703a' > "$SDK/licenses/android-sdk-preview-license"
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          yes | sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
 
       - name: Prepare web assets into Android
         run: |

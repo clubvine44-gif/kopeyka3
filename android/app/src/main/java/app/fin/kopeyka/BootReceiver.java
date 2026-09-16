@@ -15,7 +15,8 @@ public class BootReceiver extends BroadcastReceiver {
                 || Intent.ACTION_MY_PACKAGE_REPLACED.equals(a)
                 || Intent.ACTION_LOCKED_BOOT_COMPLETED.equals(a)
                 || "android.intent.action.QUICKBOOT_POWERON".equals(a)
-                || "com.htc.intent.action.QUICKBOOT_POWERON".equals(a);
+                || "com.htc.intent.action.QUICKBOOT_POWERON".equals(a)
+                || "android.intent.action.REBOOT".equals(a);
         if (!boot) return;
         try {
             FinBridge.rescheduleStored(context.getApplicationContext());
