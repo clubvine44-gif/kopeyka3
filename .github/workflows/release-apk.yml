@@ -24,7 +24,7 @@ jobs:
   release:
     if: ${{ github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'Update Fin release manifest') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -57,16 +57,12 @@ jobs:
           WWW="android/app/src/main/assets/www"; mkdir -p "$WWW"
           if [ -f "$WWW/app.js" ] && [ $(wc -c < "$WWW/app.js") -gt 50000 ]; then
             cp -f "$WWW/app.js" /tmp/good-app.js
-            echo "Saved full app.js ($(wc -c < /tmp/good-app.js) bytes)"
           fi
           for f in index.html app.js ai.js assistant-v2.js assistant.js cloud.js engine.js fin-core.js fin-plan.js fin-design.js secure-store.js fin-backup.js finn-char.js finn3d.js finn-wake.js matter.js matter-finn.js matter-room.jpg matter-room.mp3 matter-voice-1.mp3 matter-voice-2.mp3 matter-voice-3.mp3 matter-voice-4.mp3 matter-voice-5.mp3 voice.js onboard.js profile.js products.js sw.js manifest.json icon.svg widget.html ai-bootstrap.js budget-carry.js meal-plan.js; do if [ -f "$f" ]; then cp -f "$f" "$WWW/"; fi; done
           if [ -f /tmp/good-app.js ]; then
-            if [ ! -f app.js ] || [ $(wc -c < app.js) -lt 20000 ]; then
-              cp -f /tmp/good-app.js "$WWW/app.js"
-              echo "Restored full app.js into assets"
-            fi
+            if [ ! -f app.js ] || [ $(wc -c < app.js) -lt 20000 ]; then cp -f /tmp/good-app.js "$WWW/app.js"; fi
           fi
-          for f in matter.js fin-plan.js fin-design.js budget-carry.js meal-plan.js; do test -f "$WWW/$f" || { echo "Missing packaged asset: $f"; exit 1; }; done
+          for f in matter.js fin-plan.js fin-design.js budget-carry.js meal-plan.js; do test -f "$WWW/$f" || { echo "Missing $f"; exit 1; }; done
           python3 - <<'PY'
           from pathlib import Path
           import re
@@ -89,14 +85,19 @@ jobs:
           python3 - <<'PY'
           import os,re
           from pathlib import Path
-          p=Path('android/app/build.gradle'); t=p.read_text(); t=re.sub(r'versionCode\s+\d+','versionCode '+os.environ['RELEASE_VERSION_CODE'],t,count=1); t=re.sub(r'versionName\s+"[^"]+"','versionName "'+os.environ['RELEASE_VERSION_NAME']+'"',t,count=1); p.write_text(t)
+          p=Path('android/app/build.gradle'); t=p.read_text()
+          t=re.sub(r'versionCode\s+\d+','versionCode '+os.environ['RELEASE_VERSION_CODE'],t,count=1)
+          t=re.sub(r'versionName\s+"[^"]+"','versionName "'+os.environ['RELEASE_VERSION_NAME']+'"',t,count=1)
+          p.write_text(t)
           PY
       - name: Prepare release keystore
         env:
           FIN_KEYSTORE_BASE64: ${{ secrets.FIN_KEYSTORE_BASE64 }}
         run: |
           set -euo pipefail
-          test -n "$FIN_KEYSTORE_BASE64"; echo "$FIN_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/fin-release.jks"; test -s "$RUNNER_TEMP/fin-release.jks"
+          test -n "$FIN_KEYSTORE_BASE64"
+          echo "$FIN_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/fin-release.jks"
+          test -s "$RUNNER_TEMP/fin-release.jks"
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -110,22 +111,34 @@ jobs:
           FIN_KEY_PASSWORD: ${{ secrets.FIN_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          test -n "$FIN_KEYSTORE_PASSWORD"; test -n "$FIN_KEY_ALIAS"; test -n "$FIN_KEY_PASSWORD"; gradle assembleRelease --no-daemon --stacktrace
+          test -n "$FIN_KEYSTORE_PASSWORD"; test -n "$FIN_KEY_ALIAS"; test -n "$FIN_KEY_PASSWORD"
+          gradle assembleRelease --no-daemon --stacktrace
       - name: Validate APK
         run: |
           set -euo pipefail
-          cp android/app/build/outputs/apk/release/app-release.apk Fin.apk; test -s Fin.apk
-          BUILD_TOOLS="$(find "${ANDROID_HOME:-/nonexistent}" "${ANDROID_SDK_ROOT:-/nonexistent}" /usr/local/lib/android/sdk -maxdepth 3 -type d -path '*build-tools/34.0.0' 2>/dev/null | head -n1)"; test -n "$BUILD_TOOLS"
-          "$BUILD_TOOLS/zipalign" -c -p -v 4 Fin.apk; "$BUILD_TOOLS/apksigner" verify --verbose Fin.apk
+          cp android/app/build/outputs/apk/release/app-release.apk Fin.apk
+          test -s Fin.apk
+          BUILD_TOOLS="$(find "${ANDROID_HOME:-}" "${ANDROID_SDK_ROOT:-}" /usr/local/lib/android/sdk -maxdepth 3 -type d -path '*build-tools/34.0.0' 2>/dev/null | head -n1)"
+          test -n "$BUILD_TOOLS"
+          "$BUILD_TOOLS/zipalign" -c -p -v 4 Fin.apk
+          "$BUILD_TOOLS/apksigner" verify --verbose Fin.apk
           unzip -l Fin.apk | grep -E 'assets/www/(fin-plan|fin-core|fin-design|engine|meal-plan)\.js' | tee packaged-fin-assets.txt
           for f in fin-plan fin-core fin-design engine meal-plan; do test "$(grep -c "assets/www/$f.js" packaged-fin-assets.txt)" -eq 1; done
-          sha256sum Fin.apk | tee Fin.apk.sha256; ls -lh Fin.apk Fin.apk.sha256
+          sha256sum Fin.apk | tee Fin.apk.sha256
+          ls -lh Fin.apk
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_PROMPT_DISABLED: '1'
         run: |
           set -euo pipefail
-          TAG="v${RELEASE_VERSION_NAME}"; if gh release view "$TAG" >/dev/null 2>&1; then gh release upload "$TAG" Fin.apk Fin.apk.sha256 --clobber; else gh release create "$TAG" Fin.apk Fin.apk.sha256 --title "Финн ${RELEASE_VERSION_NAME}" --notes "APK ${RELEASE_VERSION_NAME} (versionCode ${RELEASE_VERSION_CODE}). Рацион Магнит Седлогорская 89."; fi
+          TAG="v${RELEASE_VERSION_NAME}"
+          # delete stuck/partial release if any
+          gh release delete "$TAG" --yes 2>/dev/null || true
+          timeout 120 gh release create "$TAG" Fin.apk Fin.apk.sha256 \
+            --title "Финн ${RELEASE_VERSION_NAME}" \
+            --notes "APK ${RELEASE_VERSION_NAME} (versionCode ${RELEASE_VERSION_CODE}). Рацион Магнит Седлогорская 89." \
+            --repo "${{ github.repository }}"
       - name: Update public update manifest
         run: |
           set -euo pipefail
@@ -133,10 +146,7 @@ jobs:
           import json,os
           from pathlib import Path
           vn=os.environ['RELEASE_VERSION_NAME']; vc=int(os.environ['RELEASE_VERSION_CODE'])
-          sha=''
-          p=Path('Fin.apk.sha256')
-          if p.exists():
-              sha=p.read_text(encoding='utf-8').split()[0].strip()
+          sha=Path('Fin.apk.sha256').read_text(encoding='utf-8').split()[0].strip()
           Path('update.json').write_text(json.dumps({
               'versionCode':vc,
               'versionName':vn,
@@ -145,4 +155,8 @@ jobs:
               'notes':f'{vn} — рацион Магнит Седлогорская, кнопка на главном (versionCode {vc})'
           },ensure_ascii=False,indent=2)+'\n')
           PY
-          git config user.name 'github-actions[bot]'; git config user.email '41898282+github-actions[bot]@users.noreply.github.com'; git add update.json; git commit -m "Update Fin release manifest to ${RELEASE_VERSION_NAME}" || true; git push origin HEAD:main
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add update.json
+          git commit -m "Update Fin release manifest to ${RELEASE_VERSION_NAME}" || true
+          git push origin HEAD:main
