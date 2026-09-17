@@ -1,7 +1,7 @@
 {
-  "versionCode": 164,
-  "versionName": "4.12.3",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.12.3/Fin.apk",
-  "sha256": "e7236bccf1901da2683ff7ee2d7b0aaba6e14ec1ef8dcdaa0558252a27ec211b",
-  "notes": "4.12.3 — накопления нужных трат без роста лимита, полный app.js, касса, облако (versionCode 164)"
+  "versionCode": 167,
+  "versionName": "4.13.0",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.0/Fin.apk",
+  "sha256": "bc1a3b670355a73efeac05efe9aae48fac1ac1221de556d1ca83f7e9961a1bc6",
+  "notes": "4.13.0 — рацион Магнит Седлогорская, кнопка на главном (versionCode 167)"
 }
