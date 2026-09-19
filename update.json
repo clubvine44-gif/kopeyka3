@@ -1,7 +1,7 @@
 {
-  "versionCode": 168,
-  "versionName": "4.13.1",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.1/Fin.apk",
-  "sha256": "5c9ac33860f60a1264c9fc7ff0190ff3b97f435d9341cf67aa93c873d0e75a98",
-  "notes": "4.13.1 — рацион Магнит, кнопка на главном (versionCode 168)"
+  "versionCode": 169,
+  "versionName": "4.13.2",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.2/Fin.apk",
+  "sha256": "113f866050fb3c3747352ee0f576e73d41e3a6f08047eddad633092929789228",
+  "notes": "4.13.2 — рацион без обнуления граммовок, кнопка на главном, шифрование снимка облака (versionCode 169)"
 }
