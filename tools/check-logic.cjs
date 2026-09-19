@@ -388,7 +388,8 @@ assert.strictEqual(cloudSandbox.window.kopeykaCloud.isEmptyState({ settings: { b
 
 var relYml = fs.readFileSync(path.join(ROOT, '.github/workflows/release-apk.yml'), 'utf8');
 assert.ok(relYml.indexOf('android-sdk-license') >= 0, 'CI must pre-accept android licenses');
-assert.ok(relYml.indexOf('yes | sdkmanager "platforms;android-34"') >= 0, 'CI package install must not wait for license prompt');
+assert.ok(relYml.indexOf('yes | sdkmanager --licenses') >= 0, 'CI must accept licenses non-interactively');
+assert.ok(relYml.indexOf('sdkmanager "platforms;android-34"') >= 0, 'CI package install must not wait for license prompt');
 assert.ok(relYml.indexOf('tools/check-logic.cjs') >= 0, 'release must run check-logic');
 
 // Meal plan: fractional template qty must not round to 0 (4.13.1 bug).
