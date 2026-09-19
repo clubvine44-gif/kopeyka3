@@ -141,11 +141,11 @@ assert.ok(payCalc.daysLeft > 1, 'payday today starts a new period, daysLeft=' + 
 assert.ok(payCalc.daily > 0 && payCalc.daily < 30000, 'daily is available/days of new period');
 
 // Syntax check critical modules
-['app.js', 'cloud.js', 'secure-store.js', 'fin-backup.js', 'engine.js', 'assistant-v2.js', 'assistant.js', 'budget-carry.js', 'widget.html'].forEach(function (f) {
+['app.js', 'cloud.js', 'secure-store.js', 'fin-backup.js', 'engine.js', 'assistant-v2.js', 'assistant.js', 'budget-carry.js', 'meal-plan.js', 'widget.html'].forEach(function (f) {
   var p = path.join(ROOT, f);
   assert.ok(fs.existsSync(p), f + ' exists');
 });
-['app.js', 'cloud.js', 'secure-store.js', 'fin-backup.js', 'engine.js', 'assistant-v2.js', 'assistant.js', 'budget-carry.js'].forEach(function (f) {
+['app.js', 'cloud.js', 'secure-store.js', 'fin-backup.js', 'engine.js', 'assistant-v2.js', 'assistant.js', 'budget-carry.js', 'meal-plan.js'].forEach(function (f) {
   require('child_process').execFileSync(process.execPath, ['--check', path.join(ROOT, f)]);
 });
 
@@ -169,6 +169,8 @@ assert.ok(appSrc.indexOf('function nextBudgetRangeAfter') >= 0, 'skipped periods
 assert.ok(appSrc.indexOf('while(guard++<24)') >= 0, 'skipped period loop');
 assert.ok(appSrc.indexOf('Number(s.settings.paydayDay)') >= 0, 'hasLiveData must see payday and budget maps');
 assert.ok(appSrc.indexOf("storedKeyNow.indexOf('month_')===0") >= 0, 'skipped periods use stored horizon mode');
+assert.ok(appSrc.indexOf('id="mealHomeCard"') >= 0, 'home must have Magnit meal card');
+assert.ok(appSrc.indexOf("currentView==='meal'") >= 0, 'app must render meal view');
 
 var cloudSrc = fs.readFileSync(path.join(ROOT, 'cloud.js'), 'utf8');
 assert.ok(cloudSrc.indexOf('localNotReady') >= 0, 'cloud must wait for local decrypt');
@@ -176,6 +178,8 @@ assert.ok(cloudSrc.indexOf('__FIN_DECRYPT_FAILED') >= 0, 'cloud must not apply o
 assert.ok(cloudSrc.indexOf("if(b&&(l===undefined||r===undefined))") < 0, 'cloud must not tombstone missing-without-tombstone rows');
 assert.ok(cloudSrc.indexOf('function mergeSettings') >= 0, 'settings must deep-merge budget maps');
 assert.ok(cloudSrc.indexOf('savingsFromReports') >= 0, 'cloud savings merge uses period reports');
+assert.ok(cloudSrc.indexOf('function hydrateBase') >= 0, 'sync-base snapshot must decrypt on boot');
+assert.ok(cloudSrc.indexOf("FinSecureStore.saveState(SYNC_BASE") >= 0, 'sync-base must be encrypted');
 
 var asstSrc = fs.readFileSync(path.join(ROOT, 'assistant-v2.js'), 'utf8');
 assert.ok(asstSrc.indexOf("s.reserveOps=s.reserveOps.filter") < 0, 'assistant must not strip reserveOps');
@@ -185,10 +189,11 @@ assert.ok(asstSrc.indexOf("type:'withdraw'") >= 0, 'assistant reserve delete mus
 var storeSrc = fs.readFileSync(path.join(ROOT, 'secure-store.js'), 'utf8');
 assert.ok(storeSrc.indexOf('existingPlain') >= 0 || storeSrc.indexOf('existingEnc') >= 0, 'must not overwrite ciphertext with plaintext');
 assert.ok(storeSrc.indexOf('budgetSavings') >= 0, 'empty-state must treat savings as live data');
+assert.ok(storeSrc.indexOf("storageKey === 'kopeyka3_state_v1'") >= 0, 'raw backup is only the live cash register');
 
 var gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle'), 'utf8');
-assert.ok(/versionCode\s+166/.test(gradle), 'versionCode 166');
-assert.ok(/versionName\s+"4\.12\.5"/.test(gradle), 'versionName 4.12.5');
+assert.ok(/versionCode\s+169/.test(gradle), 'versionCode 169');
+assert.ok(/versionName\s+"4\.13\.2"/.test(gradle), 'versionName 4.13.2');
 
 var mainJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/MainActivity.java'), 'utf8');
 assert.ok(appSrc.indexOf('function recoverLockedState') >= 0, 'decrypt-fail recovery helper');
@@ -205,6 +210,7 @@ assert.ok(cloudSrc.indexOf('recoverLockedState') >= 0, 'cloud uses recovery help
 
 var idx = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 assert.ok(idx.indexOf('budget-carry.js') >= 0, 'index must load leftover overlay');
+assert.ok(idx.indexOf('meal-plan.js') >= 0, 'index must load meal-plan');
 assert.ok(idx.indexOf('cdn.jsdelivr.net/gh/clubvine44-gif/kopeyka3') < 0, 'pages must not boot from CDN stub');
 
 var widget = fs.readFileSync(path.join(ROOT, 'widget.html'), 'utf8');
@@ -383,6 +389,46 @@ assert.strictEqual(cloudSandbox.window.kopeykaCloud.isEmptyState({ settings: { b
 var relYml = fs.readFileSync(path.join(ROOT, '.github/workflows/release-apk.yml'), 'utf8');
 assert.ok(relYml.indexOf('android-sdk-license') >= 0, 'CI must pre-accept android licenses');
 assert.ok(relYml.indexOf('yes | sdkmanager "platforms;android-34"') >= 0, 'CI package install must not wait for license prompt');
+assert.ok(relYml.indexOf('tools/check-logic.cjs') >= 0, 'release must run check-logic');
+
+// Meal plan: fractional template qty must not round to 0 (4.13.1 bug).
+(function mealQty(){
+  var mealSrc = fs.readFileSync(path.join(ROOT, 'meal-plan.js'), 'utf8');
+  var mealSandbox = {
+    window: { STATE: { settings: { budgetLimits: { 'Продукты': 25000 } } } },
+    document: {
+      readyState: 'complete',
+      addEventListener: function () {},
+      querySelector: function () { return null; },
+      querySelectorAll: function () { return []; },
+      getElementById: function () { return null; },
+      body: { appendChild: function () {} }
+    },
+    localStorage: {
+      _d: {},
+      getItem: function (k) { return this._d[k] || null; },
+      setItem: function (k, v) { this._d[k] = String(v); },
+      removeItem: function (k) { delete this._d[k]; }
+    },
+    console: { log: function () {} },
+    setTimeout: function () {},
+    MutationObserver: function () { this.observe = function () {}; }
+  };
+  mealSandbox.window.localStorage = mealSandbox.localStorage;
+  mealSandbox.window.document = mealSandbox.document;
+  mealSandbox.window.addEventListener = function () {};
+  mealSandbox.global = mealSandbox;
+  vm.runInNewContext(mealSrc, mealSandbox, { filename: 'meal-plan.js' });
+  assert(mealSandbox.window.MealPlan, 'MealPlan not exported');
+  assert.ok(Math.abs(mealSandbox.window.MealPlan.qtyOf(0.15) - 0.15) < 1e-9, 'qtyOf keeps 0.15');
+  assert.strictEqual(mealSandbox.window.MealPlan.qtyOf(0.15) === 0, false, '0.15 must not become 0');
+  var plan = mealSandbox.window.MealPlan.buildPlan({ days: 30, adults: 1, children: 0, goal: 'maintain', budgetMonth: 25000 });
+  assert.ok(plan && plan.basket && plan.basket.length > 5, 'basket has items, got ' + ((plan && plan.basket && plan.basket.length) || 0));
+  assert.ok(plan.total > 1000, 'basket total must not collapse from rounded grams, got ' + plan.total);
+  assert.ok(plan.basket.every(function (b) { return b.qty > 0; }), 'no zero-qty rows');
+  var oats = plan.basket.filter(function (b) { return b.id === 'oats_400'; })[0];
+  assert.ok(oats && oats.qty >= 1, 'oats packs ceiled from 0.15*30');
+})();
 
 console.log('logic ok', JSON.stringify({
   cash: c.cash,

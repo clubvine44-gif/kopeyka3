@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Check cash / cloud / meal logic
+        run: node tools/check-logic.cjs
       - name: Determine version
         run: |
           set -euo pipefail
@@ -40,8 +42,13 @@ jobs:
       - name: Accept Android licenses
         run: |
           set -euo pipefail
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools" || true
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          test -n "$SDK"
+          mkdir -p "$SDK/licenses"
+          printf '%s\n' '24333f8a63b6825ea9c5514f21c17bae089c7cd3' 'd56f5187479451eabf01fb78af6dfcb131a6481e' '24333f8a63b6825ea9c5514f21c17bae089c7cd3' > "$SDK/licenses/android-sdk-license"
+          printf '%s\n' '84831b9409646161da1e653efbec703a' > "$SDK/licenses/android-sdk-preview-license"
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          yes | sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
       - name: Prepare web assets
         run: |
           set -euo pipefail
@@ -147,7 +154,7 @@ jobs:
           gh release delete "$TAG" --yes 2>/dev/null || true
           timeout 120 gh release create "$TAG" Fin.apk Fin.apk.sha256 \
             --title "Финн ${RELEASE_VERSION_NAME}" \
-            --notes "APK ${RELEASE_VERSION_NAME} (versionCode ${RELEASE_VERSION_CODE}). Рацион Магнит + кнопка на главном." \
+            --notes "APK ${RELEASE_VERSION_NAME} (versionCode ${RELEASE_VERSION_CODE}). Рацион: граммовки больше не обнуляются. Кнопка на главном. Облачный снимок синхронизации зашифрован." \
             --repo "${{ github.repository }}"
       - name: Update public update manifest
         run: |
@@ -162,7 +169,7 @@ jobs:
               'versionName':vn,
               'apkUrl':f'https://github.com/clubvine44-gif/kopeyka3/releases/download/v{vn}/Fin.apk',
               'sha256':sha,
-              'notes':f'{vn} — рацион Магнит, кнопка на главном (versionCode {vc})'
+              'notes':f'{vn} — рацион без обнуления граммовок, кнопка на главном, шифрование снимка облака (versionCode {vc})'
           },ensure_ascii=False,indent=2)+'\n')
           PY
           git config user.name 'github-actions[bot]'

@@ -202,7 +202,7 @@
         try {
           localStorage.setItem(storageKey, enc);
           localStorage.setItem(LEGACY_MIGRATED, '1');
-          localStorage.setItem(RAW_BACKUP_KEY, enc);
+          if (storageKey === 'kopeyka3_state_v1') localStorage.setItem(RAW_BACKUP_KEY, enc);
         } catch (e) {}
         return state;
       }).catch(function () {
@@ -236,7 +236,8 @@
       return encryptString(plain).then(function (enc) {
         try {
           localStorage.setItem(storageKey, enc);
-          localStorage.setItem(RAW_BACKUP_KEY, enc);
+          // Emergency blob is ONLY the live cash register, never the sync-base snapshot.
+          if (storageKey === 'kopeyka3_state_v1') localStorage.setItem(RAW_BACKUP_KEY, enc);
         } catch (e) {}
         return true;
       }).catch(function () {

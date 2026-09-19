@@ -1,4 +1,4 @@
-(function(){/* v118.5 4.12.5 */'use strict';
+(function(){/* v118.6 4.13.2 */'use strict';
 var KEY='kopeyka3_state_v1',ANCHOR='2026-08-17',CYCLE=['day','day','night','night','off','off'];
 var CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье','Прочее'];
 var BUDGET_CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
@@ -1989,6 +1989,14 @@ homeHtml += '<div class="kpi"><span class="kpi-l">Долги</span><b class="'+(
 homeHtml += '</div>';
 homeHtml += '</div>';
 
+// ===== 1b. Рацион Магнит — кнопка на главном =====
+homeHtml += '<div class="card tight" id="mealHomeCard" data-act="open-meal" role="button">';
+homeHtml += '<div class="sec-title-sm">РАЦИОН · МАГНИТ</div>';
+homeHtml += '<div style="font-weight:700;margin-bottom:4px">Седлогорская, 89 · Кисловодск</div>';
+homeHtml += '<div class="muted" style="font-size:12px;margin-bottom:8px">Меню и корзина в лимит «Продукты»</div>';
+homeHtml += '<button type="button" class="link-more" data-act="open-meal">Открыть рацион →</button>';
+homeHtml += '</div>';
+
 // ===== 2. Нужные траты (бюджет по категориям) =====
 homeHtml += '<div class="card tight budget-card" id="budgetCard">';
 homeHtml += '<div class="sec-title-sm">НУЖНЫЕ ТРАТЫ</div>';
@@ -2169,6 +2177,8 @@ else if(currentView==='an') viewBody = catH;
 var htmlOut = '';
 if(currentView==='home'){
   htmlOut = homeHtml;
+} else if(currentView==='meal'){
+  htmlOut = (window.MealPlan&&typeof window.MealPlan.html==='function')?window.MealPlan.html():'<div class="view-header"><button type="button" class="back-btn" data-act="go-home">←</button><h2>Рацион</h2></div><div class="card tight"><div class="hint" style="margin:0">Модуль рациона не загрузился. Обнови приложение.</div></div>';
 } else {
   htmlOut = '<div class="view-title-bar"><h2>'+viewTitle+'</h2></div><div class="card"><div class="list">'+ (viewBody||'<div class="empty">Пусто</div>') +'</div></div>';
 }
@@ -2178,11 +2188,14 @@ if(app.__lastHtml===htmlOut){
 }else{
   app.__lastHtml=htmlOut;
   app.innerHTML = htmlOut;
+  if(currentView==='meal'){
+    try{if(window.MealPlan&&typeof window.MealPlan.bind==='function')window.MealPlan.bind(app);}catch(e){}
+  }
   if(currentView==='home'&&prevScroll>0){requestAnimationFrame(function(){window.scrollTo(0,prevScroll);requestAnimationFrame(function(){window.scrollTo(0,prevScroll);});});}
 }
 
 try{if(window.FinBridge){if(window.FinBridge.updateWidgetDataFull){window.FinBridge.updateWidgetDataFull(fmt(c.daily),fmt(c.cash),fmt(c.available),sl,String(c.daysLeft));}else if(window.FinBridge.updateWidgetData){window.FinBridge.updateWidgetData(fmt(c.daily),fmt(c.cash),sl);}}}catch(e){}
-if(!app._bound){app._bound=true;app.addEventListener('click',function(e){var t=e.target.closest('[data-date],.item[data-id],.sec-head,#mPrev,#mNext,#btnShiftPay,.quick-nav,[data-view],#btnAddMain,.qcat,#limitCard,#ringTap,#limitRingTap,#finnTipCard,#btnFullCal,.link-more,.mode,[data-budget-edit],.budget-lim,[data-horizon],.hero-horizon,.budget-row,[data-budget-cat]');if(!t||!app.contains(t))return;if(t.classList&&t.classList.contains('quick-nav')||t.dataset.view){goView(t.dataset.view);return;}
+if(!app._bound){app._bound=true;app.addEventListener('click',function(e){var t=e.target.closest('[data-act],[data-date],.item[data-id],.sec-head,#mPrev,#mNext,#btnShiftPay,.quick-nav,[data-view],#btnAddMain,.qcat,#limitCard,#ringTap,#limitRingTap,#finnTipCard,#btnFullCal,.link-more,.mode,[data-budget-edit],.budget-lim,[data-horizon],.hero-horizon,.budget-row,[data-budget-cat]');if(!t||!app.contains(t))return;if(t.getAttribute&&t.getAttribute('data-act')==='open-meal'||(t.closest&&t.closest('[data-act="open-meal"]'))){if(window.MealPlan&&typeof window.MealPlan.open==='function')window.MealPlan.open();else goView('meal');return;}if(t.getAttribute&&t.getAttribute('data-act')==='go-home'||(t.closest&&t.closest('[data-act="go-home"]'))){goHome();return;}if(t.classList&&t.classList.contains('quick-nav')||t.dataset.view){goView(t.dataset.view);return;}
 if(t.id==='btnAddMain'||t.classList.contains('qcat')){
   var cat=t.dataset.cat;
   if(typeof openModal==='function'){
