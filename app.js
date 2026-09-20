@@ -1,4 +1,4 @@
-(function(){/* v118.6 4.13.2 */'use strict';
+(function(){/* v118.7 4.13.3 */'use strict';
 var KEY='kopeyka3_state_v1',ANCHOR='2026-08-17',CYCLE=['day','day','night','night','off','off'];
 var CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье','Прочее'];
 var BUDGET_CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
@@ -52,9 +52,11 @@ function budgetPeriodRange(){
   var horizon=(STATE.settings&&STATE.settings.limitHorizon==='month')?'month':'payday';
   var payday=STATE.settings&&STATE.settings.paydayDay!=null?num(STATE.settings.paydayDay):0;
   if(horizon==='payday'&&payday>=1&&payday<=31){
+    var lastThis=daysInMonthNum(y,mo);
+    var payThis=Math.min(payday,lastThis);
     var sy,sm,sd,ey,em,ed;
-    if(d>=payday){
-      sy=y;sm=mo;sd=Math.min(payday,daysInMonthNum(y,mo));
+    if(d>=payThis){
+      sy=y;sm=mo;sd=payThis;
       if(mo===12){ey=y+1;em=1;}else{ey=y;em=mo+1;}
       ed=Math.min(payday,daysInMonthNum(ey,em))-1;
       if(ed<1){ey=sy;em=sm;ed=daysInMonthNum(sy,sm);}

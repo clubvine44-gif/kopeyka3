@@ -154,7 +154,7 @@ jobs:
           gh release delete "$TAG" --yes 2>/dev/null || true
           timeout 120 gh release create "$TAG" Fin.apk Fin.apk.sha256 \
             --title "Финн ${RELEASE_VERSION_NAME}" \
-            --notes "APK ${RELEASE_VERSION_NAME} (versionCode ${RELEASE_VERSION_CODE}). Рацион: граммовки больше не обнуляются. Кнопка на главном. Облачный снимок синхронизации зашифрован." \
+            --notes "APK ${RELEASE_VERSION_NAME} (versionCode ${RELEASE_VERSION_CODE}). Касса: аварийная копия больше не подменяется облаком. Операции во время синхронизации сохраняются. Зарплата 31-го в коротком месяце считается с последнего дня." \
             --repo "${{ github.repository }}"
       - name: Update public update manifest
         run: |
@@ -169,7 +169,7 @@ jobs:
               'versionName':vn,
               'apkUrl':f'https://github.com/clubvine44-gif/kopeyka3/releases/download/v{vn}/Fin.apk',
               'sha256':sha,
-              'notes':f'{vn} — рацион без обнуления граммовок, кнопка на главном, шифрование снимка облака (versionCode {vc})'
+              'notes':f'{vn} — сохранность кассы: аварийная копия не подменяется облаком, операции во время синхронизации не теряются (versionCode {vc})'
           },ensure_ascii=False,indent=2)+'\n')
           PY
           git config user.name 'github-actions[bot]'

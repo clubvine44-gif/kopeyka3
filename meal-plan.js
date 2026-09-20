@@ -57,7 +57,7 @@ function fmtQty(q,unit){
   if(unit==='кг')return (Math.round(q*10)/10).toLocaleString('ru-RU');
   return String(q);
 }
-function esc(s){return String(s==null?'':s).replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>').replace(/"/g,'"');}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&'+'amp;').replace(/</g,'&'+'lt;').replace(/>/g,'&'+'gt;').replace(/"/g,'&'+'quot;');}
 function getCatalog(){var st=load();return CATALOG.map(function(p){var price=st.priceOverrides[p.id]!=null?num(st.priceOverrides[p.id]):num(p.price);return Object.assign({},p,{price:price});});}
 function setPrice(id,price){var st=load();st.priceOverrides[id]=Math.max(0,num(price));save(st);}
 function productById(id){var list=getCatalog();for(var i=0;i<list.length;i++)if(list[i].id===id)return list[i];return null;}
@@ -234,7 +234,7 @@ function tryHookApp(){
     var mo=new MutationObserver(function(){setTimeout(injectHomeBtn,30);});
     mo.observe(document.body,{childList:true,subtree:true});
   }catch(e){}
-  console.log('[FINNA] meal-plan Магнит Седлогорская 4.13.2 qty-fix');
+  console.log('[FINNA] meal-plan Магнит Седлогорская 4.13.3 qty-fix');
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',tryHookApp);else tryHookApp();
 })();

@@ -5,6 +5,9 @@
  *
  * CRITICAL: never overwrite an existing FINENC1 payload with empty/default
  * state when decrypt fails — that is how data was wiped in intermediate builds.
+ *
+ * LIVE_KEY is the only key allowed to touch the emergency cash blob and the
+ * global decrypt-failed lock. Auxiliary keys (sync-base, etc.) must not.
  */
 (function (global) {
   'use strict';
@@ -13,6 +16,7 @@
   var ENC_PREFIX = 'FINENC1:';
   var LEGACY_MIGRATED = 'finna_state_enc_v1';
   var RAW_BACKUP_KEY = 'kopeyka3_state_v1__raw_backup';
+  var LIVE_KEY = 'kopeyka3_state_v1';
   var _ready = null;
   var _cryptoKey = null;
 
@@ -144,6 +148,7 @@
   }
 
   function loadState(storageKey, defFn, normFn) {
+    var isLive = storageKey === LIVE_KEY;
     return init().then(function () {
       var raw = null;
       try {
@@ -152,11 +157,12 @@
         return defFn();
       }
       if (!raw) {
-        // try emergency backup
-        try {
-          var bak = localStorage.getItem(RAW_BACKUP_KEY);
-          if (bak) raw = bak;
-        } catch (e2) {}
+        if (isLive) {
+          try {
+            var bak = localStorage.getItem(RAW_BACKUP_KEY);
+            if (bak) raw = bak;
+          } catch (e2) {}
+        }
       }
       if (!raw) return defFn();
 
@@ -169,29 +175,36 @@
       }
 
       if (raw.indexOf(ENC_PREFIX) === 0) {
-        // preserve encrypted blob before any write path
-        try { localStorage.setItem(RAW_BACKUP_KEY, raw); } catch (e) {}
+        // Preserve the live cash blob only. Sync-base must never replace it.
+        if (isLive) {
+          try { localStorage.setItem(RAW_BACKUP_KEY, raw); } catch (e) {}
+        }
         return decryptString(raw).then(function (text) {
           if (!text) {
-            // DECRYPT FAILED — do NOT wipe. Flag for UI recovery.
-            try {
-              global.__FIN_DECRYPT_FAILED = true;
-              global.__FIN_LOCKED_RAW = raw;
-            } catch (e) {}
-            return null; // caller must not save empty over this
+            if (isLive) {
+              try {
+                global.__FIN_DECRYPT_FAILED = true;
+                global.__FIN_LOCKED_RAW = raw;
+              } catch (e) {}
+            }
+            return null;
           }
           var st = parseOk(text);
           if (!st) {
-            try {
-              global.__FIN_DECRYPT_FAILED = true;
-              global.__FIN_LOCKED_RAW = raw;
-            } catch (e) {}
+            if (isLive) {
+              try {
+                global.__FIN_DECRYPT_FAILED = true;
+                global.__FIN_LOCKED_RAW = raw;
+              } catch (e) {}
+            }
             return null;
           }
-          try {
-            global.__FIN_DECRYPT_FAILED = false;
-            global.__FIN_LOCKED_RAW = null;
-          } catch (e) {}
+          if (isLive) {
+            try {
+              global.__FIN_DECRYPT_FAILED = false;
+              global.__FIN_LOCKED_RAW = null;
+            } catch (e) {}
+          }
           return st;
         });
       }
@@ -202,7 +215,7 @@
         try {
           localStorage.setItem(storageKey, enc);
           localStorage.setItem(LEGACY_MIGRATED, '1');
-          if (storageKey === 'kopeyka3_state_v1') localStorage.setItem(RAW_BACKUP_KEY, enc);
+          if (isLive) localStorage.setItem(RAW_BACKUP_KEY, enc);
         } catch (e) {}
         return state;
       }).catch(function () {
@@ -212,6 +225,7 @@
   }
 
   function saveState(storageKey, stateObj) {
+    var isLive = storageKey === LIVE_KEY;
     // Never overwrite a locked encrypted blob — decrypt failed, still loading, or crypto missing.
     try {
       if (global.__FIN_DECRYPT_FAILED || global.__FIN_CRYPTO_UNAVAILABLE || global.__FIN_LOAD_PENDING) {
@@ -237,7 +251,7 @@
         try {
           localStorage.setItem(storageKey, enc);
           // Emergency blob is ONLY the live cash register, never the sync-base snapshot.
-          if (storageKey === 'kopeyka3_state_v1') localStorage.setItem(RAW_BACKUP_KEY, enc);
+          if (isLive) localStorage.setItem(RAW_BACKUP_KEY, enc);
         } catch (e) {}
         return true;
       }).catch(function () {
@@ -260,6 +274,7 @@
     },
     isEmptyState: isEmptyState,
     ENC_PREFIX: ENC_PREFIX,
-    RAW_BACKUP_KEY: RAW_BACKUP_KEY
+    RAW_BACKUP_KEY: RAW_BACKUP_KEY,
+    LIVE_KEY: LIVE_KEY
   };
 })(typeof window !== 'undefined' ? window : this);

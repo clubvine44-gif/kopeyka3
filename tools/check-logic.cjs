@@ -171,6 +171,7 @@ assert.ok(appSrc.indexOf('Number(s.settings.paydayDay)') >= 0, 'hasLiveData must
 assert.ok(appSrc.indexOf("storedKeyNow.indexOf('month_')===0") >= 0, 'skipped periods use stored horizon mode');
 assert.ok(appSrc.indexOf('id="mealHomeCard"') >= 0, 'home must have Magnit meal card');
 assert.ok(appSrc.indexOf("currentView==='meal'") >= 0, 'app must render meal view');
+assert.ok(appSrc.indexOf('var payThis=Math.min(payday,lastThis)') >= 0, 'payday period uses last day of short months');
 
 var cloudSrc = fs.readFileSync(path.join(ROOT, 'cloud.js'), 'utf8');
 assert.ok(cloudSrc.indexOf('localNotReady') >= 0, 'cloud must wait for local decrypt');
@@ -180,6 +181,9 @@ assert.ok(cloudSrc.indexOf('function mergeSettings') >= 0, 'settings must deep-m
 assert.ok(cloudSrc.indexOf('savingsFromReports') >= 0, 'cloud savings merge uses period reports');
 assert.ok(cloudSrc.indexOf('function hydrateBase') >= 0, 'sync-base snapshot must decrypt on boot');
 assert.ok(cloudSrc.indexOf("FinSecureStore.saveState(SYNC_BASE") >= 0, 'sync-base must be encrypted');
+assert.ok(cloudSrc.indexOf('function liveDivergedFrom') >= 0, 'cloud must detect in-flight local edits');
+assert.ok(cloudSrc.indexOf('writeRemote(merged,remote,local)') >= 0, 'cloud write must keep a snapshot of local');
+assert.ok(cloudSrc.indexOf('n>=300') >= 0, 'cloud must wait long enough for PBKDF2 on slow phones');
 
 var asstSrc = fs.readFileSync(path.join(ROOT, 'assistant-v2.js'), 'utf8');
 assert.ok(asstSrc.indexOf("s.reserveOps=s.reserveOps.filter") < 0, 'assistant must not strip reserveOps');
@@ -189,11 +193,13 @@ assert.ok(asstSrc.indexOf("type:'withdraw'") >= 0, 'assistant reserve delete mus
 var storeSrc = fs.readFileSync(path.join(ROOT, 'secure-store.js'), 'utf8');
 assert.ok(storeSrc.indexOf('existingPlain') >= 0 || storeSrc.indexOf('existingEnc') >= 0, 'must not overwrite ciphertext with plaintext');
 assert.ok(storeSrc.indexOf('budgetSavings') >= 0, 'empty-state must treat savings as live data');
-assert.ok(storeSrc.indexOf("storageKey === 'kopeyka3_state_v1'") >= 0, 'raw backup is only the live cash register');
+assert.ok(storeSrc.indexOf("LIVE_KEY = 'kopeyka3_state_v1'") >= 0, 'live cash key constant');
+assert.ok(storeSrc.indexOf('storageKey === LIVE_KEY') >= 0, 'load/save must gate emergency blob on live key');
+assert.ok(storeSrc.indexOf("if (isLive) {") >= 0, 'aux keys must not set decrypt-failed');
 
 var gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle'), 'utf8');
-assert.ok(/versionCode\s+169/.test(gradle), 'versionCode 169');
-assert.ok(/versionName\s+"4\.13\.2"/.test(gradle), 'versionName 4.13.2');
+assert.ok(/versionCode\s+170/.test(gradle), 'versionCode 170');
+assert.ok(/versionName\s+"4\.13\.3"/.test(gradle), 'versionName 4.13.3');
 
 var mainJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/MainActivity.java'), 'utf8');
 assert.ok(appSrc.indexOf('function recoverLockedState') >= 0, 'decrypt-fail recovery helper');
@@ -429,16 +435,129 @@ assert.ok(relYml.indexOf('tools/check-logic.cjs') >= 0, 'release must run check-
   assert.ok(plan.basket.every(function (b) { return b.qty > 0; }), 'no zero-qty rows');
   var oats = plan.basket.filter(function (b) { return b.id === 'oats_400'; })[0];
   assert.ok(oats && oats.qty >= 1, 'oats packs ceiled from 0.15*30');
+  var mealSrc = fs.readFileSync(path.join(ROOT, 'meal-plan.js'), 'utf8');
+  assert.ok(mealSrc.indexOf("'&'+'amp;'") >= 0, 'meal esc must encode HTML entities');
+  mealSandbox.localStorage.setItem('kopeyka3_meal_v1', JSON.stringify({
+    storeId: 'magnit', priceOverrides: {},
+    lastPlan: { total: 10, note: '<img src=x onerror=alert(1)>', basket: [], menu: [] },
+    settings: { budgetMonth: 0, adults: 1, children: 0, goal: 'maintain' }
+  }));
+  var html = mealSandbox.window.MealPlan.html();
+  assert.ok(html.indexOf('onerror=alert(1)') >= 0, 'meal note text is shown');
+  assert.ok(html.indexOf('<img') < 0, 'meal note must not inject HTML tags');
+  assert.ok(html.indexOf('&' + 'lt;') >= 0, 'meal note must use HTML entities');
 })();
 
-console.log('logic ok', JSON.stringify({
-  cash: c.cash,
-  available: c.available,
-  daily: c.daily,
-  debt: c.debtRemaining,
-  octOpen: oct.openingBalance,
-  closedCash: closed.cash,
-  depositCash: openRes.cash,
-  closed2: closed2.cash,
-  mergeKeptOps: merged.reserveOps.length
-}));
+// Payday 31 in February: last day of the month starts the new period.
+(function paydayShortMonth(){
+  function pad2(n){return String(n).padStart(2,'0');}
+  function daysInMonthNum(y,m){return new Date(y,m,0).getDate();}
+  function range(y,mo,d,payday){
+    var lastThis=daysInMonthNum(y,mo);
+    var payThis=Math.min(payday,lastThis);
+    var sy,sm,sd,ey,em,ed;
+    if(d>=payThis){
+      sy=y;sm=mo;sd=payThis;
+      if(mo===12){ey=y+1;em=1;}else{ey=y;em=mo+1;}
+      ed=Math.min(payday,daysInMonthNum(ey,em))-1;
+      if(ed<1){ey=sy;em=sm;ed=daysInMonthNum(sy,sm);}
+    }else{
+      if(mo===1){sy=y-1;sm=12;}else{sy=y;sm=mo-1;}
+      sd=Math.min(payday,daysInMonthNum(sy,sm));
+      ey=y;em=mo;ed=Math.min(payday,daysInMonthNum(y,mo))-1;
+      if(ed<1){ey=sy;em=sm;ed=daysInMonthNum(sy,sm);}
+    }
+    return {start:sy+'-'+pad2(sm)+'-'+pad2(sd), end:ey+'-'+pad2(em)+'-'+pad2(ed)};
+  }
+  var r=range(2026,2,28,31);
+  assert.strictEqual(r.start, '2026-02-28', 'Feb 28 is payday when payday=31');
+  assert.strictEqual(r.end, '2026-03-30');
+  var r2=range(2026,2,27,31);
+  assert.strictEqual(r2.end, '2026-02-27', 'Feb 27 still in previous payday period');
+  var r3=range(2026,9,21,15);
+  assert.strictEqual(r3.start, '2026-09-15');
+  assert.strictEqual(r3.end, '2026-10-14');
+})();
+
+assert.strictEqual(typeof cloudSandbox.window.kopeykaCloud.liveDivergedFrom, 'function', 'liveDivergedFrom exported');
+cloudSandbox.window.STATE = JSON.parse(JSON.stringify(localKeep));
+assert.strictEqual(cloudSandbox.window.kopeykaCloud.liveDivergedFrom(localKeep), false, 'identical live is not diverged');
+cloudSandbox.window.STATE.income = [{ id: 'new1', amount: 100, date: '2026-09-21' }];
+assert.strictEqual(cloudSandbox.window.kopeykaCloud.liveDivergedFrom(localKeep), true, 'in-flight income is diverged');
+
+function finish(extra){
+  console.log('logic ok', JSON.stringify(Object.assign({
+    cash: c.cash,
+    available: c.available,
+    daily: c.daily,
+    debt: c.debtRemaining,
+    octOpen: oct.openingBalance,
+    closedCash: closed.cash,
+    depositCash: openRes.cash,
+    closed2: closed2.cash,
+    mergeKeptOps: merged.reserveOps.length
+  }, extra || {})));
+}
+
+(async function isolateAuxKey(){
+  var { webcrypto } = require('crypto');
+  var mem = {};
+  var g = {
+    crypto: webcrypto,
+    btoa: btoa,
+    atob: atob,
+    TextEncoder: TextEncoder,
+    TextDecoder: TextDecoder,
+    Uint8Array: Uint8Array,
+    Promise: Promise,
+    JSON: JSON,
+    Object: Object,
+    Number: Number,
+    Array: Array,
+    Math: Math,
+    Date: Date,
+    Error: Error,
+    console: console,
+    localStorage: {
+      getItem: function (k) { return Object.prototype.hasOwnProperty.call(mem, k) ? mem[k] : null; },
+      setItem: function (k, v) { mem[k] = String(v); },
+      removeItem: function (k) { delete mem[k]; }
+    }
+  };
+  g.window = g;
+  g.global = g;
+  vm.runInNewContext(storeSrc, g, { filename: 'secure-store.js' });
+  var SS = g.FinSecureStore;
+  assert(SS, 'FinSecureStore missing in isolation test');
+  var live = {
+    version: 6,
+    settings: { openingBalance: 4242, month: '2026-09' },
+    income: [{ id: 'i-live', amount: 100, date: '2026-09-01' }],
+    expenses: [], reserves: [], debts: [], reserveOps: [], obligations: [], obligationPays: []
+  };
+  var syncSnap = {
+    version: 6,
+    settings: { openingBalance: 1, month: '2026-08' },
+    income: [], expenses: [], reserves: [], debts: [], reserveOps: [], obligations: [], obligationPays: []
+  };
+  await SS.saveState(SS.LIVE_KEY, live);
+  var emergency = mem[SS.RAW_BACKUP_KEY];
+  assert.ok(emergency && emergency.indexOf('FINENC1:') === 0, 'live save writes emergency blob');
+  g.__FIN_LOAD_PENDING = false;
+  g.__FIN_DECRYPT_FAILED = false;
+  await SS.saveState('kopeyka3_sync_base_v1', syncSnap);
+  assert.strictEqual(mem[SS.RAW_BACKUP_KEY], emergency, 'saving sync-base must not replace cash emergency blob');
+  g.__FIN_DECRYPT_FAILED = true;
+  g.__FIN_LOCKED_RAW = 'keep-me';
+  mem['kopeyka3_sync_base_v1'] = 'FINENC1:AAAA:bbbb';
+  var aux = await SS.loadState('kopeyka3_sync_base_v1', function () { return null; }, function (x) { return x; });
+  assert.strictEqual(aux, null, 'corrupt sync-base returns null');
+  assert.strictEqual(g.__FIN_DECRYPT_FAILED, true, 'aux decrypt fail must not change live lock');
+  assert.strictEqual(g.__FIN_LOCKED_RAW, 'keep-me', 'aux decrypt fail must not touch locked blob pointer');
+  assert.strictEqual(mem[SS.RAW_BACKUP_KEY], emergency, 'loading sync-base must not clobber emergency cash blob');
+  finish({ auxIsolated: true });
+})().catch(function (e) {
+  console.error(e && e.stack || e);
+  process.exit(1);
+});
+
