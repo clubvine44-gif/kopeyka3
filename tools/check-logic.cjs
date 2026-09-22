@@ -184,6 +184,7 @@ assert.ok(cloudSrc.indexOf("FinSecureStore.saveState(SYNC_BASE") >= 0, 'sync-bas
 assert.ok(cloudSrc.indexOf('function liveDivergedFrom') >= 0, 'cloud must detect in-flight local edits');
 assert.ok(cloudSrc.indexOf('writeRemote(merged,remote,local)') >= 0, 'cloud write must keep a snapshot of local');
 assert.ok(cloudSrc.indexOf('n>=300') >= 0, 'cloud must wait long enough for PBKDF2 on slow phones');
+assert.ok(cloudSrc.indexOf('function reconcileCashAnchor') >= 0, 'cloud must reconcile cash anchor after merge');
 
 var asstSrc = fs.readFileSync(path.join(ROOT, 'assistant-v2.js'), 'utf8');
 assert.ok(asstSrc.indexOf("s.reserveOps=s.reserveOps.filter") < 0, 'assistant must not strip reserveOps');
@@ -196,10 +197,17 @@ assert.ok(storeSrc.indexOf('budgetSavings') >= 0, 'empty-state must treat saving
 assert.ok(storeSrc.indexOf("LIVE_KEY = 'kopeyka3_state_v1'") >= 0, 'live cash key constant');
 assert.ok(storeSrc.indexOf('storageKey === LIVE_KEY') >= 0, 'load/save must gate emergency blob on live key');
 assert.ok(storeSrc.indexOf("if (isLive) {") >= 0, 'aux keys must not set decrypt-failed');
+assert.ok(storeSrc.indexOf('pruneBackupSlots') >= 0, 'quota must free backup slots');
+assert.ok(storeSrc.indexOf('_saveGen') >= 0, 'live saves must be generation-guarded');
+assert.ok(storeSrc.indexOf('hasCiphertext') >= 0, 'must not mint a new key over live ciphertext');
+
+var bakSrc = fs.readFileSync(path.join(ROOT, 'fin-backup.js'), 'utf8');
+assert.ok(bakSrc.indexOf("MEAL_KEY = 'kopeyka3_meal_v1'") >= 0, 'backup envelope includes meal');
+assert.ok(bakSrc.indexOf('meal: readMeal()') >= 0, 'slots and files store meal snapshot');
 
 var gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle'), 'utf8');
-assert.ok(/versionCode\s+170/.test(gradle), 'versionCode 170');
-assert.ok(/versionName\s+"4\.13\.3"/.test(gradle), 'versionName 4.13.3');
+assert.ok(/versionCode\s+171/.test(gradle), 'versionCode 171');
+assert.ok(/versionName\s+"4\.13\.4"/.test(gradle), 'versionName 4.13.4');
 
 var mainJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/MainActivity.java'), 'utf8');
 assert.ok(appSrc.indexOf('function recoverLockedState') >= 0, 'decrypt-fail recovery helper');
@@ -485,6 +493,34 @@ assert.strictEqual(cloudSandbox.window.kopeykaCloud.liveDivergedFrom(localKeep),
 cloudSandbox.window.STATE.income = [{ id: 'new1', amount: 100, date: '2026-09-21' }];
 assert.strictEqual(cloudSandbox.window.kopeykaCloud.liveDivergedFrom(localKeep), true, 'in-flight income is diverged');
 
+// Cash-anchor reconcile: folded local + extra August income on remote must keep the extra.
+(function cashAnchorReconcile(){
+  var baseC = {
+    settings: { openingBalance: 10000, month: '2026-08' },
+    income: [], expenses: [], reserves: [], debts: [], reserveOps: [],
+    obligations: [], obligationPays: []
+  };
+  var localC = JSON.parse(JSON.stringify(baseC));
+  localC.settings = { openingBalance: 15000, month: '2026-09' };
+  localC.income = [{ id: 'i-aug', amount: 5000, date: '2026-08-10' }];
+  var remoteC = JSON.parse(JSON.stringify(baseC));
+  remoteC.settings = { openingBalance: 10000, month: '2026-08' };
+  remoteC.income = [
+    { id: 'i-aug', amount: 5000, date: '2026-08-10' },
+    { id: 'i-aug2', amount: 1000, date: '2026-08-20' }
+  ];
+  var mergedC = cloudSandbox.window.kopeykaCloud.threeWay(baseC, localC, remoteC);
+  assert.ok((mergedC.income || []).some(function (x) { return x && x.id === 'i-aug2'; }), 'remote August income kept in merge');
+  var sepCash = cloudSandbox.window.kopeykaCloud.cashAtMonth(mergedC, '2026-09');
+  assert.strictEqual(sepCash, 16000, 'Sep cash includes extra August income, got ' + sepCash);
+  var bothFolded = JSON.parse(JSON.stringify(localC));
+  bothFolded.settings = { openingBalance: 16000, month: '2026-09' };
+  bothFolded.income = remoteC.income.slice();
+  var mergedBoth = cloudSandbox.window.kopeykaCloud.threeWay(baseC, localC, bothFolded);
+  var sepCash2 = cloudSandbox.window.kopeykaCloud.cashAtMonth(mergedBoth, '2026-09');
+  assert.strictEqual(sepCash2, 16000, 'both-folded merge still 16000, got ' + sepCash2);
+})();
+
 function finish(extra){
   console.log('logic ok', JSON.stringify(Object.assign({
     cash: c.cash,
@@ -555,7 +591,91 @@ function finish(extra){
   assert.strictEqual(g.__FIN_DECRYPT_FAILED, true, 'aux decrypt fail must not change live lock');
   assert.strictEqual(g.__FIN_LOCKED_RAW, 'keep-me', 'aux decrypt fail must not touch locked blob pointer');
   assert.strictEqual(mem[SS.RAW_BACKUP_KEY], emergency, 'loading sync-base must not clobber emergency cash blob');
-  finish({ auxIsolated: true });
+
+  g.__FIN_DECRYPT_FAILED = false;
+  g.__FIN_LOCKED_RAW = null;
+  g.__FIN_LOAD_PENDING = false;
+
+  // Stale overlapping save: last snapshot wins.
+  var s1 = JSON.parse(JSON.stringify(live));
+  var s2 = JSON.parse(JSON.stringify(live));
+  s2.income = [{ id: 'i-live', amount: 100, date: '2026-09-01' }, { id: 'i-new', amount: 777, date: '2026-09-22' }];
+  var p1 = SS.saveState(SS.LIVE_KEY, s1);
+  var p2 = SS.saveState(SS.LIVE_KEY, s2);
+  await p1; await p2;
+  var after = await SS.loadState(SS.LIVE_KEY, function () { return null; }, function (x) { return x; });
+  assert.ok(after && (after.income || []).some(function (x) { return x && x.id === 'i-new'; }), 'later save must win over in-flight older encrypt');
+
+  // Install id failed to persist on first write: reopen with fallback, not a new random key.
+  var memF = {};
+  var allowInstallF = false;
+  var gF = {
+    crypto: webcrypto,
+    btoa: btoa,
+    atob: atob,
+    TextEncoder: TextEncoder,
+    TextDecoder: TextDecoder,
+    Uint8Array: Uint8Array,
+    Promise: Promise,
+    JSON: JSON,
+    Object: Object,
+    Number: Number,
+    Array: Array,
+    Math: Math,
+    Date: Date,
+    Error: Error,
+    console: console,
+    localStorage: {
+      getItem: function (k) { return Object.prototype.hasOwnProperty.call(memF, k) ? memF[k] : null; },
+      setItem: function (k, v) {
+        if (k === 'finna_install_id_v1' && !allowInstallF) throw new Error('quota');
+        memF[k] = String(v);
+      },
+      removeItem: function (k) { delete memF[k]; }
+    }
+  };
+  gF.window = gF;
+  gF.global = gF;
+  vm.runInNewContext(storeSrc, gF, { filename: 'secure-store.js' });
+  var SSF = gF.FinSecureStore;
+  var liveF = {
+    version: 6,
+    settings: { openingBalance: 8888, month: '2026-09' },
+    income: [{ id: 'keep', amount: 50, date: '2026-09-01' }],
+    expenses: [], reserves: [], debts: [], reserveOps: [], obligations: [], obligationPays: []
+  };
+  await SSF.saveState(SSF.LIVE_KEY, liveF);
+  assert.ok(memF[SSF.LIVE_KEY] && memF[SSF.LIVE_KEY].indexOf('FINENC1:') === 0, 'fallback encrypt wrote cipher');
+  assert.ok(!memF['finna_install_id_v1'], 'install id was not persisted');
+  allowInstallF = true; // second boot CAN write id — must not mint a new random key
+  var gF2 = {
+    crypto: webcrypto,
+    btoa: btoa,
+    atob: atob,
+    TextEncoder: TextEncoder,
+    TextDecoder: TextDecoder,
+    Uint8Array: Uint8Array,
+    Promise: Promise,
+    JSON: JSON,
+    Object: Object,
+    Number: Number,
+    Array: Array,
+    Math: Math,
+    Date: Date,
+    Error: Error,
+    console: console,
+    localStorage: {
+      getItem: function (k) { return Object.prototype.hasOwnProperty.call(memF, k) ? memF[k] : null; },
+      setItem: function (k, v) { memF[k] = String(v); },
+      removeItem: function (k) { delete memF[k]; }
+    }
+  };
+  gF2.window = gF2;
+  gF2.global = gF2;
+  vm.runInNewContext(storeSrc, gF2, { filename: 'secure-store.js' });
+  var reopened = await gF2.FinSecureStore.loadState(gF2.FinSecureStore.LIVE_KEY, function () { return { settings: {} }; }, function (x) { return x; });
+  assert.ok(reopened && Number(reopened.settings && reopened.settings.openingBalance) === 8888, 'cipher without install id reopens via fallback, got ' + JSON.stringify(reopened && reopened.settings));
+  finish({ auxIsolated: true, staleSaveWon: true, cipherWithoutId: true });
 })().catch(function (e) {
   console.error(e && e.stack || e);
   process.exit(1);

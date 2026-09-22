@@ -8,6 +8,9 @@
  *
  * LIVE_KEY is the only key allowed to touch the emergency cash blob and the
  * global decrypt-failed lock. Auxiliary keys (sync-base, etc.) must not.
+ *
+ * 4.13.4: serialize live writes (last snapshot wins), never mint a new crypto
+ * key over existing ciphertext, retry after freeing backup slots on quota.
  */
 (function (global) {
   'use strict';
@@ -17,8 +20,11 @@
   var LEGACY_MIGRATED = 'finna_state_enc_v1';
   var RAW_BACKUP_KEY = 'kopeyka3_state_v1__raw_backup';
   var LIVE_KEY = 'kopeyka3_state_v1';
+  var FALLBACK_ID = 'finna-fallback-install-id';
+  var SLOT_PREFIX = 'finna_backup_slot_';
   var _ready = null;
   var _cryptoKey = null;
+  var _saveGen = 0;
 
   function b64FromBuf(buf) {
     var bytes = new Uint8Array(buf);
@@ -32,19 +38,36 @@
     for (var i = 0; i < s.length; i++) bytes[i] = s.charCodeAt(i);
     return bytes.buffer;
   }
+  function hasCiphertext() {
+    try {
+      var live = localStorage.getItem(LIVE_KEY);
+      if (live && live.indexOf(ENC_PREFIX) === 0) return true;
+      var bak = localStorage.getItem(RAW_BACKUP_KEY);
+      if (bak && bak.indexOf(ENC_PREFIX) === 0) return true;
+    } catch (e) {}
+    return false;
+  }
   function getInstallId() {
     try {
       var id = localStorage.getItem(INSTALL_KEY);
       if (id && id.length >= 16) return id;
+    } catch (e) {}
+    // Ciphertext without a stored id: NEVER mint a new random key (that locks the cash).
+    // Re-use the stable fallback so a first write that failed to persist the id still opens.
+    if (hasCiphertext()) {
+      try { localStorage.setItem(INSTALL_KEY, FALLBACK_ID); } catch (e2) {}
+      return FALLBACK_ID;
+    }
+    try {
       var arr = new Uint8Array(16);
       crypto.getRandomValues(arr);
-      id = Array.prototype.map.call(arr, function (b) {
+      var nid = Array.prototype.map.call(arr, function (b) {
         return ('0' + b.toString(16)).slice(-2);
       }).join('');
-      localStorage.setItem(INSTALL_KEY, id);
-      return id;
-    } catch (e) {
-      return 'finna-fallback-install-id';
+      localStorage.setItem(INSTALL_KEY, nid);
+      return nid;
+    } catch (e3) {
+      return FALLBACK_ID;
     }
   }
 
@@ -147,6 +170,42 @@
     return true;
   }
 
+  function pruneBackupSlots() {
+    var freed = false;
+    for (var i = 4; i >= 1; i--) {
+      try {
+        if (localStorage.getItem(SLOT_PREFIX + i) != null) {
+          localStorage.removeItem(SLOT_PREFIX + i);
+          freed = true;
+        }
+      } catch (e) {}
+    }
+    return freed;
+  }
+
+  function writePayload(storageKey, payload, isLive) {
+    try {
+      localStorage.setItem(storageKey, payload);
+      if (isLive) localStorage.setItem(RAW_BACKUP_KEY, payload);
+      return true;
+    } catch (e) {
+      pruneBackupSlots();
+      try {
+        localStorage.setItem(storageKey, payload);
+        if (isLive) localStorage.setItem(RAW_BACKUP_KEY, payload);
+        return true;
+      } catch (e2) {
+        if (isLive) {
+          try {
+            localStorage.setItem(storageKey, payload);
+            return true;
+          } catch (e3) {}
+        }
+        return false;
+      }
+    }
+  }
+
   function loadState(storageKey, defFn, normFn) {
     var isLive = storageKey === LIVE_KEY;
     return init().then(function () {
@@ -226,6 +285,7 @@
 
   function saveState(storageKey, stateObj) {
     var isLive = storageKey === LIVE_KEY;
+    var gen = isLive ? ++_saveGen : 0;
     // Never overwrite a locked encrypted blob — decrypt failed, still loading, or crypto missing.
     try {
       if (global.__FIN_DECRYPT_FAILED || global.__FIN_CRYPTO_UNAVAILABLE || global.__FIN_LOAD_PENDING) {
@@ -243,24 +303,22 @@
         try {
           var existingPlain = localStorage.getItem(storageKey);
           if (existingPlain && existingPlain.indexOf(ENC_PREFIX) === 0) return false;
-          localStorage.setItem(storageKey, plain);
-        } catch (e) {}
-        return false;
+          return writePayload(storageKey, plain, isLive);
+        } catch (e) {
+          return false;
+        }
       }
       return encryptString(plain).then(function (enc) {
-        try {
-          localStorage.setItem(storageKey, enc);
-          // Emergency blob is ONLY the live cash register, never the sync-base snapshot.
-          if (isLive) localStorage.setItem(RAW_BACKUP_KEY, enc);
-        } catch (e) {}
-        return true;
+        if (isLive && gen !== _saveGen) return true; // newer live snapshot is in flight
+        return writePayload(storageKey, enc, isLive);
       }).catch(function () {
         try {
           var existingEnc = localStorage.getItem(storageKey);
           if (existingEnc && existingEnc.indexOf(ENC_PREFIX) === 0) return false;
-          localStorage.setItem(storageKey, plain);
-        } catch (e) {}
-        return false;
+          return writePayload(storageKey, plain, isLive);
+        } catch (e) {
+          return false;
+        }
       });
     });
   }
@@ -273,6 +331,7 @@
       return typeof s === 'string' && s.indexOf(ENC_PREFIX) === 0;
     },
     isEmptyState: isEmptyState,
+    pruneBackupSlots: pruneBackupSlots,
     ENC_PREFIX: ENC_PREFIX,
     RAW_BACKUP_KEY: RAW_BACKUP_KEY,
     LIVE_KEY: LIVE_KEY

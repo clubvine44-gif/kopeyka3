@@ -1,4 +1,4 @@
-/* cloud.js v23 — live-key isolation, in-flight merge, wait-for-decrypt */
+/* cloud.js v24 — live-key isolation, in-flight merge, cash-anchor reconcile */
 (function(){
 'use strict';
 const URL='https://cqslrfphsjllhltsvvuq.supabase.co';
@@ -103,7 +103,70 @@ function mergeSettings(base,local,remote,conflicts){
   else if(remote&&remote.lastPeriodReport)out.lastPeriodReport=remote.lastPeriodReport;
   return out;
 }
-function threeWay(base,local,remote){base=normalize(base||{});local=normalize(local||{});remote=normalize(remote||{});var out=Object.assign({},remote),allDeleted={},conflicts=[];COLLECTIONS.forEach(function(k){var m=mergeArray(base[k],local[k],remote[k],k,conflicts,deletedMap(base,k),deletedMap(local,k),deletedMap(remote,k));out[k]=m.items;allDeleted[k]=m.deleted;});out._deleted=allDeleted;out.shiftsOverride=mergeObject(base.shiftsOverride||{},local.shiftsOverride||{},remote.shiftsOverride||{},'shiftsOverride',conflicts);out.dayPlans=mergeObject(base.dayPlans||{},local.dayPlans||{},remote.dayPlans||{},'dayPlans',conflicts);out.voiceMap=mergeObject(base.voiceMap||{},local.voiceMap||{},remote.voiceMap||{},'voiceMap',conflicts);out.settings=mergeSettings(base.settings||{},local.settings||{},remote.settings||{},conflicts);out._conflicts=(remote._conflicts||[]).concat(local._conflicts||[],conflicts).slice(-100);out.version=Math.max(Number(local.version)||0,Number(remote.version)||0,6);out.app='kopeyka3';out.updatedAt=new Date().toISOString();return normalize(out);}
+function nextMonthKey(m){var p=String(m).split('-').map(Number),y=p[0],x=p[1]+1;if(x>12){x=1;y++;}return y+'-'+String(x).padStart(2,'0');}
+function prevMonthKey(m){var p=String(m).split('-').map(Number),y=p[0],x=p[1]-1;if(x<1){x=12;y--;}return y+'-'+String(x).padStart(2,'0');}
+function aliveRow(x){return !!(x&&!x.deleted);}
+function monthOfDate(d){return String(d||'').slice(0,7);}
+function monthDelta(s,m){
+  var inc=0,exp=0,dep=0,wd=0;
+  (s.income||[]).forEach(function(x){if(!aliveRow(x))return;if(monthOfDate(x.date)===m)inc+=num0(x.amount);});
+  (s.expenses||[]).forEach(function(x){if(!aliveRow(x))return;if(monthOfDate(x.date)===m)exp+=num0(x.amount);});
+  (s.reserveOps||[]).forEach(function(x){if(!aliveRow(x))return;if(monthOfDate(x.date)!==m)return;var a=num0(x.amount);if(x.type==='deposit')dep+=a;else if(x.type==='withdraw')wd+=a;});
+  return inc-exp-dep+wd;
+}
+function impliedOpeningAt(state,targetMonth){
+  if(!state||!targetMonth)return 0;
+  var anchor=String((state.settings&&state.settings.month)||targetMonth);
+  var open=num0(state.settings&&state.settings.openingBalance);
+  if(anchor===targetMonth)return open;
+  var guard=0;
+  if(targetMonth>anchor){
+    for(var x=anchor;x!==targetMonth&&guard++<240;x=nextMonthKey(x))open+=monthDelta(state,x);
+    return open;
+  }
+  for(var y=anchor;y!==targetMonth&&guard++<240;){y=prevMonthKey(y);open-=monthDelta(state,y);}
+  return open;
+}
+function preAnchorDelta(state,anchor){
+  var seen={},sum=0;
+  function addMonths(arr,field){
+    (arr||[]).forEach(function(x){
+      if(!aliveRow(x))return;
+      var m=monthOfDate(x[field]||x.month);
+      if(/^\d{4}-\d{2}$/.test(m)&&m<anchor)seen[m]=1;
+    });
+  }
+  addMonths(state.income,'date');
+  addMonths(state.expenses,'date');
+  addMonths(state.reserveOps,'date');
+  Object.keys(seen).forEach(function(m){sum+=monthDelta(state,m);});
+  return sum;
+}
+function cashAtMonth(state,month){
+  month=String(month||'');
+  if(!/^\d{4}-\d{2}$/.test(month))return 0;
+  return impliedOpeningAt(state,month)+monthDelta(state,month);
+}
+function reconcileCashAnchor(out,local,remote,base){
+  try{
+    var months=[base,local,remote].map(function(s){return s&&s.settings&&s.settings.month;}).filter(function(m){return /^\d{4}-\d{2}$/.test(String(m||''));}).sort();
+    if(!months.length)return out;
+    var earliest=months[0];
+    var source=null;
+    if(base&&base.settings&&base.settings.month===earliest)source=base;
+    if(remote&&remote.settings&&remote.settings.month===earliest)source=remote;
+    if(local&&local.settings&&local.settings.month===earliest)source=local;
+    if(!source)source=local||remote||base;
+    if(!source)return out;
+    var opening=impliedOpeningAt(source,earliest);
+    opening+=preAnchorDelta(out,earliest)-preAnchorDelta(source,earliest);
+    if(!out.settings)out.settings={};
+    out.settings.month=earliest;
+    out.settings.openingBalance=num0(opening);
+  }catch(e){}
+  return out;
+}
+function threeWay(base,local,remote){base=normalize(base||{});local=normalize(local||{});remote=normalize(remote||{});var out=Object.assign({},remote),allDeleted={},conflicts=[];COLLECTIONS.forEach(function(k){var m=mergeArray(base[k],local[k],remote[k],k,conflicts,deletedMap(base,k),deletedMap(local,k),deletedMap(remote,k));out[k]=m.items;allDeleted[k]=m.deleted;});out._deleted=allDeleted;out.shiftsOverride=mergeObject(base.shiftsOverride||{},local.shiftsOverride||{},remote.shiftsOverride||{},'shiftsOverride',conflicts);out.dayPlans=mergeObject(base.dayPlans||{},local.dayPlans||{},remote.dayPlans||{},'dayPlans',conflicts);out.voiceMap=mergeObject(base.voiceMap||{},local.voiceMap||{},remote.voiceMap||{},'voiceMap',conflicts);out.settings=mergeSettings(base.settings||{},local.settings||{},remote.settings||{},conflicts);out._conflicts=(remote._conflicts||[]).concat(local._conflicts||[],conflicts).slice(-100);out.version=Math.max(Number(local.version)||0,Number(remote.version)||0,6);out.app='kopeyka3';out.updatedAt=new Date().toISOString();return normalize(reconcileCashAnchor(out,local,remote,base));}
 function localChanged(base,local){return !same(normalize(base||{}),normalize(local||{}));}
 function liveDivergedFrom(captured){
   try{
@@ -170,7 +233,7 @@ if(remote){if(base&&localChanged(base,local)&&!isEmptyState(local))applyState(th
 async function bootCloud(){try{await loadSDK();var c=client();if(!c)throw new Error('Клиент не готов');var res=await c.auth.getSession();await onSession(res.data&&res.data.session);c.auth.onAuthStateChange(function(ev,session){if(ev==='SIGNED_OUT'){currentUser=null;ready=false;lastSent='';updateAccountUI();return;}if(ev==='SIGNED_IN'||ev==='TOKEN_REFRESHED'||ev==='INITIAL_SESSION')setTimeout(function(){onSession(session);},0);});}catch(e){console.error('[cloud] boot',e);setStatus(false,navigator.onLine?'Облако недоступно':'Офлайн');}window.addEventListener('online',function(){updateAccountUI();if(currentUser)syncNow();});window.addEventListener('offline',function(){updateAccountUI();});document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible'&&currentUser&&navigator.onLine){/* тихий sync, без toast */saveToCloud(false);}});window.addEventListener('pagehide',function(){if(currentUser&&navigator.onLine)saveToCloud(false);});var btn=document.getElementById('btnCloud');if(btn)btn.onclick=showAuth;}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bootCloud);else bootCloud();
 window.kopeykaCloud={save:function(){return syncNow();},user:function(){return currentUser;},scheduleSave:scheduleSave,load:function(){return loadFromCloud();},showAuth:showAuth,markLocalReset:function(){setClearIntent();},
-  threeWay:threeWay,isEmptyState:isEmptyState,liveDivergedFrom:liveDivergedFrom,
+  threeWay:threeWay,isEmptyState:isEmptyState,liveDivergedFrom:liveDivergedFrom,cashAtMonth:cashAtMonth,
   forceRestore:async function(){try{if(!currentUser){toast('Сначала войди в облако');if(typeof showAuth==='function')showAuth();return false;}var remote=await loadFromCloud();if(!remote||isEmptyState(remote)){toast('В облаке пусто — восстанавливать нечего');return false;}try{localStorage.removeItem(CLEAR_INTENT);}catch(e){}if(window.__FIN_DECRYPT_FAILED){try{window.__FIN_DECRYPT_FAILED=false;window.__FIN_LOCKED_RAW=null;}catch(e){}if(typeof window.recoverLockedState==='function'&&window.recoverLockedState(remote,'cloud')){writeBase(remote);toast('Данные восстановлены из облака');return true;}}applyState(remote,'Принудительно восстановлено из облака');writeBase(remote);toast('Данные восстановлены из облака');return true;}catch(e){toast('Ошибка восстановления: '+(e.message||''));return false;}}
 };
 })();

@@ -1,4 +1,4 @@
-(function(){/* v118.7 4.13.3 */'use strict';
+(function(){/* v118.8 4.13.4 */'use strict';
 var KEY='kopeyka3_state_v1',ANCHOR='2026-08-17',CYCLE=['day','day','night','night','off','off'];
 var CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье','Прочее'];
 var BUDGET_CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
@@ -507,7 +507,11 @@ function save(skipUndo){
   STATE.updatedAt=new Date().toISOString();
   try{
     if(window.FinSecureStore&&typeof window.FinSecureStore.saveState==='function'){
-      window.FinSecureStore.saveState(KEY,STATE);
+      window.FinSecureStore.saveState(KEY,STATE).then(function(ok){
+        if(ok===false){
+          try{toast('Касса не записалась — мало места. Сделай копию JSON.');}catch(e4){}
+        }
+      }).catch(function(){});
     }else{
       var ex2=null;try{ex2=localStorage.getItem(KEY);}catch(e3){}
       if(!(ex2&&String(ex2).indexOf('FINENC1:')===0)) localStorage.setItem(KEY,JSON.stringify(STATE));

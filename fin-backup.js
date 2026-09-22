@@ -5,6 +5,7 @@
  */
 (function (global) {
   'use strict';
+  var MEAL_KEY = 'kopeyka3_meal_v1';
   var SLOT_PREFIX = 'finna_backup_slot_';
   var SLOT_COUNT = 5;
   var META_KEY = 'finna_backup_meta_v1';
@@ -64,6 +65,18 @@
   function writeMeta(m) {
     try { localStorage.setItem(META_KEY, JSON.stringify(m)); } catch (e) {}
   }
+  function readMeal() {
+    try {
+      var r = localStorage.getItem(MEAL_KEY);
+      if (!r) return null;
+      var o = JSON.parse(r);
+      return o && typeof o === 'object' ? o : null;
+    } catch (e) { return null; }
+  }
+  function writeMeal(meal) {
+    if (!meal || typeof meal !== 'object') return;
+    try { localStorage.setItem(MEAL_KEY, JSON.stringify(meal)); } catch (e) {}
+  }
   function todayStr() {
     var d = new Date();
     var m = d.getMonth() + 1, day = d.getDate();
@@ -83,7 +96,8 @@
       savedAt: new Date().toISOString(),
       versionCode: code,
       itemCount: countItems(stateObj),
-      state: stateObj
+      state: stateObj,
+      meal: readMeal()
     };
   }
   function envelopeJson(stateObj, kind) {
@@ -93,7 +107,10 @@
     if (!raw) return null;
     var obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
     if (!obj || typeof obj !== 'object') return null;
-    if (obj.format === 'finna-backup-v2' && obj.state && typeof obj.state === 'object') return obj.state;
+    if (obj.format === 'finna-backup-v2' && obj.state && typeof obj.state === 'object') {
+      if (obj.meal) writeMeal(obj.meal);
+      return obj.state;
+    }
     if (obj.state && typeof obj.state === 'object' && (obj.savedAt || obj.itemCount != null)) return obj.state;
     if (obj.settings || obj.income || obj.expenses || obj.debts) return obj;
     return null;
@@ -102,19 +119,28 @@
     var payload = JSON.stringify({
       savedAt: new Date().toISOString(),
       itemCount: countItems(stateObj),
-      state: stateObj
+      state: stateObj,
+      meal: readMeal()
     });
-    try {
+    function writeSlots() {
       for (var i = SLOT_COUNT - 1; i >= 1; i--) {
         var prev = localStorage.getItem(SLOT_PREFIX + (i - 1));
         if (prev) localStorage.setItem(SLOT_PREFIX + i, prev);
       }
       localStorage.setItem(SLOT_PREFIX + '0', payload);
+    }
+    try {
+      writeSlots();
     } catch (e) {
       try {
         localStorage.removeItem(SLOT_PREFIX + (SLOT_COUNT - 1));
-        localStorage.setItem(SLOT_PREFIX + '0', payload);
-      } catch (e2) {}
+        localStorage.removeItem(SLOT_PREFIX + (SLOT_COUNT - 2));
+        writeSlots();
+      } catch (e2) {
+        try {
+          localStorage.setItem(SLOT_PREFIX + '0', payload);
+        } catch (e3) {}
+      }
     }
   }
   function listSlots() {
@@ -259,7 +285,14 @@
   }
   function restoreBest() {
     var best = bestSlot();
-    if (best && best.state) return best.state;
+    if (best && best.state) {
+      try {
+        var raw0 = localStorage.getItem(SLOT_PREFIX + best.slot);
+        var parsed0 = raw0 ? JSON.parse(raw0) : null;
+        if (parsed0 && parsed0.meal) writeMeal(parsed0.meal);
+      } catch (e) {}
+      return best.state;
+    }
     try {
       var raw = localStorage.getItem('kopeyka3_state_v1__raw_backup');
       if (raw && raw.indexOf('FINENC1:') !== 0) {
