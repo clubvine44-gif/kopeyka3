@@ -1,4 +1,4 @@
-(function(){/* v118.8 4.13.4 */'use strict';
+(function(){/* v118.9 4.13.5 */'use strict';
 var KEY='kopeyka3_state_v1',ANCHOR='2026-08-17',CYCLE=['day','day','night','night','off','off'];
 var CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье','Прочее'];
 var BUDGET_CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
@@ -418,7 +418,7 @@ function debtExpenseLinked(e, d, nameHint){
   var note=String(e.note||'').toLowerCase().replace(/ё/g,'е').trim();
   var nm=String(nameHint||d.name||'').toLowerCase().replace(/ё/g,'е').trim();
   if(!note||!nm)return false;
-  return note===nm||note.indexOf(nm)>=0||nm.indexOf(note)>=0;
+  return note===nm;
 }
 /** Сводит кассу и расходы к newPaid.
  *  Уменьшение paid → касса растёт (снимаем расходы или добавляем доход-возврат).
@@ -607,7 +607,7 @@ function computeReminders(){
 }
 function syncReminders(){try{if(window.FinBridge&&window.FinBridge.scheduleReminders)window.FinBridge.scheduleReminders(JSON.stringify(computeReminders()));}catch(e){}}
 function exportData(){try{if(window.FinBackup&&window.FinBackup.forceFileBackup){window.FinBackup.forceSnapshot(STATE);window.FinBackup.forceFileBackup(STATE);var fold='Загрузки / Finna';try{if(window.FinBridge&&window.FinBridge.getBackupFolderHint)fold=window.FinBridge.getBackupFolderHint();}catch(e){}toast('Копия сохранена: '+fold);return;}var data=JSON.stringify(STATE,null,2),filename='finna-backup-'+today()+'.json';if(window.FinBridge&&window.FinBridge.saveBackup){window.FinBridge.saveBackup(data,filename);}else{var blob=new Blob([data],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(function(){URL.revokeObjectURL(url);},2000);}toast('Экспорт запущен');}catch(e){toast('Не удалось сделать экспорт');}}
-function importData(){var inp=document.getElementById('importFileInput');if(!inp){inp=document.createElement('input');inp.type='file';inp.accept='.json,application/json';inp.style.display='none';inp.id='importFileInput';document.body.appendChild(inp);inp.onchange=function(){var f=inp.files&&inp.files[0];if(!f){return;}var reader=new FileReader();reader.onload=function(){try{var parsed=JSON.parse(reader.result);var stateObj=parsed;try{if(window.FinBackup&&window.FinBackup.parseBackupPayload){var un=window.FinBackup.parseBackupPayload(parsed);if(un)stateObj=un;}}catch(e){}if(!stateObj||typeof stateObj!=='object')throw new Error('bad');appConfirm('Заменить текущие данные данными из файла?\nБудет восстановлен полный снимок (все операции, долги, резервы).\nТекущие можно вернуть через «Отменить».','Импорт').then(function(ok){if(!ok)return;pushUndo();if(window.__FIN_DECRYPT_FAILED){if(!recoverLockedState(stateObj,'import')){STATE=norm(stateObj);} }else{STATE=norm(stateObj);save(true);}render();toast('Данные восстановлены из копии');});}catch(e){toast('Файл повреждён или не в формате Финны');}};reader.readAsText(f);inp.value='';};}inp.click();}
+function importData(){var inp=document.getElementById('importFileInput');if(!inp){inp=document.createElement('input');inp.type='file';inp.accept='.json,application/json';inp.style.display='none';inp.id='importFileInput';document.body.appendChild(inp);inp.onchange=function(){var f=inp.files&&inp.files[0];if(!f){return;}var reader=new FileReader();reader.onload=function(){try{var parsed=JSON.parse(reader.result);var stateObj=parsed;var mealRestore=null;try{if(window.FinBackup&&typeof window.FinBackup.inspectBackup==='function'){var env=window.FinBackup.inspectBackup(parsed);if(env&&env.state){stateObj=env.state;mealRestore=env.meal||null;}}else if(window.FinBackup&&window.FinBackup.parseBackupPayload){var un=window.FinBackup.parseBackupPayload(parsed);if(un)stateObj=un;}}catch(e){}if(!stateObj||typeof stateObj!=='object')throw new Error('bad');appConfirm('Заменить текущие данные данными из файла?\nБудет восстановлен полный снимок (все операции, долги, резервы).\nТекущие можно вернуть через «Отменить».','Импорт').then(function(ok){if(!ok)return;pushUndo();if(window.__FIN_DECRYPT_FAILED){if(!recoverLockedState(stateObj,'import')){toast('Файл пустой или без кассы');return;}}else{STATE=norm(stateObj);save(true);}try{if(mealRestore&&window.FinBackup&&typeof window.FinBackup.writeMeal==='function')window.FinBackup.writeMeal(mealRestore);}catch(eM){}render();toast('Данные восстановлены из копии');});}catch(e){toast('Файл повреждён или не в формате Финны');}};reader.readAsText(f);inp.value='';};}inp.click();}
 window.kopeykaExport=exportData;window.kopeykaImport=importData;
 window.defaultState=def;window.setAppState=function(s){pushUndo();STATE=norm(s);ensureMonth();save(true);render();};window.saveState=function(){save(true);};
 Object.defineProperty(window,'STATE',{get:function(){return STATE;},set:function(v){STATE=norm(v);}});
@@ -2802,9 +2802,22 @@ function boot(){
         }catch(e){}
       }
       // Recover from rotating snapshots / Downloads/Finna.
-      // If the AES blob is locked, plaintext slots and the emergency folder are the way back.
+      // Prefer a newer/richer slot even if live decrypted (quota-fail: live stale, slot fresh).
       try{
-        if(!hasLiveData(STATE)&&window.FinBackup&&typeof window.FinBackup.restoreBest==='function'){
+        if(window.FinBackup&&typeof window.FinBackup.preferOver==='function'){
+          var better=window.FinBackup.preferOver(STATE);
+          if(better&&hasLiveData(better)){
+            if(window.__FIN_DECRYPT_FAILED){
+              if(recoverLockedState(better,'backup')){
+                setTimeout(function(){toast('Восстановлены данные из аварийной копии (полный снимок)');},800);
+              }
+            }else{
+              STATE=norm(better);
+              try{save(true);}catch(e){}
+              setTimeout(function(){toast('Восстановлены данные из аварийной копии (полный снимок)');},800);
+            }
+          }
+        }else if(!hasLiveData(STATE)&&window.FinBackup&&typeof window.FinBackup.restoreBest==='function'){
           var recovered=window.FinBackup.restoreBest();
           if(recovered&&hasLiveData(recovered)){
             if(window.__FIN_DECRYPT_FAILED){

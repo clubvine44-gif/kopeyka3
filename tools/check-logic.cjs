@@ -204,12 +204,22 @@ assert.ok(storeSrc.indexOf('hasCiphertext') >= 0, 'must not mint a new key over 
 var bakSrc = fs.readFileSync(path.join(ROOT, 'fin-backup.js'), 'utf8');
 assert.ok(bakSrc.indexOf("MEAL_KEY = 'kopeyka3_meal_v1'") >= 0, 'backup envelope includes meal');
 assert.ok(bakSrc.indexOf('meal: readMeal()') >= 0, 'slots and files store meal snapshot');
+assert.ok(bakSrc.indexOf('function inspectBackup') >= 0, 'inspectBackup must not write meal on parse');
+assert.ok(bakSrc.indexOf('function preferOver') >= 0, 'newer slot must be able to lift stale live');
+assert.ok(appSrc.indexOf('inspectBackup') >= 0, 'import uses inspectBackup');
+assert.ok(appSrc.indexOf('preferOver') >= 0, 'boot prefers richer backup slot');
+assert.ok(appSrc.indexOf('note===nm||note.indexOf(nm)') < 0, 'debt link must be exact, not substring');
+assert.ok(storeSrc.indexOf('INSTALL_KEY_BAK') >= 0, 'install id has backup key');
+assert.ok(storeSrc.indexOf('FinBridge.setInstallId') >= 0, 'install id mirrored to native prefs');
 
 var gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle'), 'utf8');
-assert.ok(/versionCode\s+171/.test(gradle), 'versionCode 171');
-assert.ok(/versionName\s+"4\.13\.4"/.test(gradle), 'versionName 4.13.4');
+assert.ok(/versionCode\s+172/.test(gradle), 'versionCode 172');
+assert.ok(/versionName\s+"4\.13\.5"/.test(gradle), 'versionName 4.13.5');
 
 var mainJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/MainActivity.java'), 'utf8');
+assert.ok(mainJava.indexOf('isTrustedApkUrl') >= 0, 'apk url allowlisted');
+assert.ok(mainJava.indexOf('isSha256Hex') >= 0, 'sha256 format checked before download');
+assert.ok(mainJava.indexOf('clubvine44-gif/kopeyka3/releases/download/') >= 0, 'only this repo APK');
 assert.ok(appSrc.indexOf('function recoverLockedState') >= 0, 'decrypt-fail recovery helper');
 assert.ok(appSrc.indexOf("if(!hasLiveData(STATE)&&window.FinBackup") >= 0, 'backup restore must run even if decrypt failed');
 assert.ok(appSrc.indexOf('isPaydayToday') >= 0, 'app payday-today');
@@ -230,6 +240,7 @@ assert.ok(idx.indexOf('cdn.jsdelivr.net/gh/clubvine44-gif/kopeyka3') < 0, 'pages
 var widget = fs.readFileSync(path.join(ROOT, 'widget.html'), 'utf8');
 assert.ok(widget.indexOf('</script>>') < 0, 'widget script tag must not have stray >');
 assert.ok(widget.indexOf('function openingFor') >= 0, 'widget must carry cash across months');
+assert.ok(widget.indexOf("o.type==='withdraw'") >= 0, 'widget withdraw matches engine');
 
 // Leftover savings: accumulate, do not inflate limit, do not double-count.
 (function leftoverLogic(){
@@ -675,7 +686,102 @@ function finish(extra){
   vm.runInNewContext(storeSrc, gF2, { filename: 'secure-store.js' });
   var reopened = await gF2.FinSecureStore.loadState(gF2.FinSecureStore.LIVE_KEY, function () { return { settings: {} }; }, function (x) { return x; });
   assert.ok(reopened && Number(reopened.settings && reopened.settings.openingBalance) === 8888, 'cipher without install id reopens via fallback, got ' + JSON.stringify(reopened && reopened.settings));
-  finish({ auxIsolated: true, staleSaveWon: true, cipherWithoutId: true });
+
+  // Primary install id lost, bak copy remains — must reopen, not mint fallback.
+  var memB = {};
+  var gB = {
+    crypto: webcrypto, btoa: btoa, atob: atob, TextEncoder: TextEncoder, TextDecoder: TextDecoder,
+    Uint8Array: Uint8Array, Promise: Promise, JSON: JSON, Object: Object, Number: Number, Array: Array,
+    Math: Math, Date: Date, Error: Error, console: console,
+    localStorage: {
+      getItem: function (k) { return Object.prototype.hasOwnProperty.call(memB, k) ? memB[k] : null; },
+      setItem: function (k, v) { memB[k] = String(v); },
+      removeItem: function (k) { delete memB[k]; }
+    }
+  };
+  gB.window = gB; gB.global = gB;
+  vm.runInNewContext(storeSrc, gB, { filename: 'secure-store.js' });
+  var liveB = {
+    version: 6, settings: { openingBalance: 4242, month: '2026-09' },
+    income: [{ id: 'keep-b', amount: 11, date: '2026-09-01' }],
+    expenses: [], reserves: [], debts: [], reserveOps: [], obligations: [], obligationPays: []
+  };
+  await gB.FinSecureStore.saveState(gB.FinSecureStore.LIVE_KEY, liveB);
+  assert.ok(memB['finna_install_id_v1'] && memB['finna_install_id_v1_bak'], 'id mirrored to bak');
+  delete memB['finna_install_id_v1'];
+  var gB2 = {
+    crypto: webcrypto, btoa: btoa, atob: atob, TextEncoder: TextEncoder, TextDecoder: TextDecoder,
+    Uint8Array: Uint8Array, Promise: Promise, JSON: JSON, Object: Object, Number: Number, Array: Array,
+    Math: Math, Date: Date, Error: Error, console: console,
+    localStorage: {
+      getItem: function (k) { return Object.prototype.hasOwnProperty.call(memB, k) ? memB[k] : null; },
+      setItem: function (k, v) { memB[k] = String(v); },
+      removeItem: function (k) { delete memB[k]; }
+    }
+  };
+  gB2.window = gB2; gB2.global = gB2;
+  vm.runInNewContext(storeSrc, gB2, { filename: 'secure-store.js' });
+  var fromBak = await gB2.FinSecureStore.loadState(gB2.FinSecureStore.LIVE_KEY, function () { return { settings: {} }; }, function (x) { return x; });
+  assert.ok(fromBak && Number(fromBak.settings && fromBak.settings.openingBalance) === 4242, 'bak install id still opens cash');
+  assert.ok(memB['finna_install_id_v1'] === memB['finna_install_id_v1_bak'], 'primary id restored from bak');
+
+  // Backup inspect must not write meal; preferOver lifts richer/newer slot.
+  var memBak = {};
+  var gBak = {
+    localStorage: {
+      getItem: function (k) { return Object.prototype.hasOwnProperty.call(memBak, k) ? memBak[k] : null; },
+      setItem: function (k, v) { memBak[k] = String(v); },
+      removeItem: function (k) { delete memBak[k]; }
+    },
+    Date: Date, JSON: JSON, Object: Object, Number: Number, Array: Array, Math: Math, Error: Error, console: console
+  };
+  gBak.window = gBak; gBak.global = gBak;
+  vm.runInNewContext(bakSrc, gBak, { filename: 'fin-backup.js' });
+  var FB = gBak.FinBackup;
+  assert(FB && typeof FB.inspectBackup === 'function' && typeof FB.preferOver === 'function', 'FinBackup helpers');
+  memBak['kopeyka3_meal_v1'] = JSON.stringify({ storeId: 'keep-me', settings: { adults: 2 } });
+  var env = FB.inspectBackup({
+    format: 'finna-backup-v2',
+    savedAt: '2026-09-22T00:00:00.000Z',
+    itemCount: 2,
+    state: { settings: { openingBalance: 1 }, income: [{ id: 'i' }], expenses: [] },
+    meal: { storeId: 'from-file', settings: { adults: 9 } }
+  });
+  assert.ok(env && env.state && env.meal && env.meal.storeId === 'from-file', 'inspect returns meal');
+  assert.strictEqual(JSON.parse(memBak['kopeyka3_meal_v1']).storeId, 'keep-me', 'inspect must not write meal');
+  var parsedOnly = FB.parseBackupPayload({ format: 'finna-backup-v2', state: env.state, meal: env.meal });
+  assert.ok(parsedOnly && parsedOnly.settings, 'parse still returns state');
+  assert.strictEqual(JSON.parse(memBak['kopeyka3_meal_v1']).storeId, 'keep-me', 'parseBackupPayload must not write meal');
+
+  var liveOld = {
+    settings: { openingBalance: 100, month: '2026-09' },
+    income: [{ id: 'a', amount: 1, date: '2026-09-01' }],
+    expenses: [], reserves: [], debts: [], reserveOps: [], obligations: [], obligationPays: [],
+    updatedAt: '2026-09-20T00:00:00.000Z'
+  };
+  var slotNew = {
+    settings: { openingBalance: 100, month: '2026-09' },
+    income: [{ id: 'a', amount: 1, date: '2026-09-01' }, { id: 'b', amount: 50, date: '2026-09-23' }],
+    expenses: [], reserves: [], debts: [], reserveOps: [], obligations: [], obligationPays: []
+  };
+  memBak['finna_backup_slot_0'] = JSON.stringify({
+    savedAt: '2026-09-23T12:00:00.000Z',
+    itemCount: 2,
+    state: slotNew,
+    meal: { storeId: 'slot-meal' }
+  });
+  var lifted = FB.preferOver(liveOld);
+  assert.ok(lifted && (lifted.income || []).some(function (x) { return x && x.id === 'b'; }), 'newer richer slot wins over stale live');
+  assert.strictEqual(JSON.parse(memBak['kopeyka3_meal_v1']).storeId, 'slot-meal', 'preferOver applies slot meal');
+  var keepLive = {
+    settings: { openingBalance: 100, month: '2026-09' },
+    income: [{ id: 'a', amount: 1, date: '2026-09-01' }, { id: 'c', amount: 9, date: '2026-09-24' }],
+    expenses: [], reserves: [], debts: [], reserveOps: [], obligations: [], obligationPays: [],
+    updatedAt: '2026-09-24T18:00:00.000Z'
+  };
+  assert.strictEqual(FB.preferOver(keepLive), null, 'newer live must not be replaced by older slot');
+
+  finish({ auxIsolated: true, staleSaveWon: true, cipherWithoutId: true, bakInstallId: true, inspectNoWrite: true, preferSlot: true });
 })().catch(function (e) {
   console.error(e && e.stack || e);
   process.exit(1);

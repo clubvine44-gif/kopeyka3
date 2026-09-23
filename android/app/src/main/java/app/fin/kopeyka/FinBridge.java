@@ -148,6 +148,29 @@ public class FinBridge {
 
     @JavascriptInterface public String getVersion() { try { return context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionName; } catch (Exception e) { return ""; } }
     @JavascriptInterface public int getVersionCode() { try { return context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionCode; } catch (Exception e) { return 0; } }
+
+    @JavascriptInterface
+    public String getInstallId() {
+        try {
+            return context.getSharedPreferences("fin_crypto", Context.MODE_PRIVATE).getString("install_id", "");
+        } catch (Exception e) { return ""; }
+    }
+
+    @JavascriptInterface
+    public void setInstallId(String id) {
+        if (id == null) return;
+        id = id.trim();
+        if (id.length() < 16 || id.length() > 80) return;
+        for (int i = 0; i < id.length(); i++) {
+            char c = id.charAt(i);
+            boolean ok = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '-';
+            if (!ok) return;
+        }
+        try {
+            context.getSharedPreferences("fin_crypto", Context.MODE_PRIVATE)
+                    .edit().putString("install_id", id).apply();
+        } catch (Exception ignored) {}
+    }
     @JavascriptInterface public void setPullRefresh(boolean on) {
         MainActivity a = activityRef != null ? activityRef.get() : null;
         if (a != null) a.runOnUiThread(() -> a.setPullRefreshEnabled(on));

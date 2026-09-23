@@ -116,7 +116,7 @@ public class MainActivity extends AppCompatActivity {
         s.setBuiltInZoomControls(false);
         s.setDisplayZoomControls(false);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
-        s.setUserAgentString(s.getUserAgentString() + " FinApp/4.13.4");
+        s.setUserAgentString(s.getUserAgentString() + " FinApp/4.13.5");
         FinBridge bridge = new FinBridge(this);
         try { bridge.ensureBackupFolder(); } catch (Exception ignored) {}
         webView.addJavascriptInterface(bridge, "FinBridge");
@@ -267,8 +267,8 @@ public class MainActivity extends AppCompatActivity {
                 int localCode = getPackageManager().getPackageInfo(getPackageName(), 0).versionCode;
 
                 if (remoteCode <= localCode || apkUrl.isEmpty()) return;
-                if (sha256 == null || sha256.trim().isEmpty()) {
-                    android.util.Log.w("FinUpdate", "skip: empty sha256");
+                if (!isTrustedApkUrl(apkUrl) || !isSha256Hex(sha256)) {
+                    android.util.Log.w("FinUpdate", "skip: untrusted update.json");
                     return;
                 }
 
@@ -362,6 +362,15 @@ public class MainActivity extends AppCompatActivity {
             File apk = new File(dir, "Fin-update.apk");
             if (apk.exists()) //noinspection ResultOfMethodCallIgnored
                 apk.delete();
+
+            if (!isTrustedApkUrl(apkUrl) || !isSha256Hex(expectedSha256)) {
+                downloading.set(false);
+                runOnUiThread(() -> {
+                    try { if (progressDlg != null && progressDlg.isShowing()) progressDlg.dismiss(); } catch (Exception ignored) {}
+                    Toast.makeText(this, "Обновление отклонено: недоверенный источник.", Toast.LENGTH_LONG).show();
+                });
+                return;
+            }
 
             HttpURLConnection c = null;
             try {
@@ -472,6 +481,30 @@ public class MainActivity extends AppCompatActivity {
                 downloading.set(false);
             }
         });
+    }
+
+    private static boolean isTrustedApkUrl(String apkUrl) {
+        if (apkUrl == null) return false;
+        String u = apkUrl.trim();
+        final String prefix = "https://github.com/clubvine44-gif/kopeyka3/releases/download/";
+        if (!u.startsWith(prefix)) return false;
+        if (!u.endsWith("/Fin.apk")) return false;
+        if (u.indexOf(' ') >= 0 || u.contains("..") || u.contains("@") || u.contains("\\")) return false;
+        String rest = u.substring(prefix.length(), u.length() - "/Fin.apk".length());
+        if (rest.isEmpty() || rest.indexOf('/') >= 0) return false;
+        return true;
+    }
+
+    private static boolean isSha256Hex(String s) {
+        if (s == null) return false;
+        String t = s.trim();
+        if (t.length() != 64) return false;
+        for (int i = 0; i < 64; i++) {
+            char c = t.charAt(i);
+            boolean hex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+            if (!hex) return false;
+        }
+        return true;
     }
 
     private static String sha256Hex(File file) throws Exception {

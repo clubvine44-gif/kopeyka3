@@ -11,11 +11,14 @@
  *
  * 4.13.4: serialize live writes (last snapshot wins), never mint a new crypto
  * key over existing ciphertext, retry after freeing backup slots on quota.
+ * 4.13.5: install id mirrored (bak key + native FinBridge) so a lost primary
+ * id still opens the same ciphertext.
  */
 (function (global) {
   'use strict';
 
   var INSTALL_KEY = 'finna_install_id_v1';
+  var INSTALL_KEY_BAK = 'finna_install_id_v1_bak';
   var ENC_PREFIX = 'FINENC1:';
   var LEGACY_MIGRATED = 'finna_state_enc_v1';
   var RAW_BACKUP_KEY = 'kopeyka3_state_v1__raw_backup';
@@ -47,15 +50,40 @@
     } catch (e) {}
     return false;
   }
-  function getInstallId() {
+  function persistInstallId(id) {
+    if (!id || id.length < 16) return;
+    try { localStorage.setItem(INSTALL_KEY, id); } catch (e) {}
+    try { localStorage.setItem(INSTALL_KEY_BAK, id); } catch (e2) {}
     try {
-      var id = localStorage.getItem(INSTALL_KEY);
-      if (id && id.length >= 16) return id;
-    } catch (e) {}
+      if (global.FinBridge && typeof global.FinBridge.setInstallId === 'function') {
+        global.FinBridge.setInstallId(id);
+      }
+    } catch (e3) {}
+  }
+  function readStoredInstallId() {
+    var id = null;
+    try { id = localStorage.getItem(INSTALL_KEY); } catch (e) {}
+    if (id && id.length >= 16) return id;
+    try { id = localStorage.getItem(INSTALL_KEY_BAK); } catch (e2) {}
+    if (id && id.length >= 16) return id;
+    try {
+      if (global.FinBridge && typeof global.FinBridge.getInstallId === 'function') {
+        id = global.FinBridge.getInstallId();
+        if (id && String(id).length >= 16) return String(id);
+      }
+    } catch (e3) {}
+    return null;
+  }
+  function getInstallId() {
+    var id = readStoredInstallId();
+    if (id && id.length >= 16) {
+      persistInstallId(id);
+      return id;
+    }
     // Ciphertext without a stored id: NEVER mint a new random key (that locks the cash).
     // Re-use the stable fallback so a first write that failed to persist the id still opens.
     if (hasCiphertext()) {
-      try { localStorage.setItem(INSTALL_KEY, FALLBACK_ID); } catch (e2) {}
+      persistInstallId(FALLBACK_ID);
       return FALLBACK_ID;
     }
     try {
@@ -64,9 +92,10 @@
       var nid = Array.prototype.map.call(arr, function (b) {
         return ('0' + b.toString(16)).slice(-2);
       }).join('');
-      localStorage.setItem(INSTALL_KEY, nid);
+      persistInstallId(nid);
       return nid;
     } catch (e3) {
+      persistInstallId(FALLBACK_ID);
       return FALLBACK_ID;
     }
   }

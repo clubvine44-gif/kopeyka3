@@ -2,6 +2,9 @@
  * FinBackup — multi-layer safety net for Finna.
  * Public folder: Downloads/Finna (finna-latest + day + month full snapshots).
  * Public folder: Download/Finna (latest + daily + monthly FULL state snapshots).
+ *
+ * 4.13.5: inspectBackup does not write the meal plan (import confirm first);
+ * preferOver lifts a newer/richer local slot over a stale live snapshot.
  */
 (function (global) {
   'use strict';
@@ -103,17 +106,38 @@
   function envelopeJson(stateObj, kind) {
     return JSON.stringify(buildEnvelope(stateObj, kind), null, 2);
   }
-  function parseBackupPayload(raw) {
+  /** Parse a backup without touching the live meal plan. Import UI must confirm first. */
+  function inspectBackup(raw) {
     if (!raw) return null;
     var obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
     if (!obj || typeof obj !== 'object') return null;
     if (obj.format === 'finna-backup-v2' && obj.state && typeof obj.state === 'object') {
-      if (obj.meal) writeMeal(obj.meal);
-      return obj.state;
+      return {
+        state: obj.state,
+        meal: obj.meal && typeof obj.meal === 'object' ? obj.meal : null,
+        savedAt: obj.savedAt || null,
+        itemCount: obj.itemCount != null ? obj.itemCount : countItems(obj.state)
+      };
     }
-    if (obj.state && typeof obj.state === 'object' && (obj.savedAt || obj.itemCount != null)) return obj.state;
-    if (obj.settings || obj.income || obj.expenses || obj.debts) return obj;
+    if (obj.state && typeof obj.state === 'object' && (obj.savedAt || obj.itemCount != null)) {
+      return {
+        state: obj.state,
+        meal: obj.meal && typeof obj.meal === 'object' ? obj.meal : null,
+        savedAt: obj.savedAt || null,
+        itemCount: obj.itemCount != null ? obj.itemCount : countItems(obj.state)
+      };
+    }
+    if (obj.settings || obj.income || obj.expenses || obj.debts) {
+      return { state: obj, meal: null, savedAt: obj.updatedAt || null, itemCount: countItems(obj) };
+    }
     return null;
+  }
+  function parseBackupPayload(raw) {
+    var env = inspectBackup(raw);
+    return env ? env.state : null;
+  }
+  function applyMeal(meal) {
+    if (meal) writeMeal(meal);
   }
   function rotateWrite(stateObj) {
     var payload = JSON.stringify({
@@ -155,7 +179,8 @@
             slot: i,
             savedAt: parsed.savedAt || null,
             itemCount: parsed.itemCount || countItems(parsed.state),
-            state: parsed.state
+            state: parsed.state,
+            meal: parsed.meal || null
           });
         }
       } catch (e) {}
@@ -250,8 +275,11 @@
       if (!global.FinBridge || typeof global.FinBridge.readBackupFile !== 'function') return null;
       var raw = global.FinBridge.readBackupFile(filename);
       if (!raw || raw.length < 8) return null;
-      var st = parseBackupPayload(raw);
-      if (st && !isEmptyState(st)) return st;
+      var env = inspectBackup(raw);
+      if (env && env.state && !isEmptyState(env.state)) {
+        if (env.meal) writeMeal(env.meal);
+        return env.state;
+      }
     } catch (e) {}
     return null;
   }
@@ -286,17 +314,15 @@
   function restoreBest() {
     var best = bestSlot();
     if (best && best.state) {
-      try {
-        var raw0 = localStorage.getItem(SLOT_PREFIX + best.slot);
-        var parsed0 = raw0 ? JSON.parse(raw0) : null;
-        if (parsed0 && parsed0.meal) writeMeal(parsed0.meal);
-      } catch (e) {}
+      if (best.meal) writeMeal(best.meal);
       return best.state;
     }
     try {
       var raw = localStorage.getItem('kopeyka3_state_v1__raw_backup');
       if (raw && raw.indexOf('FINENC1:') !== 0) {
-        var st = parseBackupPayload(raw) || JSON.parse(raw);
+        var env = inspectBackup(raw);
+        var st = env ? env.state : JSON.parse(raw);
+        if (env && env.meal) writeMeal(env.meal);
         if (st && !isEmptyState(st)) return st;
       }
     } catch (e) {}
@@ -305,6 +331,37 @@
       var fromDisk = restoreFromEmergencyFolder();
       if (fromDisk) return fromDisk;
     } catch (e) {}
+    return null;
+  }
+  /**
+   * If a local slot (or disk copy) is empty-live-recovery OR strictly newer/richer
+   * than the decrypted live snapshot, return it. Otherwise null — keep live.
+   */
+  function preferOver(live) {
+    var slot = bestSlot();
+    var liveEmpty = !live || isEmptyState(live);
+    if (slot && slot.state && !isEmptyState(slot.state)) {
+      if (liveEmpty) {
+        if (slot.meal) writeMeal(slot.meal);
+        return slot.state;
+      }
+      var liveN = countItems(live);
+      var slotN = slot.itemCount || countItems(slot.state);
+      var liveAt = Date.parse((live && live.updatedAt) || 0) || 0;
+      var slotAt = Date.parse(slot.savedAt || 0) || 0;
+      var richer = slotN > liveN && slotAt + 5000 >= liveAt;
+      var newer = slotAt > liveAt + 2000 && slotN >= liveN;
+      if (richer || newer) {
+        if (slot.meal) writeMeal(slot.meal);
+        return slot.state;
+      }
+    }
+    if (liveEmpty) {
+      try {
+        var fromDisk = restoreFromEmergencyFolder();
+        if (fromDisk && !isEmptyState(fromDisk)) return fromDisk;
+      } catch (e) {}
+    }
     return null;
   }
   function status() {
@@ -353,6 +410,9 @@
     isEmptyState: isEmptyState,
     listSlots: listSlots,
     parseBackupPayload: parseBackupPayload,
+    inspectBackup: inspectBackup,
+    preferOver: preferOver,
+    writeMeal: writeMeal,
     buildEnvelope: buildEnvelope
   };
 })(typeof window !== 'undefined' ? window : this);

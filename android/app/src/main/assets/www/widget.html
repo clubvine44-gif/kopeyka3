@@ -35,7 +35,7 @@ a.open{display:block;text-align:center;margin-top:10px;color:#E5A75E;font-size:1
   <a class="open" href="./">Открыть приложение</a>
   <p class="muted">Добавь эту страницу на рабочий стол — получится быстрый виджет. Данные берутся из того же хранилища, что и в Финне.</p>
 </div>
-<script src="secure-store.js?v=2026092301"></script>
+<script src="secure-store.js?v=2026092401"></script>
 <script>
 (function(){
   function fmt(n){n=Math.round(+n||0);return (n<0?'−':'')+Math.abs(n).toLocaleString('ru-RU')+' ₽';}
@@ -46,7 +46,7 @@ a.open{display:block;text-align:center;margin-top:10px;color:#E5A75E;font-size:1
     var inc=0,exp=0,dep=0,wd=0;
     (st.income||[]).forEach(function(i){if(!alive(i))return;if(monthOf(i.date)===m)inc+=Number(i.amount||0);});
     (st.expenses||[]).forEach(function(e){if(!alive(e))return;if(monthOf(e.date)===m)exp+=Number(e.amount||0);});
-    (st.reserveOps||[]).forEach(function(o){if(!alive(o))return;if(monthOf(o.date)!==m)return;var a=Number(o.amount||0);if(o.type==='deposit')dep+=a;else wd+=a;});
+    (st.reserveOps||[]).forEach(function(o){if(!alive(o))return;if(monthOf(o.date)!==m)return;var a=Math.round(Number(o.amount||0)||0);if(o.type==='deposit')dep+=a;else if(o.type==='withdraw')wd+=a;});
     return {inc:inc,exp:exp,dep:dep,wd:wd,delta:inc-exp-dep+wd};
   }
   function openingFor(st, target){
