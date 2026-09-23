@@ -1,7 +1,7 @@
 {
-  "versionCode": 171,
-  "versionName": "4.13.4",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.4/Fin.apk",
-  "sha256": "9e078bb4788c8b61bb1d46f6bb89a40eac0bd50b64f3ff6b19d001929ad7080a",
-  "notes": "4.13.4 — сохранность кассы: последняя операция не затирается, якорь облака сходится, рацион в копии (versionCode 171)"
+  "versionCode": 172,
+  "versionName": "4.13.5",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.5/Fin.apk",
+  "sha256": "84bb853bf69cf5823f9aea86e518e4e7414a5660d4db10bfe0b03839099f2b5c",
+  "notes": "4.13.5 — сохранность кассы: импорт с подтверждением, аварийный слот новее живого поднимается, автообновление только с GitHub (versionCode 172)"
 }
