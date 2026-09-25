@@ -1,7 +1,7 @@
 {
-  "versionCode": 172,
-  "versionName": "4.13.5",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.5/Fin.apk",
-  "sha256": "84bb853bf69cf5823f9aea86e518e4e7414a5660d4db10bfe0b03839099f2b5c",
-  "notes": "4.13.5 — сохранность кассы: импорт с подтверждением, аварийный слот новее живого поднимается, автообновление только с GitHub (versionCode 172)"
+  "versionCode": 173,
+  "versionName": "4.13.6",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.6/Fin.apk",
+  "sha256": "501dbb86d2e62e4f0ec25b2a98178afc3daeccaab865cd6aa4ac76639bcf681d",
+  "notes": "4.13.6 — сохранность кассы: аварийная копия не затирается битым снимком, слот не откатывает живое, пустой импорт отклонён (versionCode 173)"
 }
