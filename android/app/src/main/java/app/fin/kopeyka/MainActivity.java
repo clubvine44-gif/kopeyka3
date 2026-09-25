@@ -116,7 +116,7 @@ public class MainActivity extends AppCompatActivity {
         s.setBuiltInZoomControls(false);
         s.setDisplayZoomControls(false);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
-        s.setUserAgentString(s.getUserAgentString() + " FinApp/4.13.5");
+        s.setUserAgentString(s.getUserAgentString() + " FinApp/4.13.6");
         FinBridge bridge = new FinBridge(this);
         try { bridge.ensureBackupFolder(); } catch (Exception ignored) {}
         webView.addJavascriptInterface(bridge, "FinBridge");
@@ -483,6 +483,15 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    private static boolean isTrustedRedirectHost(String host) {
+        if (host == null) return false;
+        String h = host.toLowerCase();
+        return h.equals("github.com")
+                || h.endsWith(".github.com")
+                || h.equals("githubusercontent.com")
+                || h.endsWith(".githubusercontent.com");
+    }
+
     private static boolean isTrustedApkUrl(String apkUrl) {
         if (apkUrl == null) return false;
         String u = apkUrl.trim();
@@ -534,7 +543,12 @@ public class MainActivity extends AppCompatActivity {
                 String loc = c.getHeaderField("Location");
                 c.disconnect();
                 if (loc == null || loc.isEmpty()) throw new IllegalStateException("Redirect without Location");
-                current = new URL(current, loc);
+                URL next = new URL(current, loc);
+                if (!"https".equalsIgnoreCase(next.getProtocol()))
+                    throw new IllegalStateException("Redirect не HTTPS");
+                if (!isTrustedRedirectHost(next.getHost()))
+                    throw new IllegalStateException("Redirect на недоверенный хост");
+                current = next;
                 continue;
             }
             return c;

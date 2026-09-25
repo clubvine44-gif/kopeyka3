@@ -13,6 +13,8 @@
  * key over existing ciphertext, retry after freeing backup slots on quota.
  * 4.13.5: install id mirrored (bak key + native FinBridge) so a lost primary
  * id still opens the same ciphertext.
+ * 4.13.6: never copy a locked/corrupt live blob over the emergency copy;
+ * if live decrypt fails, reopen from the emergency blob when it still opens.
  */
 (function (global) {
   'use strict';
@@ -262,39 +264,64 @@
         }
       }
 
-      if (raw.indexOf(ENC_PREFIX) === 0) {
-        // Preserve the live cash blob only. Sync-base must never replace it.
-        if (isLive) {
-          try { localStorage.setItem(RAW_BACKUP_KEY, raw); } catch (e) {}
+      function markLiveFail(blob) {
+        try {
+          global.__FIN_DECRYPT_FAILED = true;
+          global.__FIN_LOCKED_RAW = blob || raw;
+        } catch (e) {}
+      }
+      function markLiveOk() {
+        try {
+          global.__FIN_DECRYPT_FAILED = false;
+          global.__FIN_LOCKED_RAW = null;
+        } catch (e) {}
+      }
+      function rememberGoodLive(blob) {
+        if (!isLive || !blob) return;
+        try { localStorage.setItem(RAW_BACKUP_KEY, blob); } catch (e) {}
+      }
+      // decrypt live first; never copy a locked blob over the emergency copy
+      function openCipher(blob, allowEmergency) {
+        if (!blob || blob.indexOf(ENC_PREFIX) !== 0) {
+          var plain = parseOk(blob);
+          return Promise.resolve(plain || null);
         }
-        return decryptString(raw).then(function (text) {
-          if (!text) {
+        return decryptString(blob).then(function (text) {
+          if (!text) return null;
+          return parseOk(text);
+        }).then(function (st) {
+          if (st) {
             if (isLive) {
-              try {
-                global.__FIN_DECRYPT_FAILED = true;
-                global.__FIN_LOCKED_RAW = raw;
-              } catch (e) {}
+              rememberGoodLive(blob);
+              markLiveOk();
             }
+            return st;
+          }
+          if (isLive && allowEmergency) {
+            var em = null;
+            try { em = localStorage.getItem(RAW_BACKUP_KEY); } catch (e3) {}
+            if (em && em !== blob && em.indexOf(ENC_PREFIX) === 0) {
+              return decryptString(em).then(function (text2) {
+                var st2 = text2 ? parseOk(text2) : null;
+                if (st2) {
+                  try { localStorage.setItem(LIVE_KEY, em); } catch (e4) {}
+                  markLiveOk();
+                  return st2;
+                }
+                markLiveFail(blob);
+                return null;
+              });
+            }
+            markLiveFail(blob);
             return null;
           }
-          var st = parseOk(text);
-          if (!st) {
-            if (isLive) {
-              try {
-                global.__FIN_DECRYPT_FAILED = true;
-                global.__FIN_LOCKED_RAW = raw;
-              } catch (e) {}
-            }
-            return null;
-          }
-          if (isLive) {
-            try {
-              global.__FIN_DECRYPT_FAILED = false;
-              global.__FIN_LOCKED_RAW = null;
-            } catch (e) {}
-          }
-          return st;
+          if (isLive) markLiveFail(blob);
+          return null;
         });
+      }
+
+      if (raw.indexOf(ENC_PREFIX) === 0) {
+        return openCipher(raw, true);
       }
       // Legacy plaintext → migrate to encrypted
       var state = parseOk(raw);

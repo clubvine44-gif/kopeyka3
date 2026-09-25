@@ -1,4 +1,4 @@
-/* cloud.js v24 — live-key isolation, in-flight merge, cash-anchor reconcile */
+/* cloud.js v25 — live-key isolation, in-flight merge, cash-anchor reconcile, limits last-write */
 (function(){
 'use strict';
 const URL='https://cqslrfphsjllhltsvvuq.supabase.co';
@@ -63,6 +63,24 @@ function mergeNumericMap(base,local,remote){
   });
   return out;
 }
+function mergeLimitsMap(base,local,remote){
+  var out={},keys={};
+  [base,local,remote].forEach(function(o){if(o&&typeof o==='object'&&!Array.isArray(o))Object.keys(o).forEach(function(k){keys[k]=1;});});
+  Object.keys(keys).forEach(function(k){
+    var b=base&&base[k],l=local&&local[k],r=remote&&remote[k];
+    var lc=!same(l,b),rc=!same(r,b);
+    if(lc&&!rc)out[k]=l;
+    else if(!lc&&rc)out[k]=r;
+    else if(lc&&rc){
+      if(same(l,r))out[k]=l;
+      else out[k]=l; // last-write: local wins, never inflate a lowered limit
+    }else if(r!==undefined)out[k]=r;
+    else if(l!==undefined)out[k]=l;
+    if(out[k]==null||out[k]==='')delete out[k];
+    else out[k]=num0(out[k]);
+  });
+  return out;
+}
 function mergePeriodReports(local,remote){
   var map={};
   function add(arr){
@@ -98,7 +116,7 @@ function mergeSettings(base,local,remote,conflicts){
   var rec=savingsFromReports(reports);
   Object.keys(rec).forEach(function(cat){sav[cat]=Math.max(num0(sav[cat]), rec[cat]);});
   out.budgetSavings=sav;
-  out.budgetLimits=mergeNumericMap(base&&base.budgetLimits, local&&local.budgetLimits, remote&&remote.budgetLimits);
+  out.budgetLimits=mergeLimitsMap(base&&base.budgetLimits, local&&local.budgetLimits, remote&&remote.budgetLimits);
   if(local&&local.lastPeriodReport)out.lastPeriodReport=local.lastPeriodReport;
   else if(remote&&remote.lastPeriodReport)out.lastPeriodReport=remote.lastPeriodReport;
   return out;

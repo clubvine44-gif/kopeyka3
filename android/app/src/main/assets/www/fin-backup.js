@@ -3,6 +3,9 @@
  * Public folder: Downloads/Finna (finna-latest + day + month full snapshots).
  * Public folder: Download/Finna (latest + daily + monthly FULL state snapshots).
  *
+ * 4.13.6: count alive rows only (deleted rows must not look "richer");
+ * preferOver never rolls live cash back to an older slot; native file scan
+ * does not write the meal plan until a winner is chosen.
  * 4.13.5: inspectBackup does not write the meal plan (import confirm first);
  * preferOver lifts a newer/richer local slot over a stale live snapshot.
  */
@@ -60,6 +63,14 @@
     if (!s) return 0;
     var n = 0;
     collections().forEach(function (k) { if (Array.isArray(s[k])) n += s[k].length; });
+    return n;
+  }
+  function countAlive(s) {
+    if (!s) return 0;
+    var n = 0;
+    collections().forEach(function (k) {
+      (s[k] || []).forEach(function (x) { if (x && !x.deleted) n++; });
+    });
     return n;
   }
   function readMeta() {
@@ -179,6 +190,7 @@
             slot: i,
             savedAt: parsed.savedAt || null,
             itemCount: parsed.itemCount || countItems(parsed.state),
+            aliveCount: countAlive(parsed.state),
             state: parsed.state,
             meal: parsed.meal || null
           });
@@ -191,6 +203,9 @@
     var slots = listSlots();
     if (!slots.length) return null;
     slots.sort(function (a, b) {
+      var aa = a.aliveCount != null ? a.aliveCount : countAlive(a.state);
+      var bb = b.aliveCount != null ? b.aliveCount : countAlive(b.state);
+      if (bb !== aa) return bb - aa;
       if (b.itemCount !== a.itemCount) return b.itemCount - a.itemCount;
       return String(b.savedAt || '').localeCompare(String(a.savedAt || ''));
     });
@@ -270,29 +285,30 @@
     }
     writeMeta(meta);
   }
-    function readNativeBackup(filename) {
+  function readNativeBackup(filename) {
     try {
       if (!global.FinBridge || typeof global.FinBridge.readBackupFile !== 'function') return null;
       var raw = global.FinBridge.readBackupFile(filename);
       if (!raw || raw.length < 8) return null;
       var env = inspectBackup(raw);
       if (env && env.state && !isEmptyState(env.state)) {
-        if (env.meal) writeMeal(env.meal);
-        return env.state;
+        return { state: env.state, meal: env.meal || null, savedAt: env.savedAt || null, itemCount: env.itemCount };
       }
     } catch (e) {}
     return null;
   }
   function restoreFromEmergencyFolder() {
     // 1) latest
-    var st = readNativeBackup(LAST_JSON_NAME);
-    if (st) return st;
-    // 2) pick best from listed files by itemCount / date in name
+    var latest = readNativeBackup(LAST_JSON_NAME);
+    if (latest && latest.state) {
+      if (latest.meal) writeMeal(latest.meal);
+      return latest.state;
+    }
+    // 2) pick best from listed files by alive count / date in name
     try {
       if (!global.FinBridge || typeof global.FinBridge.listBackupFiles !== 'function') return null;
       var list = JSON.parse(global.FinBridge.listBackupFiles() || '[]');
       if (!Array.isArray(list) || !list.length) return null;
-      // prefer finna-latest, then day, then month, by modified desc already
       var names = list.map(function (x) { return x && x.name; }).filter(Boolean);
       var order = names.slice().sort(function (a, b) {
         var sa = a === LAST_JSON_NAME ? 0 : /^finna-day-/.test(a) ? 1 : /^finna-month-/.test(a) ? 2 : 3;
@@ -300,13 +316,14 @@
         if (sa !== sb) return sa - sb;
         return String(b).localeCompare(String(a));
       });
-      var bestState = null, bestCount = -1;
+      var bestState = null, bestMeal = null, bestCount = -1;
       for (var i = 0; i < order.length; i++) {
         var cand = readNativeBackup(order[i]);
-        if (!cand) continue;
-        var c = countItems(cand);
-        if (c > bestCount) { bestCount = c; bestState = cand; }
+        if (!cand || !cand.state) continue;
+        var c = countAlive(cand.state);
+        if (c > bestCount) { bestCount = c; bestState = cand.state; bestMeal = cand.meal || null; }
       }
+      if (bestState && bestMeal) writeMeal(bestMeal);
       return bestState;
     } catch (e) {}
     return null;
@@ -334,8 +351,9 @@
     return null;
   }
   /**
-   * If a local slot (or disk copy) is empty-live-recovery OR strictly newer/richer
-   * than the decrypted live snapshot, return it. Otherwise null — keep live.
+   * If a local slot (or disk copy) is empty-live-recovery OR strictly newer
+   * and at least as rich in ALIVE rows as the decrypted live snapshot, return it.
+   * Deleted rows must not make an older slot look richer and roll cash back.
    */
   function preferOver(live) {
     var slot = bestSlot();
@@ -345,13 +363,13 @@
         if (slot.meal) writeMeal(slot.meal);
         return slot.state;
       }
-      var liveN = countItems(live);
-      var slotN = slot.itemCount || countItems(slot.state);
+      var liveN = countAlive(live);
+      var slotN = slot.aliveCount != null ? slot.aliveCount : countAlive(slot.state);
       var liveAt = Date.parse((live && live.updatedAt) || 0) || 0;
       var slotAt = Date.parse(slot.savedAt || 0) || 0;
-      var richer = slotN > liveN && slotAt + 5000 >= liveAt;
       var newer = slotAt > liveAt + 2000 && slotN >= liveN;
-      if (richer || newer) {
+      var sameWaveRicher = slotN >= liveN + 1 && slotAt >= liveAt;
+      if (newer || sameWaveRicher) {
         if (slot.meal) writeMeal(slot.meal);
         return slot.state;
       }
@@ -412,6 +430,7 @@
     parseBackupPayload: parseBackupPayload,
     inspectBackup: inspectBackup,
     preferOver: preferOver,
+    countAlive: countAlive,
     writeMeal: writeMeal,
     buildEnvelope: buildEnvelope
   };

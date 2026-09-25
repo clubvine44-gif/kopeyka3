@@ -184,6 +184,7 @@ assert.ok(cloudSrc.indexOf("FinSecureStore.saveState(SYNC_BASE") >= 0, 'sync-bas
 assert.ok(cloudSrc.indexOf('function liveDivergedFrom') >= 0, 'cloud must detect in-flight local edits');
 assert.ok(cloudSrc.indexOf('writeRemote(merged,remote,local)') >= 0, 'cloud write must keep a snapshot of local');
 assert.ok(cloudSrc.indexOf('n>=300') >= 0, 'cloud must wait long enough for PBKDF2 on slow phones');
+assert.ok(cloudSrc.indexOf('function mergeLimitsMap') >= 0, 'category limits last-write, not max');
 assert.ok(cloudSrc.indexOf('function reconcileCashAnchor') >= 0, 'cloud must reconcile cash anchor after merge');
 
 var asstSrc = fs.readFileSync(path.join(ROOT, 'assistant-v2.js'), 'utf8');
@@ -200,25 +201,29 @@ assert.ok(storeSrc.indexOf("if (isLive) {") >= 0, 'aux keys must not set decrypt
 assert.ok(storeSrc.indexOf('pruneBackupSlots') >= 0, 'quota must free backup slots');
 assert.ok(storeSrc.indexOf('_saveGen') >= 0, 'live saves must be generation-guarded');
 assert.ok(storeSrc.indexOf('hasCiphertext') >= 0, 'must not mint a new key over live ciphertext');
+assert.ok(storeSrc.indexOf('never copy a locked blob over the emergency copy') >= 0, 'corrupt live must not clobber emergency blob');
 
 var bakSrc = fs.readFileSync(path.join(ROOT, 'fin-backup.js'), 'utf8');
 assert.ok(bakSrc.indexOf("MEAL_KEY = 'kopeyka3_meal_v1'") >= 0, 'backup envelope includes meal');
 assert.ok(bakSrc.indexOf('meal: readMeal()') >= 0, 'slots and files store meal snapshot');
 assert.ok(bakSrc.indexOf('function inspectBackup') >= 0, 'inspectBackup must not write meal on parse');
 assert.ok(bakSrc.indexOf('function preferOver') >= 0, 'newer slot must be able to lift stale live');
+assert.ok(bakSrc.indexOf('function countAlive') >= 0, 'slots ranked by alive rows');
 assert.ok(appSrc.indexOf('inspectBackup') >= 0, 'import uses inspectBackup');
 assert.ok(appSrc.indexOf('preferOver') >= 0, 'boot prefers richer backup slot');
+assert.ok(appSrc.indexOf("if(!hasLiveData(incoming))") >= 0, 'empty import must not replace cash');
 assert.ok(appSrc.indexOf('note===nm||note.indexOf(nm)') < 0, 'debt link must be exact, not substring');
 assert.ok(storeSrc.indexOf('INSTALL_KEY_BAK') >= 0, 'install id has backup key');
 assert.ok(storeSrc.indexOf('FinBridge.setInstallId') >= 0, 'install id mirrored to native prefs');
 
 var gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle'), 'utf8');
-assert.ok(/versionCode\s+172/.test(gradle), 'versionCode 172');
-assert.ok(/versionName\s+"4\.13\.5"/.test(gradle), 'versionName 4.13.5');
+assert.ok(/versionCode\s+173/.test(gradle), 'versionCode 173');
+assert.ok(/versionName\s+"4\.13\.6"/.test(gradle), 'versionName 4.13.6');
 
 var mainJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/MainActivity.java'), 'utf8');
 assert.ok(mainJava.indexOf('isTrustedApkUrl') >= 0, 'apk url allowlisted');
 assert.ok(mainJava.indexOf('isSha256Hex') >= 0, 'sha256 format checked before download');
+assert.ok(mainJava.indexOf('isTrustedRedirectHost') >= 0, 'apk redirect host allowlisted');
 assert.ok(mainJava.indexOf('clubvine44-gif/kopeyka3/releases/download/') >= 0, 'only this repo APK');
 assert.ok(appSrc.indexOf('function recoverLockedState') >= 0, 'decrypt-fail recovery helper');
 assert.ok(appSrc.indexOf("if(!hasLiveData(STATE)&&window.FinBackup") >= 0, 'backup restore must run even if decrypt failed');
@@ -371,6 +376,15 @@ assert.strictEqual(Number(mergedSav.settings.budgetSavings['Транспорт']
 assert.strictEqual((mergedSav.settings.periodReports || []).length, 2, 'period reports unioned');
 assert.strictEqual(cloudSandbox.window.kopeykaCloud.isEmptyState({ settings: { budgetSavings: { 'Продукты': 1500 } } }), false, 'savings-only state is live');
 assert.strictEqual(cloudSandbox.window.kopeykaCloud.isEmptyState({ settings: { budgetLimits: { 'Продукты': 8000 } } }), false, 'limits-only state is live');
+
+var baseLim = JSON.parse(JSON.stringify(base2));
+baseLim.settings.budgetLimits = { 'Продукты': 10000 };
+var localLim = JSON.parse(JSON.stringify(baseLim));
+localLim.settings.budgetLimits = { 'Продукты': 6000 };
+var remoteLim = JSON.parse(JSON.stringify(baseLim));
+remoteLim.settings.budgetLimits = { 'Продукты': 12000 };
+var mergedLim = cloudSandbox.window.kopeykaCloud.threeWay(baseLim, localLim, remoteLim);
+assert.strictEqual(Number(mergedLim.settings.budgetLimits['Продукты']), 6000, 'conflicted limit keeps local, not max');
 
 // Skipped period leftover: two closed cycles accumulate without inflating limit.
 (function skippedPeriods(){
@@ -617,6 +631,17 @@ function finish(extra){
   var after = await SS.loadState(SS.LIVE_KEY, function () { return null; }, function (x) { return x; });
   assert.ok(after && (after.income || []).some(function (x) { return x && x.id === 'i-new'; }), 'later save must win over in-flight older encrypt');
 
+  // Corrupt live must not clobber emergency blob; backup still opens cash.
+  var goodBakEnc = mem[SS.RAW_BACKUP_KEY];
+  assert.ok(goodBakEnc && goodBakEnc.indexOf('FINENC1:') === 0, 'emergency blob present');
+  mem[SS.LIVE_KEY] = 'FINENC1:AAAA:bbbbcccc';
+  g.__FIN_DECRYPT_FAILED = false;
+  g.__FIN_LOCKED_RAW = null;
+  var fromEm = await SS.loadState(SS.LIVE_KEY, function () { return { settings: {} }; }, function (x) { return x; });
+  assert.ok(fromEm && (fromEm.income || []).some(function (x) { return x && x.id === 'i-new'; }), 'emergency blob reopens after corrupt live');
+  assert.strictEqual(mem[SS.RAW_BACKUP_KEY], goodBakEnc, 'corrupt live must not overwrite emergency blob');
+  assert.strictEqual(g.__FIN_DECRYPT_FAILED, false, 'recovered emergency must clear decrypt lock');
+
   // Install id failed to persist on first write: reopen with fallback, not a new random key.
   var memF = {};
   var allowInstallF = false;
@@ -781,7 +806,32 @@ function finish(extra){
   };
   assert.strictEqual(FB.preferOver(keepLive), null, 'newer live must not be replaced by older slot');
 
-  finish({ auxIsolated: true, staleSaveWon: true, cipherWithoutId: true, bakInstallId: true, inspectNoWrite: true, preferSlot: true });
+  var liveNow = {
+    settings: { openingBalance: 100, month: '2026-09' },
+    income: [{ id: 'a', amount: 1, date: '2026-09-01' }],
+    expenses: [], reserves: [], debts: [], reserveOps: [], obligations: [], obligationPays: [],
+    updatedAt: '2026-09-24T18:00:00.000Z'
+  };
+  memBak['finna_backup_slot_0'] = JSON.stringify({
+    savedAt: '2026-09-23T12:00:00.000Z',
+    itemCount: 12,
+    state: {
+      settings: { openingBalance: 100, month: '2026-09' },
+      income: [
+        { id: 'a', amount: 1, date: '2026-09-01' },
+        { id: 'gone', amount: 1, date: '2026-09-02', deleted: true }
+      ],
+      expenses: [
+        { id: 'e1', amount: 1, date: '2026-09-03', deleted: true },
+        { id: 'e2', amount: 1, date: '2026-09-03', deleted: true }
+      ],
+      reserves: [], debts: [], reserveOps: [], obligations: [], obligationPays: []
+    }
+  });
+  assert.strictEqual(FB.preferOver(liveNow), null, 'older slot with extra deleted rows must not roll cash back');
+  assert.ok(typeof FB.countAlive === 'function' && FB.countAlive(liveNow) === 1, 'countAlive ignores deleted');
+
+  finish({ auxIsolated: true, staleSaveWon: true, cipherWithoutId: true, bakInstallId: true, inspectNoWrite: true, preferSlot: true, noDeletedRollback: true });
 })().catch(function (e) {
   console.error(e && e.stack || e);
   process.exit(1);
