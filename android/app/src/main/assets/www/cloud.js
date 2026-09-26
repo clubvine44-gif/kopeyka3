@@ -1,4 +1,4 @@
-/* cloud.js v25 — live-key isolation, in-flight merge, cash-anchor reconcile, limits last-write */
+/* cloud.js v26 — live-key isolation, in-flight merge, cash-anchor reconcile, limits last-write, tombstone-on-delete */
 (function(){
 'use strict';
 const URL='https://cqslrfphsjllhltsvvuq.supabase.co';
@@ -26,7 +26,7 @@ function clearIntent(){try{return Number(localStorage.getItem(CLEAR_INTENT)||0)|
 function writeBase(s){try{if(s){var n=stamp(s);_baseMem=n;if(window.FinSecureStore&&typeof window.FinSecureStore.saveState==='function'){window.FinSecureStore.saveState(SYNC_BASE,n);}else{localStorage.setItem(SYNC_BASE,JSON.stringify(n));}}else{_baseMem=null;localStorage.removeItem(SYNC_BASE);}}catch(_){} }
 function setClearIntent(){try{if(!clearIntent())localStorage.setItem(CLEAR_INTENT,String(Date.now()));}catch(_){} }
 function clearClearIntent(){try{localStorage.removeItem(CLEAR_INTENT);}catch(_){} }
-function isEmptyState(s){if(!s)return true;function live(arr){return Array.isArray(arr)&&arr.some(function(x){return x&&!x.deleted;});}if(COLLECTIONS.some(function(k){return live(s[k]);}))return false;if(s.shiftsOverride&&Object.keys(s.shiftsOverride).length)return false;if(s.dayPlans&&Object.keys(s.dayPlans).length)return false;var st=s.settings||{};if(Number(st.openingBalance)||Number(st.dayRate)||Number(st.nightRate)||Number(st.paydayDay))return false;if(st.userName)return false;function mapLive(o){if(!o||typeof o!=='object'||Array.isArray(o))return false;return Object.keys(o).some(function(k){return Number(o[k])>0;});}if(mapLive(st.budgetSavings)||mapLive(st.budgetLimits))return false;if(Array.isArray(st.periodReports)&&st.periodReports.length)return false;return true;}
+function isEmptyState(s){if(!s)return true;function live(arr){return Array.isArray(arr)&&arr.some(function(x){return x&&!x.deleted;});}if(COLLECTIONS.some(function(k){return live(s[k]);}))return false;if(s.shiftsOverride&&Object.keys(s.shiftsOverride).length)return false;if(s.dayPlans&&Object.keys(s.dayPlans).length)return false;var st=s.settings||{};if(Number(st.openingBalance)||Number(st.dayRate)||Number(st.nightRate)||Number(st.paydayDay))return false;if(st.userName)return false;function mapLive(o){if(!o||typeof o!=='object'||Array.isArray(o))return false;return Object.keys(o).some(function(k){return Number(o[k])>0;});}if(mapLive(st.budgetSavings)||mapLive(st.budgetLimits))return false;if(Array.isArray(st.periodReports)&&st.periodReports.length)return false;function hasDel(){if(s._deleted&&typeof s._deleted==='object'&&COLLECTIONS.some(function(k){var m=s._deleted[k];return m&&typeof m==='object'&&Object.keys(m).length>0;}))return true;return COLLECTIONS.some(function(k){return Array.isArray(s[k])&&s[k].some(function(x){return x&&x.deleted;});});}if(hasDel())return false;return true;}
 function same(a,b){if(a===b)return true;var x=a&&typeof a==='object'?Object.assign({},a):a,y=b&&typeof b==='object'?Object.assign({},b):b;if(x&&typeof x==='object'){delete x.updatedAt;delete x.app;}if(y&&typeof y==='object'){delete y.updatedAt;delete y.app;}return JSON.stringify(x)===JSON.stringify(y);}
 function mapById(a){var m={};(Array.isArray(a)?a:[]).forEach(function(x){if(x&&x.id)m[x.id]=x;});return m;}
 function deletedMap(s,k){return s&&s._deleted&&s._deleted[k]&&typeof s._deleted[k]==='object'?s._deleted[k]:{};}
@@ -34,9 +34,11 @@ function conflict(conflicts,kind,id,field,local,remote){conflicts.push({kind:kin
 function mergeRecord(base,local,remote,kind,id,conflicts){if(!base)return local!==undefined?local:remote;if(local===undefined||remote===undefined)return undefined;var out={},keys={};[base,local,remote].forEach(function(o){if(o&&typeof o==='object')Object.keys(o).forEach(function(k){keys[k]=1;});});Object.keys(keys).forEach(function(k){var b=base[k],l=local[k],r=remote[k],lc=!same(l,b),rc=!same(r,b);if(lc&&!rc)out[k]=l;else if(!lc&&rc)out[k]=r;else if(lc&&rc){if(same(l,r))out[k]=l;else{out[k]=l;conflict(conflicts,kind,id,k,l,r);}}else if(r!==undefined)out[k]=r;else if(l!==undefined)out[k]=l;});return out;}
 function mergeArray(base,local,remote,k,conflicts,bd,ld,rd){var bm=mapById(base),lm=mapById(local),rm=mapById(remote),ids={},out=[],deleted={};bd=bd&&typeof bd==='object'?bd:{};ld=ld&&typeof ld==='object'?ld:{};rd=rd&&typeof rd==='object'?rd:{};Object.keys(bm).concat(Object.keys(lm),Object.keys(rm)).forEach(function(id){ids[id]=1;});Object.keys(bd).concat(Object.keys(ld),Object.keys(rd)).forEach(function(id){if(ld[id]||rd[id]||bd[id])deleted[id]=Math.max(Number(bd[id])||0,Number(ld[id])||0,Number(rd[id])||0);});Object.keys(ids).forEach(function(id){var b=bm[id],l=lm[id],r=rm[id];
   if(!l&&!r){if(b||deleted[id])deleted[id]=deleted[id]||Date.now();return;}
+  if(l&&l.deleted)deleted[id]=deleted[id]||ld[id]||Date.now();
+  if(r&&r.deleted)deleted[id]=deleted[id]||rd[id]||Date.now();
   if(!l&&ld[id]){deleted[id]=ld[id]||Date.now();return;}
   if(!r&&rd[id]){deleted[id]=rd[id]||Date.now();return;}
-  if(!b&&deleted[id]&&l&&r===undefined){delete deleted[id];}
+  if(!b&&deleted[id]&&l&&r===undefined&&!(l.deleted)){delete deleted[id];}
   var v;
   if(l&&r)v=mergeRecord(b,l,r,k,id,conflicts);
   else if(l)v=l;
@@ -44,7 +46,7 @@ function mergeArray(base,local,remote,k,conflicts,bd,ld,rd){var bm=mapById(base)
   if(v)out.push(v);
 });Object.keys(deleted).forEach(function(id){if(!lm[id]&&!rm[id]&&!bm[id])delete deleted[id];});return{items:out,deleted:deleted};}
 function mergeObject(base,local,remote,kind,conflicts){var out={},keys={};[base,local,remote].forEach(function(o){if(o&&typeof o==='object')Object.keys(o).forEach(function(k){keys[k]=1;});});Object.keys(keys).forEach(function(k){var b=base&&base[k],l=local&&local[k],r=remote&&remote[k],lc=!same(l,b),rc=!same(r,b);if(lc&&!rc)out[k]=l;else if(!lc&&rc)out[k]=r;else if(lc&&rc){if(same(l,r))out[k]=l;else{out[k]=l;conflict(conflicts,kind,'state',k,l,r);}}else if(r!==undefined)out[k]=r;else if(l!==undefined)out[k]=l;});return out;}
-function num0(v){var x=Number(v);return isFinite(x)?x:0;}
+function num0(v){var x=Number(v);return isFinite(x)?Math.round(x):0;}
 function mergeNumericMap(base,local,remote){
   var out={},keys={};
   [base,local,remote].forEach(function(o){if(o&&typeof o==='object'&&!Array.isArray(o))Object.keys(o).forEach(function(k){keys[k]=1;});});

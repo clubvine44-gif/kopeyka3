@@ -8,6 +8,8 @@
  * does not write the meal plan until a winner is chosen.
  * 4.13.5: inspectBackup does not write the meal plan (import confirm first);
  * preferOver lifts a newer/richer local slot over a stale live snapshot.
+ * 4.13.7: rotating slots are AES-GCM sealed (legacy plaintext still opens);
+ * deleted rows / tombstones are not "empty" so a wipe-by-delete still snapshots.
  */
 (function (global) {
   'use strict';
@@ -21,6 +23,7 @@
   var _lastSnapAt = 0;
   var _lastLatestFileAt = 0;
   var _exportBusy = false;
+  var _encSlotCache = {};
 
   function collections() {
     return ['income', 'expenses', 'reserves', 'debts', 'reserveOps', 'obligations', 'obligationPays'];
@@ -55,6 +58,21 @@
         if (liveSav || liveLim) return false;
         if (Array.isArray(st.periodReports) && st.periodReports.length) return false;
       } catch (e) {}
+      try {
+        var del = s._deleted;
+        if (del && typeof del === 'object') {
+          var cols = collections();
+          for (var ti = 0; ti < cols.length; ti++) {
+            var m = del[cols[ti]];
+            if (m && typeof m === 'object' && Object.keys(m).length) return false;
+          }
+        }
+        var cols2 = collections();
+        for (var di = 0; di < cols2.length; di++) {
+          var arr = s[cols2[di]];
+          if (Array.isArray(arr) && arr.some(function (x) { return x && x.deleted; })) return false;
+        }
+      } catch (e2) {}
       return true;
     }
     return false;
@@ -150,13 +168,17 @@
   function applyMeal(meal) {
     if (meal) writeMeal(meal);
   }
-  function rotateWrite(stateObj) {
-    var payload = JSON.stringify({
-      savedAt: new Date().toISOString(),
-      itemCount: countItems(stateObj),
-      state: stateObj,
-      meal: readMeal()
-    });
+  function parseSlotObject(raw) {
+    if (!raw) return null;
+    if (String(raw).indexOf('FINENC1:') === 0) {
+      return _encSlotCache[raw] || null;
+    }
+    try {
+      var parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch (e) { return null; }
+  }
+  function writeSlotString(payload) {
     function writeSlots() {
       for (var i = SLOT_COUNT - 1; i >= 1; i--) {
         var prev = localStorage.getItem(SLOT_PREFIX + (i - 1));
@@ -178,13 +200,58 @@
       }
     }
   }
+  function rotateWrite(stateObj) {
+    var env = {
+      savedAt: new Date().toISOString(),
+      itemCount: countItems(stateObj),
+      aliveCount: countAlive(stateObj),
+      state: stateObj,
+      meal: readMeal()
+    };
+    var json = JSON.stringify(env);
+    function persist(raw) {
+      if (raw && String(raw).indexOf('FINENC1:') === 0) _encSlotCache[raw] = env;
+      writeSlotString(raw);
+    }
+    try {
+      if (global.FinSecureStore && typeof global.FinSecureStore.seal === 'function') {
+        global.FinSecureStore.seal(json).then(function (enc) {
+          if (enc && String(enc).indexOf('FINENC1:') === 0) persist(enc);
+          else persist(json);
+        }).catch(function () { persist(json); });
+        return;
+      }
+    } catch (e) {}
+    persist(json);
+  }
+  function hydrateSlots() {
+    var tasks = [];
+    try {
+      var SS = global.FinSecureStore;
+      if (!SS || typeof SS.open !== 'function') return Promise.resolve();
+      for (var i = 0; i < SLOT_COUNT; i++) {
+        (function (raw) {
+          if (!raw || String(raw).indexOf('FINENC1:') !== 0) return;
+          if (_encSlotCache[raw]) return;
+          tasks.push(SS.open(raw).then(function (text) {
+            if (!text) return;
+            try {
+              var o = JSON.parse(text);
+              if (o && typeof o === 'object') _encSlotCache[raw] = o;
+            } catch (e) {}
+          }).catch(function () {}));
+        })(localStorage.getItem(SLOT_PREFIX + i));
+      }
+    } catch (e2) {}
+    return tasks.length ? Promise.all(tasks) : Promise.resolve();
+  }
   function listSlots() {
     var out = [];
     for (var i = 0; i < SLOT_COUNT; i++) {
       try {
         var raw = localStorage.getItem(SLOT_PREFIX + i);
         if (!raw) continue;
-        var parsed = JSON.parse(raw);
+        var parsed = parseSlotObject(raw);
         if (parsed && parsed.state && !isEmptyState(parsed.state)) {
           out.push({
             slot: i,
@@ -430,6 +497,7 @@
     parseBackupPayload: parseBackupPayload,
     inspectBackup: inspectBackup,
     preferOver: preferOver,
+    hydrateSlots: hydrateSlots,
     countAlive: countAlive,
     writeMeal: writeMeal,
     buildEnvelope: buildEnvelope

@@ -186,6 +186,9 @@ assert.ok(cloudSrc.indexOf('writeRemote(merged,remote,local)') >= 0, 'cloud writ
 assert.ok(cloudSrc.indexOf('n>=300') >= 0, 'cloud must wait long enough for PBKDF2 on slow phones');
 assert.ok(cloudSrc.indexOf('function mergeLimitsMap') >= 0, 'category limits last-write, not max');
 assert.ok(cloudSrc.indexOf('function reconcileCashAnchor') >= 0, 'cloud must reconcile cash anchor after merge');
+assert.ok(cloudSrc.indexOf('!(l.deleted)') >= 0, 'must not drop tombstone of a locally-deleted new row');
+assert.ok(cloudSrc.indexOf('l.deleted') >= 0, 'deleted flag seeds tombstone');
+assert.ok(cloudSrc.indexOf('function hasDel') >= 0, 'cloud empty-check sees tombstones');
 
 var asstSrc = fs.readFileSync(path.join(ROOT, 'assistant-v2.js'), 'utf8');
 assert.ok(asstSrc.indexOf("s.reserveOps=s.reserveOps.filter") < 0, 'assistant must not strip reserveOps');
@@ -202,6 +205,8 @@ assert.ok(storeSrc.indexOf('pruneBackupSlots') >= 0, 'quota must free backup slo
 assert.ok(storeSrc.indexOf('_saveGen') >= 0, 'live saves must be generation-guarded');
 assert.ok(storeSrc.indexOf('hasCiphertext') >= 0, 'must not mint a new key over live ciphertext');
 assert.ok(storeSrc.indexOf('never copy a locked blob over the emergency copy') >= 0, 'corrupt live must not clobber emergency blob');
+assert.ok(storeSrc.indexOf('seal:') >= 0 || storeSrc.indexOf('seal: function') >= 0, 'seal exported for backup slots');
+assert.ok(storeSrc.indexOf('arr3[j3].deleted') >= 0, 'deleted rows are not empty state');
 
 var bakSrc = fs.readFileSync(path.join(ROOT, 'fin-backup.js'), 'utf8');
 assert.ok(bakSrc.indexOf("MEAL_KEY = 'kopeyka3_meal_v1'") >= 0, 'backup envelope includes meal');
@@ -209,16 +214,21 @@ assert.ok(bakSrc.indexOf('meal: readMeal()') >= 0, 'slots and files store meal s
 assert.ok(bakSrc.indexOf('function inspectBackup') >= 0, 'inspectBackup must not write meal on parse');
 assert.ok(bakSrc.indexOf('function preferOver') >= 0, 'newer slot must be able to lift stale live');
 assert.ok(bakSrc.indexOf('function countAlive') >= 0, 'slots ranked by alive rows');
+assert.ok(bakSrc.indexOf('function hydrateSlots') >= 0, 'slots decrypt before preferOver');
+assert.ok(bakSrc.indexOf('FINENC1:') >= 0, 'slots may be sealed');
+assert.ok(bakSrc.indexOf('x.deleted') >= 0, 'backup empty-check sees deleted rows');
 assert.ok(appSrc.indexOf('inspectBackup') >= 0, 'import uses inspectBackup');
 assert.ok(appSrc.indexOf('preferOver') >= 0, 'boot prefers richer backup slot');
+assert.ok(appSrc.indexOf('hydrateSlots') >= 0, 'boot hydrates sealed slots');
 assert.ok(appSrc.indexOf("if(!hasLiveData(incoming))") >= 0, 'empty import must not replace cash');
+assert.ok(appSrc.indexOf('darr[dj].deleted') >= 0, 'hasLiveData sees tombstones');
 assert.ok(appSrc.indexOf('note===nm||note.indexOf(nm)') < 0, 'debt link must be exact, not substring');
 assert.ok(storeSrc.indexOf('INSTALL_KEY_BAK') >= 0, 'install id has backup key');
 assert.ok(storeSrc.indexOf('FinBridge.setInstallId') >= 0, 'install id mirrored to native prefs');
 
 var gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle'), 'utf8');
-assert.ok(/versionCode\s+173/.test(gradle), 'versionCode 173');
-assert.ok(/versionName\s+"4\.13\.6"/.test(gradle), 'versionName 4.13.6');
+assert.ok(/versionCode\s+174/.test(gradle), 'versionCode 174');
+assert.ok(/versionName\s+"4\.13\.7"/.test(gradle), 'versionName 4.13.7');
 
 var mainJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/MainActivity.java'), 'utf8');
 assert.ok(mainJava.indexOf('isTrustedApkUrl') >= 0, 'apk url allowlisted');
@@ -350,6 +360,17 @@ var remoteStill = JSON.parse(JSON.stringify(base));
 var mergedDel = cloudSandbox.window.kopeykaCloud.threeWay(base, localTomb, remoteStill);
 assert.ok(mergedDel.reserveOps.length === 0 || !(mergedDel.reserveOps || []).some(function (x) { return x && x.id === 'o1'; }), 'explicit tombstone still wins');
 
+var localDelOnly = JSON.parse(JSON.stringify(base));
+localDelOnly.reserveOps = [{ id: 'o1', amount: 3000, type: 'deposit', date: '2026-09-04', deleted: true }];
+localDelOnly._deleted = { reserveOps: { o1: Date.now() } };
+var remoteNever = JSON.parse(JSON.stringify(base));
+remoteNever.reserveOps = [];
+var mergedDelOnly = cloudSandbox.window.kopeykaCloud.threeWay({ reserveOps: [] }, localDelOnly, remoteNever);
+assert.ok(mergedDelOnly._deleted && mergedDelOnly._deleted.reserveOps && mergedDelOnly._deleted.reserveOps.o1, 'deleted-only local keeps tombstone');
+assert.ok(!(mergedDelOnly.reserveOps || []).some(function (x) { return x && x.id === 'o1' && !x.deleted; }), 'deleted local row must not resurrect alive');
+assert.strictEqual(cloudSandbox.window.kopeykaCloud.isEmptyState(localDelOnly), false, 'tombstone-only state is not empty');
+assert.strictEqual(cloudSandbox.window.kopeykaCloud.isEmptyState({ settings: {}, income: [{ id: 'x', deleted: true }], expenses: [] }), false, 'soft-deleted rows are not empty');
+
 var bootJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/BootReceiver.java'), 'utf8');
 assert.ok(bootJava.indexOf('UpdateCheckReceiver.scheduleSoon') >= 0, 'reboot must reschedule auto-update');
 assert.ok(bootJava.indexOf('QUICKBOOT_POWERON') >= 0, 'xiaomi/realme quickboot must reschedule');
@@ -430,6 +451,9 @@ assert.ok(relYml.indexOf('android-sdk-license') >= 0, 'CI must pre-accept androi
 assert.ok(relYml.indexOf('yes | sdkmanager --licenses') >= 0, 'CI must accept licenses non-interactively');
 assert.ok(relYml.indexOf('sdkmanager "platforms;android-34"') >= 0, 'CI package install must not wait for license prompt');
 assert.ok(relYml.indexOf('tools/check-logic.cjs') >= 0, 'release must run check-logic');
+
+var dbgYml = fs.readFileSync(path.join(ROOT, '.github/workflows/build-apk.yml'), 'utf8');
+assert.ok(dbgYml.indexOf("packages: 'platform-tools platforms;android-34 build-tools;34.0.0'") >= 0, 'debug APK must not install obsolete tools package');
 
 // Meal plan: fractional template qty must not round to 0 (4.13.1 bug).
 (function mealQty(){
@@ -544,6 +568,12 @@ assert.strictEqual(cloudSandbox.window.kopeykaCloud.liveDivergedFrom(localKeep),
   var mergedBoth = cloudSandbox.window.kopeykaCloud.threeWay(baseC, localC, bothFolded);
   var sepCash2 = cloudSandbox.window.kopeykaCloud.cashAtMonth(mergedBoth, '2026-09');
   assert.strictEqual(sepCash2, 16000, 'both-folded merge still 16000, got ' + sepCash2);
+  var frac = {
+    settings: { openingBalance: 10000, month: '2026-09' },
+    income: [{ id: 'f', amount: 100.4, date: '2026-09-01' }],
+    expenses: [], reserves: [], debts: [], reserveOps: [], obligations: [], obligationPays: []
+  };
+  assert.strictEqual(cloudSandbox.window.kopeykaCloud.cashAtMonth(frac, '2026-09'), 10100, 'cloud cash rounds like the engine');
 })();
 
 function finish(extra){
@@ -630,6 +660,17 @@ function finish(extra){
   await p1; await p2;
   var after = await SS.loadState(SS.LIVE_KEY, function () { return null; }, function (x) { return x; });
   assert.ok(after && (after.income || []).some(function (x) { return x && x.id === 'i-new'; }), 'later save must win over in-flight older encrypt');
+
+  // Deleted-only snapshot must still overwrite ciphertext (user cleared the last ops).
+  var wiped = JSON.parse(JSON.stringify(after));
+  wiped.income = (wiped.income || []).map(function (x) { return Object.assign({}, x, { deleted: true }); });
+  wiped._deleted = { income: { 'i-live': Date.now(), 'i-new': Date.now() } };
+  wiped.settings = Object.assign({}, wiped.settings, { openingBalance: 0 });
+  var savedWiped = await SS.saveState(SS.LIVE_KEY, wiped);
+  assert.ok(savedWiped !== false, 'deleted-only state must persist over ciphertext');
+  var reWiped = await SS.loadState(SS.LIVE_KEY, function () { return null; }, function (x) { return x; });
+  assert.ok(reWiped && (reWiped.income || []).every(function (x) { return !x || x.deleted; }), 'deleted rows still stored');
+  assert.ok(SS.isEmptyState(wiped) === false, 'secure-store treats tombstones as live');
 
   // Corrupt live must not clobber emergency blob; backup still opens cash.
   var goodBakEnc = mem[SS.RAW_BACKUP_KEY];
@@ -831,7 +872,29 @@ function finish(extra){
   assert.strictEqual(FB.preferOver(liveNow), null, 'older slot with extra deleted rows must not roll cash back');
   assert.ok(typeof FB.countAlive === 'function' && FB.countAlive(liveNow) === 1, 'countAlive ignores deleted');
 
-  finish({ auxIsolated: true, staleSaveWon: true, cipherWithoutId: true, bakInstallId: true, inspectNoWrite: true, preferSlot: true, noDeletedRollback: true });
+  vm.runInNewContext(bakSrc, g, { filename: 'fin-backup-enc.js' });
+  var FBenc = g.FinBackup;
+  var envS = {
+    savedAt: '2026-09-26T12:00:00.000Z',
+    itemCount: 1,
+    state: {
+      settings: { openingBalance: 77, month: '2026-09' },
+      income: [{ id: 'enc1', amount: 5, date: '2026-09-01' }],
+      expenses: [], reserves: [], debts: [], reserveOps: [], obligations: [], obligationPays: []
+    }
+  };
+  var sealed = await SS.seal(JSON.stringify(envS));
+  assert.ok(sealed && String(sealed).indexOf('FINENC1:') === 0, 'slot seal is ciphertext');
+  mem['finna_backup_slot_0'] = sealed;
+  await FBenc.hydrateSlots();
+  var liftedEnc = FBenc.preferOver({
+    settings: { openingBalance: 1, month: '2026-09' },
+    income: [], expenses: [], reserves: [], debts: [], reserveOps: [], obligations: [], obligationPays: [],
+    updatedAt: '2026-09-20T00:00:00.000Z'
+  });
+  assert.ok(liftedEnc && (liftedEnc.income || []).some(function (x) { return x && x.id === 'enc1'; }), 'hydrated sealed slot lifts stale live');
+
+  finish({ auxIsolated: true, staleSaveWon: true, cipherWithoutId: true, bakInstallId: true, inspectNoWrite: true, preferSlot: true, noDeletedRollback: true, deletedPersists: true, sealedSlot: true });
 })().catch(function (e) {
   console.error(e && e.stack || e);
   process.exit(1);

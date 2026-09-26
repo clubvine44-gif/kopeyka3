@@ -1,4 +1,4 @@
-(function(){/* v118.10 4.13.6 */'use strict';
+(function(){/* v118.11 4.13.7 */'use strict';
 var KEY='kopeyka3_state_v1',ANCHOR='2026-08-17',CYCLE=['day','day','night','night','off','off'];
 var CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье','Прочее'];
 var BUDGET_CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
@@ -348,6 +348,22 @@ function hasLiveData(s){
     }
     if(s.settings&&Array.isArray(s.settings.periodReports)&&s.settings.periodReports.length)return true;
   }catch(e){}
+  try{
+    if(s._deleted&&typeof s._deleted==='object'){
+      for(var ti=0;ti<cols.length;ti++){
+        var tm=s._deleted[cols[ti]];
+        if(tm&&typeof tm==='object'){
+          for(var tk in tm){if(Object.prototype.hasOwnProperty.call(tm,tk))return true;}
+        }
+      }
+    }
+    for(var di=0;di<cols.length;di++){
+      var darr=s[cols[di]];
+      if(Array.isArray(darr)){
+        for(var dj=0;dj<darr.length;dj++){if(darr[dj]&&darr[dj].deleted)return true;}
+      }
+    }
+  }catch(e2){}
   if(s.shiftsOverride&&Object.keys(s.shiftsOverride).length)return true;
   if(s.dayPlans&&Object.keys(s.dayPlans).length)return true;
   return false;
@@ -2801,60 +2817,72 @@ function boot(){
           window.dispatchEvent(new Event('fin-app-ready'));
         }catch(e){}
       }
-      // Recover from rotating snapshots / Downloads/Finna.
-      // Prefer a newer/richer slot even if live decrypted (quota-fail: live stale, slot fresh).
-      try{
-        if(window.FinBackup&&typeof window.FinBackup.preferOver==='function'){
-          var better=window.FinBackup.preferOver(STATE);
-          if(better&&hasLiveData(better)){
-            if(window.__FIN_DECRYPT_FAILED){
-              if(recoverLockedState(better,'backup')){
-                setTimeout(function(){toast('Восстановлены данные из аварийной копии (полный снимок)');},800);
-              }
-            }else{
-              STATE=norm(better);
-              try{save(true);}catch(e){}
-              setTimeout(function(){toast('Восстановлены данные из аварийной копии (полный снимок)');},800);
-            }
-          }
-        }else if(!hasLiveData(STATE)&&window.FinBackup&&typeof window.FinBackup.restoreBest==='function'){
-          var recovered=window.FinBackup.restoreBest();
-          if(recovered&&hasLiveData(recovered)){
-            if(window.__FIN_DECRYPT_FAILED){
-              if(recoverLockedState(recovered,'backup')){
-                setTimeout(function(){toast('Восстановлены данные из аварийной копии (полный снимок)');},800);
-              }
-            }else{
-              STATE=norm(recovered);
-              try{save(true);}catch(e){}
-              setTimeout(function(){toast('Восстановлены данные из аварийной копии (полный снимок)');},800);
-            }
-          }
-        }
-      }catch(e){}
-      runAppBoot();
-      markAppReady();
-      try{
-        if(window.__FIN_DECRYPT_FAILED){
-          setTimeout(function(){
-            toast('Данные зашифрованы и не открылись. Не переустанавливай приложение. Открой облако ☁ или импорт JSON из Загрузки/Finna.');
-          },900);
-        }
-      }catch(e){}
-      try{
-        if(!window.__FIN_DECRYPT_FAILED&&!hasLiveData(STATE)&&window.kopeykaCloud&&typeof window.kopeykaCloud.load==='function'){
-          setTimeout(function(){try{window.kopeykaCloud.load();}catch(e){}},1500);
-        }
-      }catch(e){}
-      setTimeout(function(){
+      function continueBoot(){
+        // Recover from rotating snapshots / Downloads/Finna.
+        // Prefer a newer/richer slot even if live decrypted (quota-fail: live stale, slot fresh).
         try{
-          var user=window.kopeykaCloud&&window.kopeykaCloud.user&&window.kopeykaCloud.user();
-          if(hasLiveData(STATE)&&!user){
-            toast('Включи облако (иконка ☁) — так данные не потеряются');
+          if(window.FinBackup&&typeof window.FinBackup.preferOver==='function'){
+            var better=window.FinBackup.preferOver(STATE);
+            if(better&&hasLiveData(better)){
+              if(window.__FIN_DECRYPT_FAILED){
+                if(recoverLockedState(better,'backup')){
+                  setTimeout(function(){toast('Восстановлены данные из аварийной копии (полный снимок)');},800);
+                }
+              }else{
+                STATE=norm(better);
+                try{save(true);}catch(e){}
+                setTimeout(function(){toast('Восстановлены данные из аварийной копии (полный снимок)');},800);
+              }
+            }
+          }else if(!hasLiveData(STATE)&&window.FinBackup&&typeof window.FinBackup.restoreBest==='function'){
+            var recovered=window.FinBackup.restoreBest();
+            if(recovered&&hasLiveData(recovered)){
+              if(window.__FIN_DECRYPT_FAILED){
+                if(recoverLockedState(recovered,'backup')){
+                  setTimeout(function(){toast('Восстановлены данные из аварийной копии (полный снимок)');},800);
+                }
+              }else{
+                STATE=norm(recovered);
+                try{save(true);}catch(e){}
+                setTimeout(function(){toast('Восстановлены данные из аварийной копии (полный снимок)');},800);
+              }
+            }
           }
         }catch(e){}
-      },4000);
-      try{if(!window.__FIN_DECRYPT_FAILED&&window.FinBackup&&window.FinBackup.forceSnapshot)window.FinBackup.forceSnapshot(STATE);}catch(e){}
+        runAppBoot();
+        markAppReady();
+        try{
+          if(window.__FIN_DECRYPT_FAILED){
+            setTimeout(function(){
+              toast('Данные зашифрованы и не открылись. Не переустанавливай приложение. Открой облако ☁ или импорт JSON из Загрузки/Finna.');
+            },900);
+          }
+        }catch(e){}
+        try{
+          if(!window.__FIN_DECRYPT_FAILED&&!hasLiveData(STATE)&&window.kopeykaCloud&&typeof window.kopeykaCloud.load==='function'){
+            setTimeout(function(){try{window.kopeykaCloud.load();}catch(e){}},1500);
+          }
+        }catch(e){}
+        setTimeout(function(){
+          try{
+            var user=window.kopeykaCloud&&window.kopeykaCloud.user&&window.kopeykaCloud.user();
+            if(hasLiveData(STATE)&&!user){
+              toast('Включи облако (иконка ☁) — так данные не потеряются');
+            }
+          }catch(e){}
+        },4000);
+        try{if(!window.__FIN_DECRYPT_FAILED&&window.FinBackup&&window.FinBackup.forceSnapshot)window.FinBackup.forceSnapshot(STATE);}catch(e){}
+      }
+      if(window.FinBackup&&typeof window.FinBackup.hydrateSlots==='function'){
+        try{
+          var hyd=window.FinBackup.hydrateSlots();
+          if(hyd&&typeof hyd.then==='function'){
+            hyd.then(continueBoot).catch(continueBoot);
+            return;
+          }
+        }catch(eH){}
+      }
+      continueBoot();
     }
     if(window.FinSecureStore&&typeof window.FinSecureStore.loadState==='function'){
       window.FinSecureStore.loadState(KEY,def,norm).then(function(st){

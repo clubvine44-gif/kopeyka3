@@ -15,6 +15,8 @@
  * id still opens the same ciphertext.
  * 4.13.6: never copy a locked/corrupt live blob over the emergency copy;
  * if live decrypt fails, reopen from the emergency blob when it still opens.
+ * 4.13.7: seal/open for encrypted backup slots; deleted rows / tombstones
+ * are live intent (saving an "empty" after delete must not be blocked).
  */
 (function (global) {
   'use strict';
@@ -198,6 +200,25 @@
       }
       if (Array.isArray(st.periodReports) && st.periodReports.length) return false;
     } catch (e3) {}
+    try {
+      var del = obj._deleted;
+      if (del && typeof del === 'object') {
+        for (var i2 = 0; i2 < cols.length; i2++) {
+          var m = del[cols[i2]];
+          if (m && typeof m === 'object') {
+            for (var k3 in m) { if (Object.prototype.hasOwnProperty.call(m, k3)) return false; }
+          }
+        }
+      }
+      for (var i3 = 0; i3 < cols.length; i3++) {
+        var arr3 = obj[cols[i3]];
+        if (Array.isArray(arr3)) {
+          for (var j3 = 0; j3 < arr3.length; j3++) {
+            if (arr3[j3] && arr3[j3].deleted) return false;
+          }
+        }
+      }
+    } catch (e4) {}
     return true;
   }
 
@@ -388,6 +409,17 @@
     },
     isEmptyState: isEmptyState,
     pruneBackupSlots: pruneBackupSlots,
+    seal: function (plain) {
+      return init().then(function () {
+        if (!_cryptoKey) return String(plain == null ? '' : plain);
+        return encryptString(String(plain == null ? '' : plain));
+      });
+    },
+    open: function (raw) {
+      return init().then(function () {
+        return decryptString(raw);
+      });
+    },
     ENC_PREFIX: ENC_PREFIX,
     RAW_BACKUP_KEY: RAW_BACKUP_KEY,
     LIVE_KEY: LIVE_KEY
