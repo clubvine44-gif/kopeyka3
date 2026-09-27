@@ -10,6 +10,8 @@
  * preferOver lifts a newer/richer local slot over a stale live snapshot.
  * 4.13.7: rotating slots are AES-GCM sealed (legacy plaintext still opens);
  * deleted rows / tombstones are not "empty" so a wipe-by-delete still snapshots.
+ * 4.13.8: newest slot wins (not "most alive") — deleting all ops must not
+ * be rolled back by an older richer snapshot; seal writes are generation-guarded.
  */
 (function (global) {
   'use strict';
@@ -24,6 +26,7 @@
   var _lastLatestFileAt = 0;
   var _exportBusy = false;
   var _encSlotCache = {};
+  var _slotGen = 0;
 
   function collections() {
     return ['income', 'expenses', 'reserves', 'debts', 'reserveOps', 'obligations', 'obligationPays'];
@@ -209,7 +212,9 @@
       meal: readMeal()
     };
     var json = JSON.stringify(env);
+    var gen = ++_slotGen;
     function persist(raw) {
+      if (gen !== _slotGen) return; // newer snapshot is already sealing
       if (raw && String(raw).indexOf('FINENC1:') === 0) _encSlotCache[raw] = env;
       writeSlotString(raw);
     }
@@ -269,12 +274,16 @@
   function bestSlot() {
     var slots = listSlots();
     if (!slots.length) return null;
+    // Newest snapshot wins. Ranking by alive-count resurrected deleted ops
+    // from an older richer slot when live decrypt failed or was empty.
     slots.sort(function (a, b) {
+      var ta = String(a.savedAt || '');
+      var tb = String(b.savedAt || '');
+      if (tb !== ta) return tb.localeCompare(ta);
       var aa = a.aliveCount != null ? a.aliveCount : countAlive(a.state);
       var bb = b.aliveCount != null ? b.aliveCount : countAlive(b.state);
       if (bb !== aa) return bb - aa;
-      if (b.itemCount !== a.itemCount) return b.itemCount - a.itemCount;
-      return String(b.savedAt || '').localeCompare(String(a.savedAt || ''));
+      return (b.itemCount || 0) - (a.itemCount || 0);
     });
     return slots[0];
   }
@@ -383,12 +392,23 @@
         if (sa !== sb) return sa - sb;
         return String(b).localeCompare(String(a));
       });
-      var bestState = null, bestMeal = null, bestCount = -1;
+      var bestState = null, bestMeal = null, bestAt = '', bestName = '';
       for (var i = 0; i < order.length; i++) {
         var cand = readNativeBackup(order[i]);
         if (!cand || !cand.state) continue;
-        var c = countAlive(cand.state);
-        if (c > bestCount) { bestCount = c; bestState = cand.state; bestMeal = cand.meal || null; }
+        var at = String(cand.savedAt || '');
+        if (!at) {
+          var dm = String(order[i]).match(/(\d{4}-\d{2}(?:-\d{2})?)/);
+          if (dm) at = dm[1];
+        }
+        var newer = !bestState || at > bestAt;
+        var sameWave = at === bestAt && String(order[i]) > bestName;
+        if (newer || sameWave) {
+          bestAt = at;
+          bestName = String(order[i]);
+          bestState = cand.state;
+          bestMeal = cand.meal || null;
+        }
       }
       if (bestState && bestMeal) writeMeal(bestMeal);
       return bestState;
@@ -499,6 +519,7 @@
     preferOver: preferOver,
     hydrateSlots: hydrateSlots,
     countAlive: countAlive,
+    bestSlot: bestSlot,
     writeMeal: writeMeal,
     buildEnvelope: buildEnvelope
   };

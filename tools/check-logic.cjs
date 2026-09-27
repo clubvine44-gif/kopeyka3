@@ -189,6 +189,7 @@ assert.ok(cloudSrc.indexOf('function reconcileCashAnchor') >= 0, 'cloud must rec
 assert.ok(cloudSrc.indexOf('!(l.deleted)') >= 0, 'must not drop tombstone of a locally-deleted new row');
 assert.ok(cloudSrc.indexOf('l.deleted') >= 0, 'deleted flag seeds tombstone');
 assert.ok(cloudSrc.indexOf('function hasDel') >= 0, 'cloud empty-check sees tombstones');
+assert.ok(cloudSrc.indexOf('!ld[id]&&!rd[id]&&!bd[id]') >= 0, 'tombstone map without row must survive merge cleanup');
 
 var asstSrc = fs.readFileSync(path.join(ROOT, 'assistant-v2.js'), 'utf8');
 assert.ok(asstSrc.indexOf("s.reserveOps=s.reserveOps.filter") < 0, 'assistant must not strip reserveOps');
@@ -217,6 +218,9 @@ assert.ok(bakSrc.indexOf('function countAlive') >= 0, 'slots ranked by alive row
 assert.ok(bakSrc.indexOf('function hydrateSlots') >= 0, 'slots decrypt before preferOver');
 assert.ok(bakSrc.indexOf('FINENC1:') >= 0, 'slots may be sealed');
 assert.ok(bakSrc.indexOf('x.deleted') >= 0, 'backup empty-check sees deleted rows');
+assert.ok(bakSrc.indexOf('_slotGen') >= 0, 'slot seal is generation-guarded');
+assert.ok(bakSrc.indexOf('Newest snapshot wins') >= 0 || bakSrc.indexOf('newest first') >= 0 || bakSrc.indexOf('tb.localeCompare(ta)') >= 0, 'bestSlot ranks by savedAt first');
+assert.ok(bakSrc.indexOf('bestSlot: bestSlot') >= 0, 'bestSlot exported');
 assert.ok(appSrc.indexOf('inspectBackup') >= 0, 'import uses inspectBackup');
 assert.ok(appSrc.indexOf('preferOver') >= 0, 'boot prefers richer backup slot');
 assert.ok(appSrc.indexOf('hydrateSlots') >= 0, 'boot hydrates sealed slots');
@@ -227,8 +231,8 @@ assert.ok(storeSrc.indexOf('INSTALL_KEY_BAK') >= 0, 'install id has backup key')
 assert.ok(storeSrc.indexOf('FinBridge.setInstallId') >= 0, 'install id mirrored to native prefs');
 
 var gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle'), 'utf8');
-assert.ok(/versionCode\s+174/.test(gradle), 'versionCode 174');
-assert.ok(/versionName\s+"4\.13\.7"/.test(gradle), 'versionName 4.13.7');
+assert.ok(/versionCode\s+175/.test(gradle), 'versionCode 175');
+assert.ok(/versionName\s+"4\.13\.8"/.test(gradle), 'versionName 4.13.8');
 
 var mainJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/MainActivity.java'), 'utf8');
 assert.ok(mainJava.indexOf('isTrustedApkUrl') >= 0, 'apk url allowlisted');
@@ -370,6 +374,15 @@ assert.ok(mergedDelOnly._deleted && mergedDelOnly._deleted.reserveOps && mergedD
 assert.ok(!(mergedDelOnly.reserveOps || []).some(function (x) { return x && x.id === 'o1' && !x.deleted; }), 'deleted local row must not resurrect alive');
 assert.strictEqual(cloudSandbox.window.kopeykaCloud.isEmptyState(localDelOnly), false, 'tombstone-only state is not empty');
 assert.strictEqual(cloudSandbox.window.kopeykaCloud.isEmptyState({ settings: {}, income: [{ id: 'x', deleted: true }], expenses: [] }), false, 'soft-deleted rows are not empty');
+
+var localTombMapOnly = JSON.parse(JSON.stringify(base));
+localTombMapOnly.reserveOps = [];
+localTombMapOnly._deleted = { reserveOps: { o1: Date.now() } };
+var remoteNeverRow = JSON.parse(JSON.stringify(base));
+remoteNeverRow.reserveOps = [];
+var mergedTombMap = cloudSandbox.window.kopeykaCloud.threeWay({ reserveOps: [] }, localTombMapOnly, remoteNeverRow);
+assert.ok(mergedTombMap._deleted && mergedTombMap._deleted.reserveOps && mergedTombMap._deleted.reserveOps.o1, 'tombstone without row still kept');
+assert.ok(!(mergedTombMap.reserveOps || []).some(function (x) { return x && x.id === 'o1' && !x.deleted; }), 'map-only tombstone must not resurrect');
 
 var bootJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/BootReceiver.java'), 'utf8');
 assert.ok(bootJava.indexOf('UpdateCheckReceiver.scheduleSoon') >= 0, 'reboot must reschedule auto-update');
@@ -872,6 +885,82 @@ function finish(extra){
   assert.strictEqual(FB.preferOver(liveNow), null, 'older slot with extra deleted rows must not roll cash back');
   assert.ok(typeof FB.countAlive === 'function' && FB.countAlive(liveNow) === 1, 'countAlive ignores deleted');
 
+  // 4.13.8: newest slot wins — older richer snapshot must not undo a wipe-by-delete.
+  memBak['kopeyka3_meal_v1'] = JSON.stringify({ storeId: 'keep-me', settings: { adults: 2 } });
+  memBak['finna_backup_slot_0'] = JSON.stringify({
+    savedAt: '2026-09-27T18:00:00.000Z',
+    itemCount: 2,
+    aliveCount: 0,
+    state: {
+      settings: { openingBalance: 100, month: '2026-09' },
+      income: [
+        { id: 'a', amount: 1, date: '2026-09-01', deleted: true },
+        { id: 'b', amount: 50, date: '2026-09-23', deleted: true }
+      ],
+      expenses: [], reserves: [], debts: [], reserveOps: [], obligations: [], obligationPays: [],
+      _deleted: { income: { a: 1, b: 1 } }
+    }
+  });
+  memBak['finna_backup_slot_1'] = JSON.stringify({
+    savedAt: '2026-09-23T12:00:00.000Z',
+    itemCount: 2,
+    aliveCount: 2,
+    state: {
+      settings: { openingBalance: 100, month: '2026-09' },
+      income: [
+        { id: 'a', amount: 1, date: '2026-09-01' },
+        { id: 'b', amount: 50, date: '2026-09-23' }
+      ],
+      expenses: [], reserves: [], debts: [], reserveOps: [], obligations: [], obligationPays: []
+    }
+  });
+  assert.ok(typeof FB.bestSlot === 'function' && FB.bestSlot() && FB.bestSlot().savedAt === '2026-09-27T18:00:00.000Z', 'bestSlot is newest, not most-alive');
+  var emptyLive = {
+    settings: { openingBalance: 0, month: '2026-09' },
+    income: [], expenses: [], reserves: [], debts: [], reserveOps: [], obligations: [], obligationPays: []
+  };
+  var recoveredDel = FB.preferOver(emptyLive);
+  assert.ok(recoveredDel, 'empty live recovers a slot');
+  assert.ok((recoveredDel.income || []).every(function (x) { return !x || x.deleted; }), 'newest slot keeps deletions, does not resurrect');
+  assert.ok((recoveredDel.income || []).length === 2, 'deleted rows still stored in recovered slot');
+
+  var staleLive = {
+    settings: { openingBalance: 100, month: '2026-09' },
+    income: [{ id: 'a', amount: 1, date: '2026-09-01' }],
+    expenses: [], reserves: [], debts: [], reserveOps: [], obligations: [], obligationPays: [],
+    updatedAt: '2026-09-24T10:00:00.000Z'
+  };
+  memBak['finna_backup_slot_0'] = JSON.stringify({
+    savedAt: '2026-09-24T12:00:00.000Z',
+    itemCount: 2,
+    aliveCount: 2,
+    state: {
+      settings: { openingBalance: 100, month: '2026-09' },
+      income: [
+        { id: 'a', amount: 1, date: '2026-09-01' },
+        { id: 'c', amount: 9, date: '2026-09-24' }
+      ],
+      expenses: [], reserves: [], debts: [], reserveOps: [], obligations: [], obligationPays: []
+    }
+  });
+  memBak['finna_backup_slot_1'] = JSON.stringify({
+    savedAt: '2026-09-20T00:00:00.000Z',
+    itemCount: 20,
+    aliveCount: 20,
+    state: {
+      settings: { openingBalance: 100, month: '2026-09' },
+      income: (function () {
+        var arr = [];
+        for (var i = 0; i < 20; i++) arr.push({ id: 'old' + i, amount: 1, date: '2026-09-01' });
+        return arr;
+      })(),
+      expenses: [], reserves: [], debts: [], reserveOps: [], obligations: [], obligationPays: []
+    }
+  });
+  var liftedStale = FB.preferOver(staleLive);
+  assert.ok(liftedStale && (liftedStale.income || []).some(function (x) { return x && x.id === 'c'; }), 'newer slot lifts stale live even if older slot is richer');
+  assert.ok(!(liftedStale.income || []).some(function (x) { return x && String(x.id).indexOf('old') === 0; }), 'older richer slot must not replace newer');
+
   vm.runInNewContext(bakSrc, g, { filename: 'fin-backup-enc.js' });
   var FBenc = g.FinBackup;
   var envS = {
@@ -894,7 +983,7 @@ function finish(extra){
   });
   assert.ok(liftedEnc && (liftedEnc.income || []).some(function (x) { return x && x.id === 'enc1'; }), 'hydrated sealed slot lifts stale live');
 
-  finish({ auxIsolated: true, staleSaveWon: true, cipherWithoutId: true, bakInstallId: true, inspectNoWrite: true, preferSlot: true, noDeletedRollback: true, deletedPersists: true, sealedSlot: true });
+  finish({ auxIsolated: true, staleSaveWon: true, cipherWithoutId: true, bakInstallId: true, inspectNoWrite: true, preferSlot: true, noDeletedRollback: true, deletedPersists: true, sealedSlot: true, newestSlotWins: true, staleLiveNewerSlot: true, tombMapKept: true });
 })().catch(function (e) {
   console.error(e && e.stack || e);
   process.exit(1);

@@ -1,4 +1,4 @@
-/* cloud.js v26 — live-key isolation, in-flight merge, cash-anchor reconcile, limits last-write, tombstone-on-delete */
+/* cloud.js v27 — newest-slot recovery, tombstone-without-row kept, cash-anchor reconcile */
 (function(){
 'use strict';
 const URL='https://cqslrfphsjllhltsvvuq.supabase.co';
@@ -44,7 +44,7 @@ function mergeArray(base,local,remote,k,conflicts,bd,ld,rd){var bm=mapById(base)
   else if(l)v=l;
   else v=r;
   if(v)out.push(v);
-});Object.keys(deleted).forEach(function(id){if(!lm[id]&&!rm[id]&&!bm[id])delete deleted[id];});return{items:out,deleted:deleted};}
+});Object.keys(deleted).forEach(function(id){if(!lm[id]&&!rm[id]&&!bm[id]&&!ld[id]&&!rd[id]&&!bd[id])delete deleted[id];});return{items:out,deleted:deleted};}
 function mergeObject(base,local,remote,kind,conflicts){var out={},keys={};[base,local,remote].forEach(function(o){if(o&&typeof o==='object')Object.keys(o).forEach(function(k){keys[k]=1;});});Object.keys(keys).forEach(function(k){var b=base&&base[k],l=local&&local[k],r=remote&&remote[k],lc=!same(l,b),rc=!same(r,b);if(lc&&!rc)out[k]=l;else if(!lc&&rc)out[k]=r;else if(lc&&rc){if(same(l,r))out[k]=l;else{out[k]=l;conflict(conflicts,kind,'state',k,l,r);}}else if(r!==undefined)out[k]=r;else if(l!==undefined)out[k]=l;});return out;}
 function num0(v){var x=Number(v);return isFinite(x)?Math.round(x):0;}
 function mergeNumericMap(base,local,remote){
