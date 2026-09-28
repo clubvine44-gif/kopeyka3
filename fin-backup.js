@@ -10,8 +10,9 @@
  * preferOver lifts a newer/richer local slot over a stale live snapshot.
  * 4.13.7: rotating slots are AES-GCM sealed (legacy plaintext still opens);
  * deleted rows / tombstones are not "empty" so a wipe-by-delete still snapshots.
- * 4.13.8: newest slot wins (not "most alive") — deleting all ops must not
- * be rolled back by an older richer snapshot; seal writes are generation-guarded.
+ * 4.13.9: preferOver — newest snapshot wins even if it has fewer alive rows
+ * (quota: live ciphertext stale, slot already has deletions). Meal from a slot
+ * is applied only if it is not older than the live meal.
  */
 (function (global) {
   'use strict';
@@ -111,6 +112,14 @@
   function writeMeal(meal) {
     if (!meal || typeof meal !== 'object') return;
     try { localStorage.setItem(MEAL_KEY, JSON.stringify(meal)); } catch (e) {}
+  }
+  function applyMealIfNewer(meal) {
+    if (!meal || typeof meal !== 'object') return;
+    var cur = readMeal();
+    if (!cur) { writeMeal(meal); return; }
+    var ct = Date.parse(cur.savedAt || 0) || 0;
+    var nt = Date.parse(meal.savedAt || 0) || 0;
+    if (!ct || nt >= ct) writeMeal(meal);
   }
   function todayStr() {
     var d = new Date();
@@ -377,7 +386,7 @@
     // 1) latest
     var latest = readNativeBackup(LAST_JSON_NAME);
     if (latest && latest.state) {
-      if (latest.meal) writeMeal(latest.meal);
+      if (latest.meal) applyMealIfNewer(latest.meal);
       return latest.state;
     }
     // 2) pick best from listed files by alive count / date in name
@@ -410,7 +419,7 @@
           bestMeal = cand.meal || null;
         }
       }
-      if (bestState && bestMeal) writeMeal(bestMeal);
+      if (bestState && bestMeal) applyMealIfNewer(bestMeal);
       return bestState;
     } catch (e) {}
     return null;
@@ -418,7 +427,7 @@
   function restoreBest() {
     var best = bestSlot();
     if (best && best.state) {
-      if (best.meal) writeMeal(best.meal);
+      if (best.meal) applyMealIfNewer(best.meal);
       return best.state;
     }
     try {
@@ -426,8 +435,10 @@
       if (raw && raw.indexOf('FINENC1:') !== 0) {
         var env = inspectBackup(raw);
         var st = env ? env.state : JSON.parse(raw);
-        if (env && env.meal) writeMeal(env.meal);
-        if (st && !isEmptyState(st)) return st;
+        if (st && !isEmptyState(st)) {
+          if (env && env.meal) applyMealIfNewer(env.meal);
+          return st;
+        }
       }
     } catch (e) {}
     // После переустановки localStorage пуст — читаем Загрузки/Finna
@@ -439,25 +450,19 @@
   }
   /**
    * If a local slot (or disk copy) is empty-live-recovery OR strictly newer
-   * and at least as rich in ALIVE rows as the decrypted live snapshot, return it.
-   * Deleted rows must not make an older slot look richer and roll cash back.
+   * than live, return it. Alive-count must NOT block a newer snapshot:
+   * deleting ops after a failed live write used to lose to the stale richer
+   * ciphertext. An older slot never replaces live.
    */
   function preferOver(live) {
     var slot = bestSlot();
     var liveEmpty = !live || isEmptyState(live);
     if (slot && slot.state && !isEmptyState(slot.state)) {
-      if (liveEmpty) {
-        if (slot.meal) writeMeal(slot.meal);
-        return slot.state;
-      }
-      var liveN = countAlive(live);
-      var slotN = slot.aliveCount != null ? slot.aliveCount : countAlive(slot.state);
       var liveAt = Date.parse((live && live.updatedAt) || 0) || 0;
       var slotAt = Date.parse(slot.savedAt || 0) || 0;
-      var newer = slotAt > liveAt + 2000 && slotN >= liveN;
-      var sameWaveRicher = slotN >= liveN + 1 && slotAt >= liveAt;
-      if (newer || sameWaveRicher) {
-        if (slot.meal) writeMeal(slot.meal);
+      var take = liveEmpty || slotAt > liveAt + 2000;
+      if (take) {
+        if (slot.meal) applyMealIfNewer(slot.meal);
         return slot.state;
       }
     }
@@ -520,6 +525,8 @@
     hydrateSlots: hydrateSlots,
     countAlive: countAlive,
     bestSlot: bestSlot,
+    applyMealIfNewer: applyMealIfNewer,
+    readMeal: readMeal,
     writeMeal: writeMeal,
     buildEnvelope: buildEnvelope
   };

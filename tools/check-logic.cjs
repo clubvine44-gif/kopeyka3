@@ -221,6 +221,10 @@ assert.ok(bakSrc.indexOf('x.deleted') >= 0, 'backup empty-check sees deleted row
 assert.ok(bakSrc.indexOf('_slotGen') >= 0, 'slot seal is generation-guarded');
 assert.ok(bakSrc.indexOf('Newest snapshot wins') >= 0 || bakSrc.indexOf('newest first') >= 0 || bakSrc.indexOf('tb.localeCompare(ta)') >= 0, 'bestSlot ranks by savedAt first');
 assert.ok(bakSrc.indexOf('bestSlot: bestSlot') >= 0, 'bestSlot exported');
+assert.ok(bakSrc.indexOf('slotAt > liveAt + 2000') >= 0, 'newer slot wins regardless of alive count');
+assert.ok(bakSrc.indexOf('applyMealIfNewer') >= 0, 'slot meal is timestamp-gated');
+assert.ok(cloudSrc.indexOf('function mergeMeal') >= 0, 'cloud merges meal plan');
+assert.ok(cloudSrc.indexOf('out.mealPlan=mergeMeal') >= 0, 'threeWay keeps mealPlan');
 assert.ok(appSrc.indexOf('inspectBackup') >= 0, 'import uses inspectBackup');
 assert.ok(appSrc.indexOf('preferOver') >= 0, 'boot prefers richer backup slot');
 assert.ok(appSrc.indexOf('hydrateSlots') >= 0, 'boot hydrates sealed slots');
@@ -231,14 +235,15 @@ assert.ok(storeSrc.indexOf('INSTALL_KEY_BAK') >= 0, 'install id has backup key')
 assert.ok(storeSrc.indexOf('FinBridge.setInstallId') >= 0, 'install id mirrored to native prefs');
 
 var gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle'), 'utf8');
-assert.ok(/versionCode\s+175/.test(gradle), 'versionCode 175');
-assert.ok(/versionName\s+"4\.13\.8"/.test(gradle), 'versionName 4.13.8');
+assert.ok(/versionCode\s+176/.test(gradle), 'versionCode 176');
+assert.ok(/versionName\s+"4\.13\.9"/.test(gradle), 'versionName 4.13.9');
 
 var mainJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/MainActivity.java'), 'utf8');
 assert.ok(mainJava.indexOf('isTrustedApkUrl') >= 0, 'apk url allowlisted');
 assert.ok(mainJava.indexOf('isSha256Hex') >= 0, 'sha256 format checked before download');
 assert.ok(mainJava.indexOf('isTrustedRedirectHost') >= 0, 'apk redirect host allowlisted');
 assert.ok(mainJava.indexOf('clubvine44-gif/kopeyka3/releases/download/') >= 0, 'only this repo APK');
+assert.ok(mainJava.indexOf('45L * 60L * 1000L') < 0, 'install click must not snooze 45 min before download');
 assert.ok(appSrc.indexOf('function recoverLockedState') >= 0, 'decrypt-fail recovery helper');
 assert.ok(appSrc.indexOf("if(!hasLiveData(STATE)&&window.FinBackup") >= 0, 'backup restore must run even if decrypt failed');
 assert.ok(appSrc.indexOf('isPaydayToday') >= 0, 'app payday-today');
@@ -554,6 +559,18 @@ cloudSandbox.window.STATE = JSON.parse(JSON.stringify(localKeep));
 assert.strictEqual(cloudSandbox.window.kopeykaCloud.liveDivergedFrom(localKeep), false, 'identical live is not diverged');
 cloudSandbox.window.STATE.income = [{ id: 'new1', amount: 100, date: '2026-09-21' }];
 assert.strictEqual(cloudSandbox.window.kopeykaCloud.liveDivergedFrom(localKeep), true, 'in-flight income is diverged');
+
+var localMeal = JSON.parse(JSON.stringify(localKeep));
+localMeal.mealPlan = { storeId: 'magnit', savedAt: '2026-09-28T12:00:00.000Z', lastPlan: { total: 5000, basket: [{ id: 'oats_400', qty: 2 }] }, settings: { adults: 2, children: 0, goal: 'maintain' } };
+var remoteMeal = JSON.parse(JSON.stringify(localKeep));
+remoteMeal.mealPlan = { storeId: 'magnit', savedAt: '2026-09-28T10:00:00.000Z', lastPlan: { total: 1000, basket: [{ id: 'bread', qty: 1 }] }, settings: { adults: 1, children: 0, goal: 'maintain' } };
+var mergedMeal = cloudSandbox.window.kopeykaCloud.threeWay(base, localMeal, remoteMeal);
+assert.ok(mergedMeal.mealPlan && mergedMeal.mealPlan.lastPlan && Number(mergedMeal.mealPlan.lastPlan.total) === 5000, 'newer local meal wins cloud merge');
+var remoteNewerMeal = JSON.parse(JSON.stringify(remoteMeal));
+remoteNewerMeal.mealPlan.savedAt = '2026-09-28T18:00:00.000Z';
+remoteNewerMeal.mealPlan.lastPlan.total = 7777;
+var mergedMeal2 = cloudSandbox.window.kopeykaCloud.threeWay(base, localMeal, remoteNewerMeal);
+assert.strictEqual(Number(mergedMeal2.mealPlan.lastPlan.total), 7777, 'newer remote meal wins cloud merge');
 
 // Cash-anchor reconcile: folded local + extra August income on remote must keep the extra.
 (function cashAnchorReconcile(){
@@ -961,6 +978,49 @@ function finish(extra){
   assert.ok(liftedStale && (liftedStale.income || []).some(function (x) { return x && x.id === 'c'; }), 'newer slot lifts stale live even if older slot is richer');
   assert.ok(!(liftedStale.income || []).some(function (x) { return x && String(x.id).indexOf('old') === 0; }), 'older richer slot must not replace newer');
 
+  // 4.13.9: newer slot with FEWER alive rows must lift stale live (failed live write after delete).
+  memBak['finna_backup_slot_0'] = JSON.stringify({
+    savedAt: '2026-09-28T18:00:00.000Z',
+    itemCount: 2,
+    aliveCount: 0,
+    state: {
+      settings: { openingBalance: 100, month: '2026-09' },
+      income: [
+        { id: 'a', amount: 1, date: '2026-09-01', deleted: true },
+        { id: 'c', amount: 9, date: '2026-09-24', deleted: true }
+      ],
+      expenses: [], reserves: [], debts: [], reserveOps: [], obligations: [], obligationPays: [],
+      _deleted: { income: { a: 1, c: 1 } }
+    }
+  });
+  memBak['finna_backup_slot_1'] = JSON.stringify({
+    savedAt: '2026-09-20T00:00:00.000Z',
+    itemCount: 20,
+    aliveCount: 20,
+    state: {
+      settings: { openingBalance: 100, month: '2026-09' },
+      income: (function () {
+        var arr = [];
+        for (var i = 0; i < 20; i++) arr.push({ id: 'old' + i, amount: 1, date: '2026-09-01' });
+        return arr;
+      })(),
+      expenses: [], reserves: [], debts: [], reserveOps: [], obligations: [], obligationPays: []
+    }
+  });
+  var staleRichLive = {
+    settings: { openingBalance: 100, month: '2026-09' },
+    income: [
+      { id: 'a', amount: 1, date: '2026-09-01' },
+      { id: 'c', amount: 9, date: '2026-09-24' }
+    ],
+    expenses: [], reserves: [], debts: [], reserveOps: [], obligations: [], obligationPays: [],
+    updatedAt: '2026-09-28T10:00:00.000Z'
+  };
+  var liftedDel = FB.preferOver(staleRichLive);
+  assert.ok(liftedDel, 'newer deleted slot lifts stale live');
+  assert.ok((liftedDel.income || []).every(function (x) { return !x || x.deleted; }), 'newer slot deletions win over stale richer live');
+  assert.ok(!(liftedDel.income || []).some(function (x) { return x && !x.deleted; }), 'stale live ops must not resurrect');
+
   vm.runInNewContext(bakSrc, g, { filename: 'fin-backup-enc.js' });
   var FBenc = g.FinBackup;
   var envS = {
@@ -983,7 +1043,7 @@ function finish(extra){
   });
   assert.ok(liftedEnc && (liftedEnc.income || []).some(function (x) { return x && x.id === 'enc1'; }), 'hydrated sealed slot lifts stale live');
 
-  finish({ auxIsolated: true, staleSaveWon: true, cipherWithoutId: true, bakInstallId: true, inspectNoWrite: true, preferSlot: true, noDeletedRollback: true, deletedPersists: true, sealedSlot: true, newestSlotWins: true, staleLiveNewerSlot: true, tombMapKept: true });
+  finish({ auxIsolated: true, staleSaveWon: true, cipherWithoutId: true, bakInstallId: true, inspectNoWrite: true, preferSlot: true, noDeletedRollback: true, deletedPersists: true, sealedSlot: true, newestSlotWins: true, staleLiveNewerSlot: true, tombMapKept: true, newerDeleteSlotWins: true, mealCloudMerge: true });
 })().catch(function (e) {
   console.error(e && e.stack || e);
   process.exit(1);

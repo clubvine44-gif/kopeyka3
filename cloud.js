@@ -1,4 +1,4 @@
-/* cloud.js v27 — newest-slot recovery, tombstone-without-row kept, cash-anchor reconcile */
+/* cloud.js v28 — mealPlan last-write, newest-slot recovery, tombstone-without-row kept, cash-anchor reconcile */
 (function(){
 'use strict';
 const URL='https://cqslrfphsjllhltsvvuq.supabase.co';
@@ -123,6 +123,46 @@ function mergeSettings(base,local,remote,conflicts){
   else if(remote&&remote.lastPeriodReport)out.lastPeriodReport=remote.lastPeriodReport;
   return out;
 }
+function mealLive(m){
+  if(!m||typeof m!=='object')return false;
+  if(m.lastPlan&&typeof m.lastPlan==='object'){
+    if(Array.isArray(m.lastPlan.basket)&&m.lastPlan.basket.length)return true;
+    if(Number(m.lastPlan.total)>0)return true;
+  }
+  if(m.priceOverrides&&typeof m.priceOverrides==='object'&&Object.keys(m.priceOverrides).length)return true;
+  if(m.settings&&typeof m.settings==='object'){
+    if(Number(m.settings.budgetMonth)>0)return true;
+    if(Number(m.settings.adults)>1||Number(m.settings.children)>0)return true;
+  }
+  return false;
+}
+function readCurrentMeal(){
+  try{if(window.FinBackup&&typeof window.FinBackup.readMeal==='function')return window.FinBackup.readMeal();}catch(e){}
+  try{var r=localStorage.getItem('kopeyka3_meal_v1');if(!r)return null;var o=JSON.parse(r);return o&&typeof o==='object'?o:null;}catch(e2){}
+  return null;
+}
+function attachMeal(s){
+  try{var m=readCurrentMeal();if(s&&mealLive(m))s.mealPlan=m;}catch(e){}
+  return s;
+}
+function applyMeal(s){
+  try{
+    var m=s&&s.mealPlan;
+    if(!mealLive(m))return;
+    if(window.FinBackup&&typeof window.FinBackup.applyMealIfNewer==='function')window.FinBackup.applyMealIfNewer(m);
+    else if(window.FinBackup&&typeof window.FinBackup.writeMeal==='function')window.FinBackup.writeMeal(m);
+  }catch(e){}
+}
+function mergeMeal(local,remote){
+  var l=local&&local.mealPlan, r=remote&&remote.mealPlan;
+  var ll=mealLive(l), rr=mealLive(r);
+  if(ll&&!rr)return l;
+  if(rr&&!ll)return r;
+  if(!ll&&!rr)return null;
+  var lt=Date.parse((l&&(l.savedAt||l.updatedAt))||0)||0;
+  var rt=Date.parse((r&&(r.savedAt||r.updatedAt))||0)||0;
+  return rt>lt?r:l;
+}
 function nextMonthKey(m){var p=String(m).split('-').map(Number),y=p[0],x=p[1]+1;if(x>12){x=1;y++;}return y+'-'+String(x).padStart(2,'0');}
 function prevMonthKey(m){var p=String(m).split('-').map(Number),y=p[0],x=p[1]-1;if(x<1){x=12;y--;}return y+'-'+String(x).padStart(2,'0');}
 function aliveRow(x){return !!(x&&!x.deleted);}
@@ -186,7 +226,7 @@ function reconcileCashAnchor(out,local,remote,base){
   }catch(e){}
   return out;
 }
-function threeWay(base,local,remote){base=normalize(base||{});local=normalize(local||{});remote=normalize(remote||{});var out=Object.assign({},remote),allDeleted={},conflicts=[];COLLECTIONS.forEach(function(k){var m=mergeArray(base[k],local[k],remote[k],k,conflicts,deletedMap(base,k),deletedMap(local,k),deletedMap(remote,k));out[k]=m.items;allDeleted[k]=m.deleted;});out._deleted=allDeleted;out.shiftsOverride=mergeObject(base.shiftsOverride||{},local.shiftsOverride||{},remote.shiftsOverride||{},'shiftsOverride',conflicts);out.dayPlans=mergeObject(base.dayPlans||{},local.dayPlans||{},remote.dayPlans||{},'dayPlans',conflicts);out.voiceMap=mergeObject(base.voiceMap||{},local.voiceMap||{},remote.voiceMap||{},'voiceMap',conflicts);out.settings=mergeSettings(base.settings||{},local.settings||{},remote.settings||{},conflicts);out._conflicts=(remote._conflicts||[]).concat(local._conflicts||[],conflicts).slice(-100);out.version=Math.max(Number(local.version)||0,Number(remote.version)||0,6);out.app='kopeyka3';out.updatedAt=new Date().toISOString();return normalize(reconcileCashAnchor(out,local,remote,base));}
+function threeWay(base,local,remote){base=normalize(base||{});local=normalize(local||{});remote=normalize(remote||{});var out=Object.assign({},remote),allDeleted={},conflicts=[];COLLECTIONS.forEach(function(k){var m=mergeArray(base[k],local[k],remote[k],k,conflicts,deletedMap(base,k),deletedMap(local,k),deletedMap(remote,k));out[k]=m.items;allDeleted[k]=m.deleted;});out._deleted=allDeleted;out.shiftsOverride=mergeObject(base.shiftsOverride||{},local.shiftsOverride||{},remote.shiftsOverride||{},'shiftsOverride',conflicts);out.dayPlans=mergeObject(base.dayPlans||{},local.dayPlans||{},remote.dayPlans||{},'dayPlans',conflicts);out.voiceMap=mergeObject(base.voiceMap||{},local.voiceMap||{},remote.voiceMap||{},'voiceMap',conflicts);out.settings=mergeSettings(base.settings||{},local.settings||{},remote.settings||{},conflicts);out.mealPlan=mergeMeal(local,remote);out._conflicts=(remote._conflicts||[]).concat(local._conflicts||[],conflicts).slice(-100);out.version=Math.max(Number(local.version)||0,Number(remote.version)||0,6);out.app='kopeyka3';out.updatedAt=new Date().toISOString();return normalize(reconcileCashAnchor(out,local,remote,base));}
 function localChanged(base,local){return !same(normalize(base||{}),normalize(local||{}));}
 function liveDivergedFrom(captured){
   try{
@@ -199,13 +239,14 @@ function hasPendingChanges(){var base=readBase(),local=readLocal();return !!clea
 function applyState(s,label){if(localNotReady()){if(label)toast('Локальные данные ещё открываются — облако подождёт');return;}var n=stamp(s);if(isEmptyState(n)){var live=liveState();if(live&&!isEmptyState(live)){if(label)toast('Локальные данные сохранены, пустое облако не применено');return;}try{var existing=localStorage.getItem(LOCAL_BASE);if(existing&&String(existing).indexOf('FINENC1:')===0){if(label)toast('Зашифрованные данные на устройстве сохранены');return;}}catch(_){}}var prev=null;try{prev=window.STATE?JSON.stringify(window.STATE):null;}catch(_){}
 writeLocal(n);suppressSave=true;try{
   window.STATE=n;
+  try{applyMeal(n);}catch(_){}
   try{if(typeof window.ensureMonth==='function')window.ensureMonth();}catch(_){}
   var next=JSON.stringify(window.STATE||n);
   if(prev!==next&&typeof window.render==='function')window.render();
 }finally{suppressSave=false;}lastSent=JSON.stringify(window.STATE||n);if(label)toast(label);}
 async function loadFromCloud(){if(!currentUser)return null;var c=client();if(!c)throw new Error('Облако недоступно');var r=await c.from('user_finance_state').select('state,version,updated_at').eq('user_id',currentUser.id).maybeSingle();if(r.error)throw new Error(r.error.message||r.error.code||'Ошибка загрузки облака');if(!r.data)return null;var state=normalize(r.data.state);if(r.data.updated_at)state.updatedAt=r.data.updated_at;Object.defineProperty(state,'_dbVersion',{value:Number(r.data.version)||0,enumerable:false,writable:true});return state;}
 async function writeRemote(merged,remote,capturedLocal){var c=client();if(!c)throw new Error('Облако недоступно');var next=(remote&&remote._dbVersion?remote._dbVersion:0)+1,now=new Date().toISOString(),payload={user_id:currentUser.id,state:merged,version:next,updated_at:now};if(remote){var r=await c.from('user_finance_state').update({state:merged,version:next,updated_at:now}).eq('user_id',currentUser.id).eq('version',remote._dbVersion).select('user_id');if(r.error)throw new Error(r.error.message||r.error.code||'Ошибка сохранения в облако');if(!r.data||!r.data.length)return false;}else{var r2=await c.from('user_finance_state').insert(payload).select('user_id');if(r2.error){if(r2.error.code==='23505'||/duplicate|unique/i.test(r2.error.message||''))return false;throw new Error(r2.error.message||r2.error.code||'Ошибка сохранения в облако');}}merged.updatedAt=now;writeBase(merged);clearClearIntent();lastSent=JSON.stringify(merged);if(liveDivergedFrom(capturedLocal)){try{var kept=threeWay(capturedLocal||{},liveState(),merged);writeLocal(kept);applyState(kept);scheduleSave();}catch(e){scheduleSave();}return true;}writeLocal(merged);applyState(merged);return true;}
-async function saveToCloud(force){if(!currentUser||!ready||suppressSave)return false;if(localNotReady())return false;if(saving&&!force)return false;saving=true;try{for(var attempt=0;attempt<3;attempt++){var local=stamp(window.STATE||readLocal()||{}),base=readBase(),remote=await loadFromCloud(),clearAt=clearIntent();
+async function saveToCloud(force){if(!currentUser||!ready||suppressSave)return false;if(localNotReady())return false;if(saving&&!force)return false;saving=true;try{for(var attempt=0;attempt<3;attempt++){var local=attachMeal(stamp(window.STATE||readLocal()||{})),base=readBase(),remote=await loadFromCloud(),clearAt=clearIntent();
 if(remote&&!isEmptyState(remote)&&isEmptyState(local)){applyState(remote);writeBase(remote);return true;}
 if(clearAt&&clearAt>(remote&&Date.parse(remote.updatedAt)||0)){if(remote&&!isEmptyState(remote)){try{localStorage.removeItem(CLEAR_INTENT);}catch(e){}applyState(remote);return true;}local=stamp(local);remote=null;base=null;}var merged;if(remote&&base&&localChanged(base,local)&&!isEmptyState(local))merged=threeWay(base,local,remote);else if(remote&&base&&!localChanged(base,local))merged=remote;else if(remote&&!base){merged=remote;if(localChanged(null,local)&&!isEmptyState(local))merged=threeWay(null,local,remote);}else merged=local;if(remote&&!isEmptyState(remote)&&isEmptyState(merged))merged=remote;var lastObj=null;try{lastObj=lastSent?JSON.parse(lastSent):null;}catch(_){}if(!force&&same(merged,lastObj)&&!localChanged(base,local))return true;if(await writeRemote(merged,remote,local))return true;await new Promise(function(res){setTimeout(res,50*(attempt+1));});}throw new Error('Конфликт версии: не удалось сохранить после нескольких попыток');}catch(e){console.error('[cloud] save',e);scheduleRetry();if(force)toast('Не удалось сохранить в облако: '+(e.message||''));return false;}finally{saving=false;}}
 function scheduleRetry(){clearTimeout(retryTimer);retryTimer=setTimeout(function(){if(navigator.onLine&&currentUser)saveToCloud(false);},5000);}

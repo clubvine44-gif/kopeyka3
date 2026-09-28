@@ -116,7 +116,7 @@ public class MainActivity extends AppCompatActivity {
         s.setBuiltInZoomControls(false);
         s.setDisplayZoomControls(false);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
-        s.setUserAgentString(s.getUserAgentString() + " FinApp/4.13.8");
+        s.setUserAgentString(s.getUserAgentString() + " FinApp/4.13.9");
         FinBridge bridge = new FinBridge(this);
         try { bridge.ensureBackupFolder(); } catch (Exception ignored) {}
         webView.addJavascriptInterface(bridge, "FinBridge");
@@ -326,11 +326,7 @@ public class MainActivity extends AppCompatActivity {
         if (install != null) install.setOnClickListener(v -> {
             dlg.dismiss();
             updateDialogShowing.set(false);
-            // на 45 мин не предлагать ЭТУ же versionCode снова (новая версия прилетит)
-            getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-                    .putInt(KEY_SKIP_CODE, code)
-                    .putLong(KEY_SKIP_UNTIL, System.currentTimeMillis() + 45L * 60L * 1000L)
-                    .apply();
+            // Не ставим snooze до скачивания: если APK не доехал, диалог должен появиться снова.
             downloadAndInstall(apkUrl, name, sha256);
         });
         dlg.setOnCancelListener(d -> skip.run());
