@@ -1,7 +1,7 @@
 {
-  "versionCode": 175,
-  "versionName": "4.13.8",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.8/Fin.apk",
-  "sha256": "a45ca1ae3208d28425643050a33f5f5a2da87fd7d68179366f4f7f2aaf017b01",
-  "notes": "4.13.8 — сохранность кассы: удаление не откатывается старым слотом, tombstone без строки держится (versionCode 175)"
+  "versionCode": 176,
+  "versionName": "4.13.9",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.9/Fin.apk",
+  "sha256": "bf691316d613ec380a362f0ecad92235a1ddef9a5f136c4a0dcb928acb01d455",
+  "notes": "4.13.9 — сохранность кассы: новый слот с удалениями не проигрывает устаревшей кассе, рацион в облаке, автообновление повторяет скачивание (versionCode 176)"
 }
