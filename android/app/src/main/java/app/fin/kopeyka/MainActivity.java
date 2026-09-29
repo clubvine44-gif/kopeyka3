@@ -96,7 +96,11 @@ public class MainActivity extends AppCompatActivity {
         refreshLayout.setEnabled(false);
         ensureMicPermission();
         webView.loadUrl("https://appassets.androidplatform.net/assets/www/index.html");
-        checkForUpdate();
+        if (getIntent() != null && getIntent().getBooleanExtra("fin_auto_update", false)) {
+            forceCheckUpdate();
+        } else {
+            checkForUpdate();
+        }
         try { UpdateCheckReceiver.scheduleSoon(this); } catch (Exception ignored) {}
     }
 
@@ -116,7 +120,7 @@ public class MainActivity extends AppCompatActivity {
         s.setBuiltInZoomControls(false);
         s.setDisplayZoomControls(false);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
-        s.setUserAgentString(s.getUserAgentString() + " FinApp/4.13.9");
+        s.setUserAgentString(s.getUserAgentString() + " FinApp/4.13.10");
         FinBridge bridge = new FinBridge(this);
         try { bridge.ensureBackupFolder(); } catch (Exception ignored) {}
         webView.addJavascriptInterface(bridge, "FinBridge");
@@ -193,6 +197,15 @@ public class MainActivity extends AppCompatActivity {
             if (ok) pendingMicRequest.grant(pendingMicRequest.getResources());
             else pendingMicRequest.deny();
             pendingMicRequest = null;
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (intent != null && intent.getBooleanExtra("fin_auto_update", false)) {
+            forceCheckUpdate();
         }
     }
 
@@ -356,8 +369,6 @@ public class MainActivity extends AppCompatActivity {
             File dir = getExternalFilesDir(null);
             if (dir == null) dir = getFilesDir();
             File apk = new File(dir, "Fin-update.apk");
-            if (apk.exists()) //noinspection ResultOfMethodCallIgnored
-                apk.delete();
 
             if (!isTrustedApkUrl(apkUrl) || !isSha256Hex(expectedSha256)) {
                 downloading.set(false);
@@ -368,8 +379,26 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
 
+            Exception lastErr = null;
+            for (int attempt = 1; attempt <= 3; attempt++) {
+            if (apk.exists()) //noinspection ResultOfMethodCallIgnored
+                apk.delete();
+
             HttpURLConnection c = null;
             try {
+                if (attempt > 1) {
+                    final int shown = attempt;
+                    runOnUiThread(() -> {
+                        try {
+                            if (progressDlg != null && progressDlg.isShowing()) {
+                                TextView pm = progressDlg.findViewById(R.id.progMsg);
+                                if (pm != null) pm.setText("Повтор загрузки " + shown + "/3…");
+                            }
+                        } catch (Exception ignored) {}
+                    });
+                    try { Thread.sleep(1600L * (attempt - 1)); }
+                    catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+                }
                 URL url = new URL(apkUrl);
                 c = openFollowingRedirects(url);
                 int status = c.getResponseCode();
@@ -460,22 +489,37 @@ public class MainActivity extends AppCompatActivity {
                         installApk(apk);
                     }, 350);
                 });
+                downloading.set(false);
+                return;
             } catch (Exception e) {
-                android.util.Log.e("FinUpdate", "download failed: " + e.getMessage(), e);
+                lastErr = e;
+                android.util.Log.e("FinUpdate", "download failed attempt " + attempt + ": " + e.getMessage(), e);
                 if (apk.exists()) //noinspection ResultOfMethodCallIgnored
                     apk.delete();
-                final String msg = e.getMessage() != null ? e.getMessage() : "неизвестная ошибка";
-                runOnUiThread(() -> {
-                    try { if (progressDlg != null && progressDlg.isShowing()) progressDlg.dismiss(); } catch (Exception ignored) {}
-                    Toast.makeText(this,
-                        "Не удалось обновить: " + msg
-                                + "\nСкачай APK вручную с GitHub Releases.",
-                        Toast.LENGTH_LONG).show();
-                });
             } finally {
                 if (c != null) c.disconnect();
-                downloading.set(false);
             }
+            } // retry loop
+
+            downloading.set(false);
+            final String msg = lastErr != null && lastErr.getMessage() != null ? lastErr.getMessage() : "неизвестная ошибка";
+            runOnUiThread(() -> {
+                try { if (progressDlg != null && progressDlg.isShowing()) progressDlg.dismiss(); } catch (Exception ignored) {}
+                Toast.makeText(this,
+                    "Не удалось обновить: " + msg
+                            + "\nПовторю проверку через минуту. Или скачай APK с GitHub Releases.",
+                    Toast.LENGTH_LONG).show();
+            });
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                try {
+                    getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                            .putInt(KEY_SKIP_CODE, 0)
+                            .putLong(KEY_SKIP_UNTIL, 0L)
+                            .apply();
+                    updateCheckRunning.set(false);
+                    checkForUpdate();
+                } catch (Exception ignored) {}
+            }, 45_000L);
         });
     }
 

@@ -15,8 +15,9 @@
  * id still opens the same ciphertext.
  * 4.13.6: never copy a locked/corrupt live blob over the emergency copy;
  * if live decrypt fails, reopen from the emergency blob when it still opens.
- * 4.13.7: seal/open for encrypted backup slots; deleted rows / tombstones
- * are live intent (saving an "empty" after delete must not be blocked).
+ * 4.13.10: if a new install id cannot be persisted (quota), encrypt with
+ * the stable FALLBACK id — never a random key that the next boot cannot
+ * reopen. persistInstallId is verified by a read-back.
  */
 (function (global) {
   'use strict';
@@ -55,7 +56,7 @@
     return false;
   }
   function persistInstallId(id) {
-    if (!id || id.length < 16) return;
+    if (!id || id.length < 16) return false;
     try { localStorage.setItem(INSTALL_KEY, id); } catch (e) {}
     try { localStorage.setItem(INSTALL_KEY_BAK, id); } catch (e2) {}
     try {
@@ -63,6 +64,12 @@
         global.FinBridge.setInstallId(id);
       }
     } catch (e3) {}
+    try {
+      var got = readStoredInstallId();
+      return !!(got && got === id);
+    } catch (e4) {
+      return false;
+    }
   }
   function readStoredInstallId() {
     var id = null;
@@ -96,8 +103,11 @@
       var nid = Array.prototype.map.call(arr, function (b) {
         return ('0' + b.toString(16)).slice(-2);
       }).join('');
-      persistInstallId(nid);
-      return nid;
+      // Encrypt with FALLBACK so the next boot can still open this ciphertext
+      // if localStorage refused to keep the random id (quota / private mode).
+      if (persistInstallId(nid)) return nid;
+      persistInstallId(FALLBACK_ID);
+      return FALLBACK_ID;
     } catch (e3) {
       persistInstallId(FALLBACK_ID);
       return FALLBACK_ID;

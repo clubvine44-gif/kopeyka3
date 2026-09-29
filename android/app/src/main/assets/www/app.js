@@ -1,4 +1,4 @@
-(function(){/* v118.13 4.13.9 */'use strict';
+(function(){/* v118.14 4.13.10 */'use strict';
 var KEY='kopeyka3_state_v1',ANCHOR='2026-08-17',CYCLE=['day','day','night','night','off','off'];
 var CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье','Прочее'];
 var BUDGET_CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
@@ -542,6 +542,20 @@ function save(skipUndo){
   try{if(window.FinBackup&&typeof window.FinBackup.onSave==='function')window.FinBackup.onSave(STATE);}catch(e){}
   syncReminders();
 }
+function flushLiveSave(){
+  try{
+    if(window.__FIN_DECRYPT_FAILED||window.__FIN_LOAD_PENDING)return;
+    if(!hasLiveData(STATE))return;
+    save(true);
+  }catch(e){}
+}
+try{
+  document.addEventListener('visibilitychange',function(){
+    if(document.visibilityState==='hidden')flushLiveSave();
+  });
+  window.addEventListener('pagehide',flushLiveSave);
+  window.addEventListener('freeze',flushLiveSave);
+}catch(eF){}
 /** Явное восстановление, когда AES-снимок не открылся.
  *  Снимает блокировку записи и сохраняет живое состояние поверх повреждённого блоба. */
 function recoverLockedState(stateObj, source){

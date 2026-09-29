@@ -232,11 +232,14 @@ assert.ok(appSrc.indexOf("if(!hasLiveData(incoming))") >= 0, 'empty import must 
 assert.ok(appSrc.indexOf('darr[dj].deleted') >= 0, 'hasLiveData sees tombstones');
 assert.ok(appSrc.indexOf('note===nm||note.indexOf(nm)') < 0, 'debt link must be exact, not substring');
 assert.ok(storeSrc.indexOf('INSTALL_KEY_BAK') >= 0, 'install id has backup key');
+assert.ok(storeSrc.indexOf('Encrypt with FALLBACK so the next boot can still open') >= 0, 'persist-fail must use fallback id');
+assert.ok(storeSrc.indexOf('got && got === id') >= 0, 'install id persist is verified by read-back');
+assert.ok(appSrc.indexOf('function flushLiveSave') >= 0, 'pagehide flushes live cash');
 assert.ok(storeSrc.indexOf('FinBridge.setInstallId') >= 0, 'install id mirrored to native prefs');
 
 var gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle'), 'utf8');
-assert.ok(/versionCode\s+176/.test(gradle), 'versionCode 176');
-assert.ok(/versionName\s+"4\.13\.9"/.test(gradle), 'versionName 4.13.9');
+assert.ok(/versionCode\s+177/.test(gradle), 'versionCode 177');
+assert.ok(/versionName\s+"4\.13\.10"/.test(gradle), 'versionName 4.13.10');
 
 var mainJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/MainActivity.java'), 'utf8');
 assert.ok(mainJava.indexOf('isTrustedApkUrl') >= 0, 'apk url allowlisted');
@@ -244,6 +247,8 @@ assert.ok(mainJava.indexOf('isSha256Hex') >= 0, 'sha256 format checked before do
 assert.ok(mainJava.indexOf('isTrustedRedirectHost') >= 0, 'apk redirect host allowlisted');
 assert.ok(mainJava.indexOf('clubvine44-gif/kopeyka3/releases/download/') >= 0, 'only this repo APK');
 assert.ok(mainJava.indexOf('45L * 60L * 1000L') < 0, 'install click must not snooze 45 min before download');
+assert.ok(mainJava.indexOf('attempt <= 3') >= 0, 'apk download retries');
+assert.ok(mainJava.indexOf('fin_auto_update') >= 0, 'notification tap forces update check');
 assert.ok(appSrc.indexOf('function recoverLockedState') >= 0, 'decrypt-fail recovery helper');
 assert.ok(appSrc.indexOf("if(!hasLiveData(STATE)&&window.FinBackup") >= 0, 'backup restore must run even if decrypt failed');
 assert.ok(appSrc.indexOf('isPaydayToday') >= 0, 'app payday-today');
@@ -396,6 +401,10 @@ assert.ok(bootJava.indexOf('QUICKBOOT_POWERON') >= 0, 'xiaomi/realme quickboot m
 var updJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/UpdateCheckReceiver.java'), 'utf8');
 assert.ok(updJava.indexOf('UPDATE_URL + "?t="') >= 0, 'background update check must cache-bust update.json');
 assert.ok(updJava.indexOf('setExactAndAllowWhileIdle') >= 0, 'auto-update alarm must be exact');
+assert.ok(updJava.indexOf('fin_auto_update') >= 0, 'update notification opens installer check');
+
+var bridgeJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/FinBridge.java'), 'utf8');
+assert.ok(bridgeJava.indexOf('function findNewestDownload') < 0 && bridgeJava.indexOf('findNewestDownload') >= 0, 'downloads pick newest duplicate');
 
 var manifestXml = fs.readFileSync(path.join(ROOT, 'android/app/src/main/AndroidManifest.xml'), 'utf8');
 assert.ok(manifestXml.indexOf('com.htc.intent.action.QUICKBOOT_POWERON') >= 0, 'manifest must listen for htc/realme quickboot');
@@ -821,6 +830,46 @@ function finish(extra){
   assert.ok(fromBak && Number(fromBak.settings && fromBak.settings.openingBalance) === 4242, 'bak install id still opens cash');
   assert.ok(memB['finna_install_id_v1'] === memB['finna_install_id_v1_bak'], 'primary id restored from bak');
 
+  // 4.13.10: neither id key persisted — must encrypt with FALLBACK, not a random key the next boot cannot open.
+  var memN = {};
+  var gN = {
+    crypto: webcrypto, btoa: btoa, atob: atob, TextEncoder: TextEncoder, TextDecoder: TextDecoder,
+    Uint8Array: Uint8Array, Promise: Promise, JSON: JSON, Object: Object, Number: Number, Array: Array,
+    Math: Math, Date: Date, Error: Error, console: console,
+    localStorage: {
+      getItem: function (k) { return Object.prototype.hasOwnProperty.call(memN, k) ? memN[k] : null; },
+      setItem: function (k, v) {
+        if (k === 'finna_install_id_v1' || k === 'finna_install_id_v1_bak') throw new Error('quota');
+        memN[k] = String(v);
+      },
+      removeItem: function (k) { delete memN[k]; }
+    }
+  };
+  gN.window = gN; gN.global = gN;
+  vm.runInNewContext(storeSrc, gN, { filename: 'secure-store.js' });
+  var liveN = {
+    version: 6, settings: { openingBalance: 5555, month: '2026-09' },
+    income: [{ id: 'keep-n', amount: 7, date: '2026-09-01' }],
+    expenses: [], reserves: [], debts: [], reserveOps: [], obligations: [], obligationPays: []
+  };
+  await gN.FinSecureStore.saveState(gN.FinSecureStore.LIVE_KEY, liveN);
+  assert.ok(memN[gN.FinSecureStore.LIVE_KEY] && memN[gN.FinSecureStore.LIVE_KEY].indexOf('FINENC1:') === 0, 'fallback-id cipher wrote');
+  assert.ok(!memN['finna_install_id_v1'] && !memN['finna_install_id_v1_bak'], 'neither install id persisted');
+  var gN2 = {
+    crypto: webcrypto, btoa: btoa, atob: atob, TextEncoder: TextEncoder, TextDecoder: TextDecoder,
+    Uint8Array: Uint8Array, Promise: Promise, JSON: JSON, Object: Object, Number: Number, Array: Array,
+    Math: Math, Date: Date, Error: Error, console: console,
+    localStorage: {
+      getItem: function (k) { return Object.prototype.hasOwnProperty.call(memN, k) ? memN[k] : null; },
+      setItem: function (k, v) { memN[k] = String(v); },
+      removeItem: function (k) { delete memN[k]; }
+    }
+  };
+  gN2.window = gN2; gN2.global = gN2;
+  vm.runInNewContext(storeSrc, gN2, { filename: 'secure-store.js' });
+  var fromFb = await gN2.FinSecureStore.loadState(gN2.FinSecureStore.LIVE_KEY, function () { return { settings: {} }; }, function (x) { return x; });
+  assert.ok(fromFb && Number(fromFb.settings && fromFb.settings.openingBalance) === 5555, 'FALLBACK_ID still opens after persist-fail first write');
+
   // Backup inspect must not write meal; preferOver lifts richer/newer slot.
   var memBak = {};
   var gBak = {
@@ -1043,7 +1092,7 @@ function finish(extra){
   });
   assert.ok(liftedEnc && (liftedEnc.income || []).some(function (x) { return x && x.id === 'enc1'; }), 'hydrated sealed slot lifts stale live');
 
-  finish({ auxIsolated: true, staleSaveWon: true, cipherWithoutId: true, bakInstallId: true, inspectNoWrite: true, preferSlot: true, noDeletedRollback: true, deletedPersists: true, sealedSlot: true, newestSlotWins: true, staleLiveNewerSlot: true, tombMapKept: true, newerDeleteSlotWins: true, mealCloudMerge: true });
+  finish({ auxIsolated: true, staleSaveWon: true, cipherWithoutId: true, bakInstallId: true, fallbackIdOpens: true, inspectNoWrite: true, preferSlot: true, noDeletedRollback: true, deletedPersists: true, sealedSlot: true, newestSlotWins: true, staleLiveNewerSlot: true, tombMapKept: true, newerDeleteSlotWins: true, mealCloudMerge: true });
 })().catch(function (e) {
   console.error(e && e.stack || e);
   process.exit(1);

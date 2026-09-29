@@ -417,6 +417,28 @@ public class FinBridge {
         return arr.toString();
     }
 
+    /** Newest Downloads/Finna file with this display name (duplicates from reinstall). */
+    private Uri findNewestDownload(String filename) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || filename == null || filename.isEmpty()) return null;
+        android.database.Cursor cur = null;
+        try {
+            cur = context.getContentResolver().query(
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                    new String[]{MediaStore.Downloads._ID, MediaStore.Downloads.DATE_MODIFIED, MediaStore.Downloads.SIZE},
+                    MediaStore.Downloads.DISPLAY_NAME + "=? AND " + MediaStore.Downloads.RELATIVE_PATH + " LIKE ?",
+                    new String[]{filename, "%/Finna/%"},
+                    MediaStore.Downloads.DATE_MODIFIED + " DESC");
+            if (cur != null && cur.moveToFirst()) {
+                long id = cur.getLong(0);
+                return Uri.withAppendedPath(MediaStore.Downloads.EXTERNAL_CONTENT_URI, String.valueOf(id));
+            }
+        } catch (Exception ignored) {
+        } finally {
+            if (cur != null) try { cur.close(); } catch (Exception ignored) {}
+        }
+        return null;
+    }
+
     /** Читает JSON бэкапа по имени файла (сначала приватная папка, потом Загрузки/Finna). */
     @JavascriptInterface public String readBackupFile(String filename) {
         if (filename == null) return "";
@@ -437,31 +459,20 @@ public class FinBridge {
                 if (n > 0) return new String(b, 0, n, StandardCharsets.UTF_8);
             }
         } catch (Exception ignored) {}
-        // public Downloads/Finna
+        // public Downloads/Finna — newest duplicate wins (reinstall used to insert another copy)
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                android.database.Cursor cur = context.getContentResolver().query(
-                        MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-                        new String[]{MediaStore.Downloads._ID},
-                        MediaStore.Downloads.DISPLAY_NAME + "=? AND " + MediaStore.Downloads.RELATIVE_PATH + " LIKE ?",
-                        new String[]{filename, "%/Finna/%"},
-                        null);
-                if (cur != null) {
-                    if (cur.moveToFirst()) {
-                        long id = cur.getLong(0);
-                        Uri uri = Uri.withAppendedPath(MediaStore.Downloads.EXTERNAL_CONTENT_URI, String.valueOf(id));
-                        InputStream in = context.getContentResolver().openInputStream(uri);
-                        if (in != null) {
-                            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
-                            byte[] buf = new byte[8192];
-                            int n;
-                            while ((n = in.read(buf)) != -1) bos.write(buf, 0, n);
-                            in.close();
-                            cur.close();
-                            return new String(bos.toByteArray(), StandardCharsets.UTF_8);
-                        }
+                Uri uri = findNewestDownload(filename);
+                if (uri != null) {
+                    InputStream in = context.getContentResolver().openInputStream(uri);
+                    if (in != null) {
+                        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+                        byte[] buf = new byte[8192];
+                        int n;
+                        while ((n = in.read(buf)) != -1) bos.write(buf, 0, n);
+                        in.close();
+                        return new String(bos.toByteArray(), StandardCharsets.UTF_8);
                     }
-                    cur.close();
                 }
             } else {
                 File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Finna");
@@ -499,27 +510,22 @@ public class FinBridge {
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                if ("finna-latest.json".equalsIgnoreCase(filename)) {
+                Uri exist = findNewestDownload(filename);
+                if (exist != null) {
                     try {
-                        android.database.Cursor cur = context.getContentResolver().query(
-                                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-                                new String[]{MediaStore.Downloads._ID},
-                                MediaStore.Downloads.DISPLAY_NAME + "=? AND " + MediaStore.Downloads.RELATIVE_PATH + " LIKE ?",
-                                new String[]{filename, "%/Finna/%"},
-                                null);
-                        if (cur != null) {
-                            if (cur.moveToFirst()) {
-                                long id = cur.getLong(0);
-                                Uri exist = Uri.withAppendedPath(MediaStore.Downloads.EXTERNAL_CONTENT_URI, String.valueOf(id));
-                                OutputStream uo = context.getContentResolver().openOutputStream(exist, "wt");
-                                if (uo != null) {
-                                    uo.write(bytes);
-                                    uo.close();
-                                    cur.close();
-                                    return;
-                                }
-                            }
-                            cur.close();
+                        OutputStream uo = context.getContentResolver().openOutputStream(exist, "wt");
+                        if (uo != null) {
+                            uo.write(bytes);
+                            uo.close();
+                            return;
+                        }
+                    } catch (Exception ignored) {}
+                    try {
+                        OutputStream uo2 = context.getContentResolver().openOutputStream(exist);
+                        if (uo2 != null) {
+                            uo2.write(bytes);
+                            uo2.close();
+                            return;
                         }
                     } catch (Exception ignored) {}
                 }
