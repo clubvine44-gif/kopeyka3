@@ -439,53 +439,72 @@ public class FinBridge {
         return null;
     }
 
-    /** Читает JSON бэкапа по имени файла (сначала приватная папка, потом Загрузки/Finna). */
+    /** Читает JSON бэкапа по имени файла. Если копия есть и в приложении, и в Загрузках — берём более новую. */
     @JavascriptInterface public String readBackupFile(String filename) {
         if (filename == null) return "";
         filename = filename.replace("\\", "/");
         int slash = filename.lastIndexOf('/');
         if (slash >= 0) filename = filename.substring(slash + 1);
         if (filename.isEmpty()) return "";
-        // private
+        String privText = null;
+        long privMod = 0L;
         try {
             File priv = context.getExternalFilesDir("FinnaBackup");
             if (priv == null) priv = new File(context.getFilesDir(), "FinnaBackup");
             File f = new File(priv, filename);
             if (f.exists() && f.isFile()) {
+                privMod = f.lastModified();
                 byte[] b = new byte[(int) f.length()];
                 java.io.FileInputStream in = new java.io.FileInputStream(f);
                 int n = in.read(b);
                 in.close();
-                if (n > 0) return new String(b, 0, n, StandardCharsets.UTF_8);
+                if (n > 0) privText = new String(b, 0, n, StandardCharsets.UTF_8);
             }
         } catch (Exception ignored) {}
-        // public Downloads/Finna — newest duplicate wins (reinstall used to insert another copy)
+        String pubText = null;
+        long pubMod = 0L;
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                Uri uri = findNewestDownload(filename);
-                if (uri != null) {
-                    InputStream in = context.getContentResolver().openInputStream(uri);
-                    if (in != null) {
-                        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
-                        byte[] buf = new byte[8192];
-                        int n;
-                        while ((n = in.read(buf)) != -1) bos.write(buf, 0, n);
-                        in.close();
-                        return new String(bos.toByteArray(), StandardCharsets.UTF_8);
+                android.database.Cursor cur = null;
+                try {
+                    cur = context.getContentResolver().query(
+                            MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                            new String[]{MediaStore.Downloads._ID, MediaStore.Downloads.DATE_MODIFIED},
+                            MediaStore.Downloads.DISPLAY_NAME + "=? AND " + MediaStore.Downloads.RELATIVE_PATH + " LIKE ?",
+                            new String[]{filename, "%/Finna/%"},
+                            MediaStore.Downloads.DATE_MODIFIED + " DESC");
+                    if (cur != null && cur.moveToFirst()) {
+                        long id = cur.getLong(0);
+                        pubMod = cur.getLong(1) * 1000L;
+                        android.net.Uri uri = android.net.Uri.withAppendedPath(MediaStore.Downloads.EXTERNAL_CONTENT_URI, String.valueOf(id));
+                        InputStream in = context.getContentResolver().openInputStream(uri);
+                        if (in != null) {
+                            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+                            byte[] buf = new byte[8192];
+                            int n;
+                            while ((n = in.read(buf)) != -1) bos.write(buf, 0, n);
+                            in.close();
+                            pubText = new String(bos.toByteArray(), StandardCharsets.UTF_8);
+                        }
                     }
+                } finally {
+                    if (cur != null) try { cur.close(); } catch (Exception ignored) {}
                 }
             } else {
                 File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Finna");
                 File f = new File(dir, filename);
                 if (f.exists()) {
+                    pubMod = f.lastModified();
                     byte[] b = new byte[(int) f.length()];
                     java.io.FileInputStream in = new java.io.FileInputStream(f);
                     int n = in.read(b);
                     in.close();
-                    if (n > 0) return new String(b, 0, n, StandardCharsets.UTF_8);
+                    if (n > 0) pubText = new String(b, 0, n, StandardCharsets.UTF_8);
                 }
             }
         } catch (Exception ignored) {}
+        if (pubText != null && (privText == null || pubMod > privMod)) return pubText;
+        if (privText != null) return privText;
         return "";
     }
 

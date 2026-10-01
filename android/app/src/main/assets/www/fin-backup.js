@@ -13,6 +13,8 @@
  * 4.13.9: preferOver — newest snapshot wins even if it has fewer alive rows
  * (quota: live ciphertext stale, slot already has deletions). Meal from a slot
  * is applied only if it is not older than the live meal.
+ * 4.13.11: emergency folder restore ranks by savedAt; stale finna-latest loses
+ * to a newer day/month snapshot.
  */
 (function (global) {
   'use strict';
@@ -382,46 +384,72 @@
     } catch (e) {}
     return null;
   }
-  function restoreFromEmergencyFolder() {
-    // 1) latest
-    var latest = readNativeBackup(LAST_JSON_NAME);
-    if (latest && latest.state) {
-      if (latest.meal) applyMealIfNewer(latest.meal);
-      return latest.state;
+  function envelopeTime(cand, name) {
+    var at = String((cand && cand.savedAt) || '');
+    if (!at) {
+      var dm = String(name || '').match(/(\d{4}-\d{2}(?:-\d{2})?)/);
+      if (dm) at = dm[1];
     }
-    // 2) pick best from listed files by alive count / date in name
+    return at;
+  }
+  /**
+   * Newest snapshot wins. A stale finna-latest.json must not beat a newer
+   * day/month file — latest writes can fail while daily still succeeds.
+   * On equal timestamps prefer the dedicated latest name.
+   */
+  function pickNewestEmergency(cands) {
+    var best = null;
+    (cands || []).forEach(function (cand) {
+      if (!cand || !cand.state) return;
+      var name = String(cand.name || '');
+      var at = envelopeTime(cand, name);
+      var isLatest = name === LAST_JSON_NAME;
+      if (!best) {
+        best = { state: cand.state, meal: cand.meal || null, savedAt: at, name: name };
+        return;
+      }
+      if (at > best.savedAt) {
+        best = { state: cand.state, meal: cand.meal || null, savedAt: at, name: name };
+        return;
+      }
+      if (at === best.savedAt && isLatest && best.name !== LAST_JSON_NAME) {
+        best = { state: cand.state, meal: cand.meal || null, savedAt: at, name: name };
+      }
+    });
+    return best;
+  }
+  function restoreFromEmergencyFolder() {
+    var cands = [];
     try {
-      if (!global.FinBridge || typeof global.FinBridge.listBackupFiles !== 'function') return null;
-      var list = JSON.parse(global.FinBridge.listBackupFiles() || '[]');
-      if (!Array.isArray(list) || !list.length) return null;
-      var names = list.map(function (x) { return x && x.name; }).filter(Boolean);
-      var order = names.slice().sort(function (a, b) {
-        var sa = a === LAST_JSON_NAME ? 0 : /^finna-day-/.test(a) ? 1 : /^finna-month-/.test(a) ? 2 : 3;
-        var sb = b === LAST_JSON_NAME ? 0 : /^finna-day-/.test(b) ? 1 : /^finna-month-/.test(b) ? 2 : 3;
-        if (sa !== sb) return sa - sb;
-        return String(b).localeCompare(String(a));
-      });
-      var bestState = null, bestMeal = null, bestAt = '', bestName = '';
-      for (var i = 0; i < order.length; i++) {
-        var cand = readNativeBackup(order[i]);
-        if (!cand || !cand.state) continue;
-        var at = String(cand.savedAt || '');
-        if (!at) {
-          var dm = String(order[i]).match(/(\d{4}-\d{2}(?:-\d{2})?)/);
-          if (dm) at = dm[1];
-        }
-        var newer = !bestState || at > bestAt;
-        var sameWave = at === bestAt && String(order[i]) > bestName;
-        if (newer || sameWave) {
-          bestAt = at;
-          bestName = String(order[i]);
-          bestState = cand.state;
-          bestMeal = cand.meal || null;
+      if (global.FinBridge && typeof global.FinBridge.listBackupFiles === 'function') {
+        var list = JSON.parse(global.FinBridge.listBackupFiles() || '[]');
+        if (Array.isArray(list)) {
+          list.forEach(function (x) {
+            var name = x && x.name;
+            if (!name) return;
+            var cand = readNativeBackup(name);
+            if (cand && cand.state) {
+              cand.name = name;
+              cands.push(cand);
+            }
+          });
         }
       }
-      if (bestState && bestMeal) applyMealIfNewer(bestMeal);
-      return bestState;
     } catch (e) {}
+    if (!cands.some(function (c) { return c && c.name === LAST_JSON_NAME; })) {
+      try {
+        var latest = readNativeBackup(LAST_JSON_NAME);
+        if (latest && latest.state) {
+          latest.name = LAST_JSON_NAME;
+          cands.push(latest);
+        }
+      } catch (e2) {}
+    }
+    var best = pickNewestEmergency(cands);
+    if (best && best.state) {
+      if (best.meal) applyMealIfNewer(best.meal);
+      return best.state;
+    }
     return null;
   }
   function restoreBest() {
@@ -525,6 +553,7 @@
     hydrateSlots: hydrateSlots,
     countAlive: countAlive,
     bestSlot: bestSlot,
+    pickNewestEmergency: pickNewestEmergency,
     applyMealIfNewer: applyMealIfNewer,
     readMeal: readMeal,
     writeMeal: writeMeal,

@@ -81,40 +81,48 @@ public class UpdateCheckReceiver extends BroadcastReceiver {
     }
 
     private void check(Context context) throws Exception {
-        HttpURLConnection c = (HttpURLConnection) new URL(UPDATE_URL + "?t=" + System.currentTimeMillis()).openConnection();
-        c.setConnectTimeout(12000);
-        c.setReadTimeout(12000);
-        c.setUseCaches(false);
-        c.setRequestProperty("Cache-Control", "no-cache");
-        c.setRequestProperty("Pragma", "no-cache");
-        if (c.getResponseCode() != 200) return;
-        InputStream in = c.getInputStream();
-        StringBuilder sb = new StringBuilder();
-        byte[] buf = new byte[4096];
-        int n;
-        while ((n = in.read(buf)) != -1) sb.append(new String(buf, 0, n, "UTF-8"));
-        in.close();
-        c.disconnect();
+        HttpURLConnection c = null;
+        InputStream in = null;
+        try {
+            c = (HttpURLConnection) new URL(UPDATE_URL + "?t=" + System.currentTimeMillis()).openConnection();
+            c.setConnectTimeout(12000);
+            c.setReadTimeout(12000);
+            c.setUseCaches(false);
+            c.setRequestProperty("Cache-Control", "no-cache");
+            c.setRequestProperty("Pragma", "no-cache");
+            if (c.getResponseCode() != 200) return;
+            in = c.getInputStream();
+            StringBuilder sb = new StringBuilder();
+            byte[] buf = new byte[4096];
+            int n;
+            while ((n = in.read(buf)) != -1) sb.append(new String(buf, 0, n, "UTF-8"));
 
-        JSONObject j = new JSONObject(sb.toString());
-        int remote = j.optInt("versionCode", 0);
-        String name = j.optString("versionName", "");
-        int local = context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionCode;
-        if (remote <= local) return;
+            JSONObject j = new JSONObject(sb.toString());
+            int remote = j.optInt("versionCode", 0);
+            String name = j.optString("versionName", "");
+            int local = context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionCode;
+            if (remote <= local) return;
 
-        SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-        int notified = prefs.getInt("notified_code", 0);
-        if (notified == remote) return;
-        prefs.edit().putInt("notified_code", remote).apply();
+            SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+            int notified = prefs.getInt("notified_code", 0);
+            if (notified == remote) return;
 
-        String msg = "Доступна версия " + (name.isEmpty() ? String.valueOf(remote) : name)
-                + ". Открой приложение, чтобы обновить.";
-        notifyUpdate(context, msg);
+            String msg = "Доступна версия " + (name.isEmpty() ? String.valueOf(remote) : name)
+                    + ". Открой приложение, чтобы обновить.";
+            // Не помечаем версию «показанной», пока пуш реально не ушёл —
+            // иначе при отказе в уведомлениях автообновление молчит навсегда.
+            if (notifyUpdate(context, msg)) {
+                prefs.edit().putInt("notified_code", remote).apply();
+            }
+        } finally {
+            if (in != null) try { in.close(); } catch (Exception ignored) {}
+            if (c != null) try { c.disconnect(); } catch (Exception ignored) {}
+        }
     }
 
-    private void notifyUpdate(Context context, String message) {
+    private boolean notifyUpdate(Context context, String message) {
         NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
-        if (nm == null) return;
+        if (nm == null) return false;
         String channelId = FinBridge.CHANNEL_ID;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = nm.getNotificationChannel(channelId);
@@ -150,6 +158,8 @@ public class UpdateCheckReceiver extends BroadcastReceiver {
         boolean can = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
                 || ActivityCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
                 == PackageManager.PERMISSION_GRANTED;
-        if (can) nm.notify(77002, b.build());
+        if (!can) return false;
+        nm.notify(77002, b.build());
+        return true;
     }
 }

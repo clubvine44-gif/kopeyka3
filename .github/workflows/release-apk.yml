@@ -154,7 +154,7 @@ jobs:
           gh release delete "$TAG" --yes 2>/dev/null || true
           timeout 120 gh release create "$TAG" Fin.apk Fin.apk.sha256 \
             --title "Финн ${RELEASE_VERSION_NAME}" \
-            --notes "APK ${RELEASE_VERSION_NAME} (versionCode ${RELEASE_VERSION_CODE}). Касса: ключ шифрования не теряется при переполнении хранилища, копии в Загрузках не дублируются, автообновление повторяет скачивание и ставит APK с уведомления." \
+            --notes "APK ${RELEASE_VERSION_NAME} (versionCode ${RELEASE_VERSION_CODE}). Касса: аварийное восстановление берёт самый новый снимок, пуш обновления повторяется если уведомление не ушло, PWA кэш совпадает со скриптами." \
             --repo "${{ github.repository }}"
       - name: Update public update manifest
         run: |
@@ -169,7 +169,7 @@ jobs:
               'versionName':vn,
               'apkUrl':f'https://github.com/clubvine44-gif/kopeyka3/releases/download/v{vn}/Fin.apk',
               'sha256':sha,
-              'notes':f'{vn} — сохранность кассы: ключ шифрования не теряется при переполнении, копии в Загрузках без дублей, автообновление повторяет скачивание (versionCode {vc})'
+              'notes':f'{vn} — аварийное восстановление берёт самый новый снимок, автообновление повторяет пуш, PWA кэш совпадает со скриптами (versionCode {vc})'
           },ensure_ascii=False,indent=2)+'\n')
           PY
           git config user.name 'github-actions[bot]'
