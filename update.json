@@ -1,7 +1,7 @@
 {
-  "versionCode": 177,
-  "versionName": "4.13.10",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.10/Fin.apk",
-  "sha256": "5e6eb87df454074a33eeb0c9822940a5d5e259e5a28f04aad1df61e77e0d3ce2",
-  "notes": "4.13.10 — сохранность кассы: ключ шифрования не теряется при переполнении, копии в Загрузках без дублей, автообновление повторяет скачивание (versionCode 177)"
+  "versionCode": 178,
+  "versionName": "4.13.11",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.11/Fin.apk",
+  "sha256": "10324e8c191cc1e2155d892b5c08b23e1c92dfae188e59c13f60d880b84dacaf",
+  "notes": "4.13.11 — аварийное восстановление берёт самый новый снимок, автообновление повторяет пуш, PWA кэш совпадает со скриптами (versionCode 178)"
 }
