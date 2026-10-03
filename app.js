@@ -2202,7 +2202,7 @@ if(flags.prioritizeDebts){
 // month nav + cal (keep existing calendar)
 /* full calendar moved to modal */
 
-var viewTitle = {obl:'Обязательные',res:'Резервы и цели',debt:'Долги',ops:'Операции',an:'Аналитика'}[currentView]||'';
+var viewTitle = {obl:'Обязательные',res:'Резервы и цели',debt:'Долги',ops:'Операции',an:'Аналитика',calendar:'Календарь смен',plan:'План',more:'Ещё'}[currentView]||'';
 var viewBody = '';
 if(currentView==='obl') viewBody = '<div class="list">'+oblH+'</div>';
 else if(currentView==='res') viewBody = '<div class="list">'+resH+'</div>';
@@ -2215,6 +2215,12 @@ if(currentView==='home'){
   htmlOut = homeHtml;
 } else if(currentView==='meal'){
   htmlOut = (window.MealPlan&&typeof window.MealPlan.html==='function')?window.MealPlan.html():'<div class="view-header"><button type="button" class="back-btn" data-act="go-home">←</button><h2>Рацион</h2></div><div class="card tight"><div class="hint" style="margin:0">Модуль рациона не загрузился. Обнови приложение.</div></div>';
+} else if(currentView==='plan'){
+  htmlOut = window.FinoPlanView?window.FinoPlanView.html(STATE,t):'<div class="card">Финансовый план временно недоступен</div>';
+} else if(currentView==='calendar'){
+  htmlOut = '<div class="view-title-bar"><h2>Календарь смен</h2></div><div class="card">'+cal+'<button type="button" class="btn-shift" id="btnShiftPay">Зарплата по сменам</button></div>';
+} else if(currentView==='more'){
+  htmlOut = '<div class="view-title-bar"><h2>Ещё</h2></div><div class="fino-more"><button data-view="res">Цели и резервы</button><button data-view="obl">Обязательные платежи</button><button data-view="debt">Долги</button><button data-view="an">Аналитика</button><button type="button" id="finoOpenSettings">Настройки и копии</button></div>';
 } else {
   htmlOut = '<div class="view-title-bar"><h2>'+viewTitle+'</h2></div><div class="card"><div class="list">'+ (viewBody||'<div class="empty">Пусто</div>') +'</div></div>';
 }
@@ -2227,11 +2233,12 @@ if(app.__lastHtml===htmlOut){
   if(currentView==='meal'){
     try{if(window.MealPlan&&typeof window.MealPlan.bind==='function')window.MealPlan.bind(app);}catch(e){}
   }
+  if(currentView==='plan'&&window.FinoPlanView)window.FinoPlanView.bind(app,render);
   if(currentView==='home'&&prevScroll>0){requestAnimationFrame(function(){window.scrollTo(0,prevScroll);requestAnimationFrame(function(){window.scrollTo(0,prevScroll);});});}
 }
 
 try{if(window.FinBridge){if(window.FinBridge.updateWidgetDataFull){window.FinBridge.updateWidgetDataFull(fmt(c.daily),fmt(c.cash),fmt(c.available),sl,String(c.daysLeft));}else if(window.FinBridge.updateWidgetData){window.FinBridge.updateWidgetData(fmt(c.daily),fmt(c.cash),sl);}}}catch(e){}
-if(!app._bound){app._bound=true;app.addEventListener('click',function(e){var t=e.target.closest('[data-act],[data-date],.item[data-id],.sec-head,#mPrev,#mNext,#btnShiftPay,.quick-nav,[data-view],#btnAddMain,.qcat,#limitCard,#ringTap,#limitRingTap,#finnTipCard,#btnFullCal,.link-more,.mode,[data-budget-edit],.budget-lim,[data-horizon],.hero-horizon,.budget-row,[data-budget-cat]');if(!t||!app.contains(t))return;if(t.getAttribute&&t.getAttribute('data-act')==='open-meal'||(t.closest&&t.closest('[data-act="open-meal"]'))){if(window.MealPlan&&typeof window.MealPlan.open==='function')window.MealPlan.open();else goView('meal');return;}if(t.getAttribute&&t.getAttribute('data-act')==='go-home'||(t.closest&&t.closest('[data-act="go-home"]'))){goHome();return;}if(t.classList&&t.classList.contains('quick-nav')||t.dataset.view){goView(t.dataset.view);return;}
+if(!app._bound){app._bound=true;app.addEventListener('click',function(e){var t=e.target.closest('[data-act],[data-date],.item[data-id],.sec-head,#mPrev,#mNext,#btnShiftPay,.quick-nav,[data-view],#btnAddMain,.qcat,#limitCard,#ringTap,#limitRingTap,#finnTipCard,#btnFullCal,.link-more,.mode,[data-budget-edit],.budget-lim,[data-horizon],.hero-horizon,.budget-row,[data-budget-cat],#finoOpenSettings');if(!t||!app.contains(t))return;if(t.id==='finoOpenSettings'){var settingsButton=document.getElementById('btnSettings');if(settingsButton)settingsButton.click();return;}if(t.getAttribute&&t.getAttribute('data-act')==='open-meal'||(t.closest&&t.closest('[data-act="open-meal"]'))){if(window.MealPlan&&typeof window.MealPlan.open==='function')window.MealPlan.open();else goView('meal');return;}if(t.getAttribute&&t.getAttribute('data-act')==='go-home'||(t.closest&&t.closest('[data-act="go-home"]'))){goHome();return;}if(t.classList&&t.classList.contains('quick-nav')||t.dataset.view){goView(t.dataset.view);return;}
 if(t.id==='btnAddMain'||t.classList.contains('qcat')){
   var cat=t.dataset.cat;
   if(typeof openModal==='function'){
