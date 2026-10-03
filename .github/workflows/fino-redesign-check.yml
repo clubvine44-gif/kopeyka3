@@ -29,6 +29,7 @@ jobs:
           cmp fino-plan-view.js android/app/src/main/assets/www/fino-plan-view.js
           cmp fino-theme.css android/app/src/main/assets/www/fino-theme.css
           cmp fino-theme.js android/app/src/main/assets/www/fino-theme.js
+          cmp sw.js android/app/src/main/assets/www/sw.js
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
