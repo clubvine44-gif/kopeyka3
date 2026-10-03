@@ -19,3 +19,14 @@
 .fino-more{display:grid;gap:9px}.fino-more button{min-height:54px;text-align:left;padding:0 18px;background:#1a2427;color:#edf4f2;border:1px solid #354548;border-radius:15px;font-size:15px}
 @media(max-width:360px){.fino-balance-grid{gap:6px}.fino-balance-grid b{font-size:13px}.fino-row{font-size:12px}}
 @media(prefers-reduced-motion:reduce){.fino-plan *, .fino-more *{animation:none!important;transition:none!important}}
+html[data-fino-theme="light"]{--bg:#f5f7f5;--bg2:#eaf0ed;--card:#fff;--card2:#f8fbf9;--glass:#e9f1ee;--line:#d5e1dc;--line2:#b8cdc4;--text:#192b2b;--muted:#5d7270;--accent:#147c79;--accent2:#147c79;--green:#14714d;--red:#b94c52;--blue:#316b9a;--shadow:0 5px 18px rgba(30,65,55,.07)}
+html[data-fino-theme="light"] body{background:#f5f7f5!important;color:#192b2b}
+html[data-fino-theme="light"] .topbar,html[data-fino-theme="light"] .bottom-nav{background:#fff!important;border-color:#d5e1dc!important;color:#192b2b}
+html[data-fino-theme="light"] .card,html[data-fino-theme="light"] .sec,html[data-fino-theme="light"] .modal-card{background:#fff!important;border-color:#d5e1dc!important;color:#192b2b;box-shadow:0 5px 18px rgba(30,65,55,.06)!important}
+html[data-fino-theme="light"] .card.hero{background:#e6f2ee!important;border-color:#b8d5cb!important}
+html[data-fino-theme="light"] .item,html[data-fino-theme="light"] .quick-nav,html[data-fino-theme="light"] .limit-card,html[data-fino-theme="light"] .today-card,html[data-fino-theme="light"] .budget-card,html[data-fino-theme="light"] .cal-d{background:#f4f8f6!important;border-color:#d5e1dc!important;color:#192b2b}
+html[data-fino-theme="light"] .hint{background:#edf3f0!important;color:#526865;border-color:#d5e1dc!important}
+html[data-fino-theme="light"] .muted,html[data-fino-theme="light"] .sec-right{color:#5d7270!important}
+html[data-fino-theme="light"] .fino-plan{--f-bg:#f5f7f5;--f-surface:#fff;--f-elevated:#edf4f0;--f-border:#d5e1dc;--f-text:#192b2b;--f-muted:#607673;--f-accent:#147c79;--f-green:#14714d;--f-red:#b94c52}
+html[data-fino-theme="light"] .fino-balance{background:#e6f2ee}
+html[data-fino-theme="light"] .fino-more button{background:#fff;color:#192b2b;border-color:#d5e1dc}

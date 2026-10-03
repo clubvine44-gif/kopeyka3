@@ -22,11 +22,13 @@ jobs:
           node tools/check-logic.cjs
           node --check app.js
           node --check fino-plan-view.js
+          node --check fino-theme.js
           cmp app.js android/app/src/main/assets/www/app.js
           cmp index.html android/app/src/main/assets/www/index.html
           cmp financial-engine.js android/app/src/main/assets/www/financial-engine.js
           cmp fino-plan-view.js android/app/src/main/assets/www/fino-plan-view.js
           cmp fino-theme.css android/app/src/main/assets/www/fino-theme.css
+          cmp fino-theme.js android/app/src/main/assets/www/fino-theme.js
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -48,4 +50,5 @@ jobs:
           unzip -p "$APK" assets/www/index.html | grep -q 'fino-plan-view.js'
           unzip -p "$APK" assets/www/financial-engine.js | grep -q 'FinoFinancialEngine'
           unzip -p "$APK" assets/www/fino-theme.css | grep -q 'fino-plan'
+          unzip -p "$APK" assets/www/fino-theme.js | grep -q 'FinoTheme'
           echo "Packaged APK: $(du -h "$APK" | cut -f1)"
