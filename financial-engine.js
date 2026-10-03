@@ -21,8 +21,9 @@
     return neg?-n:n;
   }
   function rub(cents){if(!Number.isSafeInteger(cents))throw Error('Unsafe amount');return cents/100;}
+  function safe(n){if(!Number.isSafeInteger(n))throw Error('Money overflow');return n;}
   function live(x){return x&&x.deleted!==true&&x.active!==false;}
-  function sum(xs,fn){return (xs||[]).reduce(function(v,x){return v+(live(x)?fn(x):0);},0);}
+  function sum(xs,fn){return (xs||[]).reduce(function(v,x){return safe(v+(live(x)?fn(x):0));},0);}
   function payday(after,day){
     if(!Number.isInteger(day)||day<1||day>31)return null;
     var d=date(after),y=d.getUTCFullYear(),m=d.getUTCMonth();
@@ -58,19 +59,18 @@
     for(var on=from;on<=to;on=add(on,1)){
       var amount=shiftValue(state,on);if(!amount)continue;
       count++;
-      if(on<=asOf)earned+=amount;else expected+=amount;
+      if(on<=asOf)earned=safe(earned+amount);else expected=safe(expected+amount);
     }
-    return {earned:earned,expected:expected,total:earned+expected,shifts:count};
+    return {earned:earned,expected:expected,total:safe(earned+expected),shifts:count};
   }
   function cash(state,on){
     var settings=state.settings||{},anchor=settings.month||month(on);
     var start=anchor+'-01';date(start);
     var value=money(settings.openingBalance||0);
     function inRange(x){return x.date>=start&&x.date<=on;}
-    value+=sum(state.income,function(x){return inRange(x)?money(x.amount):0;});
-    value-=sum(state.expenses,function(x){return inRange(x)?money(x.amount):0;});
-    value+=sum(state.reserveOps,function(x){return inRange(x)?(x.type==='withdraw'?1:-1)*money(x.amount):0;});
-    return value;
+    value=safe(value+sum(state.income,function(x){return inRange(x)?money(x.amount):0;}));
+    value=safe(value-sum(state.expenses,function(x){return inRange(x)?money(x.amount):0;}));
+    return safe(value+sum(state.reserveOps,function(x){return inRange(x)?(x.type==='withdraw'?1:-1)*money(x.amount):0;}));
   }
   function due(state,from,to){
     var items=[];
@@ -96,9 +96,9 @@
     var balance=cash(state,on),next=payday(on,Number((state.settings||{}).paydayDay));
     var end=next?add(next,-1):add(on,29);
     var obligations=due(state,on,end),owed=obligations.reduce(function(v,x){return v+x.amount;},0);
-    var debts=debt(state,on),free=balance-owed-debts;
+    var debts=debt(state,on),free=safe(balance-owed-debts);
     var span=days(on,end)+1;
-    return {date:on,cash:balance,goals:reserve(state),reserved:owed+debts,free:free,daily:Math.floor(Math.max(0,free)/span),days:span,nextPayday:next,obligations:obligations,confidence:next?'configured payday; receipt is unconfirmed':'payday unknown'};
+    return {date:on,cash:balance,goals:reserve(state),reserved:safe(owed+debts),free:free,daily:Math.floor(Math.max(0,free)/span),days:span,nextPayday:next,obligations:obligations,confidence:next?'configured payday; receipt is unconfirmed':'payday unknown'};
   }
   function forecast(state,on,horizon,opts){
     opts=opts||{};date(on);
@@ -115,7 +115,7 @@
     }
     bonuses=sum(state.plannedIncome,function(x){return x.date>on&&x.date<=end?money(x.amount):0;});
     var compulsory=events.reduce(function(v,x){return v+x.amount;},0);
-    return {from:on,to:end,actualCash:base.cash,predictedSalary:salary,otherIncome:bonuses,obligations:compulsory,variableExpense:variable*horizon,estimatedCash:base.cash+salary+bonuses-compulsory-variable*horizon,confidence:variable?'based on supplied daily spending':'variable expenses unknown; estimate is incomplete'};
+    return {from:on,to:end,actualCash:base.cash,predictedSalary:salary,otherIncome:bonuses,obligations:compulsory,variableExpense:safe(variable*horizon),estimatedCash:safe(base.cash+salary+bonuses-compulsory-variable*horizon),confidence:variable?'based on supplied daily spending':'variable expenses unknown; estimate is incomplete'};
   }
   function scenario(state,on,price,mode,opts){
     opts=opts||{};

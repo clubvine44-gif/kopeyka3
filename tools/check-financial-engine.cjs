@@ -5,6 +5,7 @@ const base=()=>({settings:{openingBalance:52000,month:'2026-10',dayRate:4800,nig
 let checks=0;
 function test(name,fn){try{fn();checks++;}catch(err){err.message=name+': '+err.message;throw err;}}
 test('money decimals and rejection',()=>{assert.equal(e.money('0,01'),1);assert.equal(e.money('4800.50'),480050);assert.throws(()=>e.money('1.001'));});
+test('unsafe totals fail rather than round',()=>{let s=base();s.settings.openingBalance='90071992547409';s.income=[{id:'x',date:'2026-10-02',amount:2}];assert.throws(()=>e.cash(s,'2026-10-03'),/overflow/);});
 test('zero balance',()=>{let s=base();s.settings.openingBalance=0;assert.equal(e.snapshot(s,'2026-10-03').free,0);});
 test('ordinary obligations',()=>{let s=base();s.obligations=[{id:'a',amount:25000,day:7},{id:'b',amount:8000,day:9}];let x=e.snapshot(s,'2026-10-03');assert.equal(x.cash,5200000);assert.equal(x.reserved,3300000);assert.equal(x.free,1900000);assert.equal(x.daily,158333);});
 test('21 shifts',()=>{let s=base();s.settings.shiftCycle=['day'];assert.equal(e.wages(s,'2026-10-01','2026-10-21','2026-10-10').total,10080000);});
