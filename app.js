@@ -292,7 +292,7 @@ function categoryDailyLimit(cat,leftDays){
 
 
 var RES_PRESETS=['Подушка безопасности','Права','Отпуск','Ремонт','Налог','Свой вариант'];
-var SHIFT_LABEL={day:'День',night:'Ночь',off:'Выходной'};
+var SHIFT_LABEL={day:'Дневная',night:'Ночная',off:'Выходной',vacation:'Отпуск',sick:'Больничный',extra:'Дополнительная'};
 var _renderQueued=false,_rafRender=null;
 var MONTHS_RU=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 var viewMonth=null,currentView='home',openSecs={ops:1,obl:1,an:0,res:0,debt:0},undoStack=[],UNDO_MAX=30;
@@ -318,8 +318,17 @@ function sane(v){return num(v);}
 function esc(s){return String(s==null?'':s).replace(/&/g,'&'+'amp;').replace(/</g,'&'+'lt;').replace(/>/g,'&'+'gt;').replace(/\"/g,'&'+'quot;').replace(/'/g,'&#39;');}
 function pd(s){var p=String(s||'').split('-').map(Number);return new Date(p[0],(p[1]||1)-1,p[2]||1);}
 function days(a,b){return Math.round((pd(b)-pd(a))/864e5);}
-function shift(ds,ov){var v=ov&&ov[ds];if(typeof v==='string'&&SHIFT_LABEL[v])return v;return CYCLE[((days(ANCHOR,ds)%6)+6)%6];}window.shift=shift;window.SHIFT_LABEL=SHIFT_LABEL;
+function shift(ds,ov){var v=ov&&ov[ds];if(typeof v==='string'&&SHIFT_LABEL[v])return v;var set=STATE&&STATE.settings||{},cy=Array.isArray(set.shiftCycle)&&set.shiftCycle.length&&set.shiftCycle.every(function(x){return !!SHIFT_LABEL[x];})?set.shiftCycle:CYCLE,anchor=/^\d{4}-\d{2}-\d{2}$/.test(set.shiftAnchor||'')?set.shiftAnchor:ANCHOR;return cy[((days(anchor,ds)%cy.length)+cy.length)%cy.length];}window.shift=shift;window.SHIFT_LABEL=SHIFT_LABEL;
 function cleanShifts(ov){var out={};if(!ov||typeof ov!=='object')return out;Object.keys(ov).forEach(function(k){var v=ov[k];if(typeof v==='string'&&SHIFT_LABEL[v])out[k]=v;});return out;}
+function editShiftDay(ds,done){
+  appChoice('Смена · '+ds,['Дневная','Ночная','Выходной','Отпуск','Больничный','Дополнительная','По графику'],'Смена').then(function(choice){
+    if(choice==null)return;
+    var types=['day','night','off','vacation','sick','extra'];
+    pushUndo();
+    if(choice===6)delete STATE.shiftsOverride[ds];else STATE.shiftsOverride[ds]=types[choice];
+    save(true);if(done)done();else render();toast('Смена: '+(choice===6?'по графику':SHIFT_LABEL[types[choice]]));
+  });
+}
 function inMonth(dateStr,month){return String(dateStr||'').slice(0,7)===month;}
 function alive(x){return !!(x&&!x.deleted);}
 function hasLiveData(s){
@@ -368,7 +377,7 @@ function hasLiveData(s){
   if(s.dayPlans&&Object.keys(s.dayPlans).length)return true;
   return false;
 }
-function def(){return{version:6,settings:{openingBalance:0,month:today().slice(0,7),dayRate:0,nightRate:0,paydayDay:null,limitHorizon:'payday',shiftNotifHour:20,shiftNotifMinute:0,shiftNotifEnabled:true,userName:'',budgetLimits:{},budgetSavings:{},periodReports:[]},income:[],expenses:[],reserves:[],debts:[],reserveOps:[],obligations:[],obligationPays:[],voiceMap:{},shiftsOverride:{},dayPlans:{},updatedAt:new Date().toISOString()};}
+function def(){return{version:6,settings:{openingBalance:0,month:today().slice(0,7),dayRate:0,nightRate:0,paydayDay:null,limitHorizon:'payday',shiftAnchor:ANCHOR,shiftCycle:CYCLE.slice(),dayStart:'07:00',dayEnd:'19:00',nightStart:'19:00',nightEnd:'07:00',shiftNotifHour:20,shiftNotifMinute:0,shiftNotifEnabled:true,userName:'',budgetLimits:{},budgetSavings:{},periodReports:[]},income:[],expenses:[],reserves:[],debts:[],reserveOps:[],obligations:[],obligationPays:[],voiceMap:{},shiftsOverride:{},dayPlans:{},updatedAt:new Date().toISOString()};}
 function norm(raw){
   var b=def();if(!raw||typeof raw!=='object')return b;
   var o=Object.assign({},b,raw);o.settings=Object.assign({},b.settings,raw.settings||{});
@@ -379,6 +388,8 @@ function norm(raw){
   o.settings.openingBalance=sane(o.settings.openingBalance);
   o.settings.dayRate=sane(o.settings.dayRate);
   o.settings.nightRate=sane(o.settings.nightRate);
+  if(!Array.isArray(o.settings.shiftCycle)||!o.settings.shiftCycle.length||o.settings.shiftCycle.length>31||!o.settings.shiftCycle.every(function(x){return !!SHIFT_LABEL[x];}))o.settings.shiftCycle=CYCLE.slice();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(o.settings.shiftAnchor||''))o.settings.shiftAnchor=ANCHOR;
   if(o.settings.paydayDay!=null&&o.settings.paydayDay!==''){var pd=num(o.settings.paydayDay);o.settings.paydayDay=(pd>=1&&pd<=31)?pd:null;}else o.settings.paydayDay=null;
   if(o.settings.limitHorizon!=='month'&&o.settings.limitHorizon!=='payday')o.settings.limitHorizon=(o.settings.paydayDay? 'payday':'month');
   if(!Array.isArray(o.settings.periodReports))o.settings.periodReports=[];
@@ -842,8 +853,21 @@ function showNameIntro(force){
   }catch(e){}
 }
 window.showNameIntro=showNameIntro;
-function countShifts(month){var p=month.split('-').map(Number),dim=new Date(p[0],p[1],0).getDate();var day=0,night=0,off=0,leftDay=0,leftNight=0,leftOff=0;var t=today(),curM=t.slice(0,7),curD=Number(t.slice(8));for(var d=1;d<=dim;d++){var ds=month+'-'+String(d).padStart(2,'0');var s=shift(ds,STATE.shiftsOverride);if(s==='day')day++;else if(s==='night')night++;else off++;if(month>curM||(month===curM&&d>=curD)){if(s==='day')leftDay++;else if(s==='night')leftNight++;else leftOff++;}}return{day:day,night:night,off:off,total:dim,leftDay:leftDay,leftNight:leftNight,leftOff:leftOff,leftWork:leftDay+leftNight};}
-function showShiftPay(){var month=getViewMonth(),sc=countShifts(month),dr=num(STATE.settings.dayRate),nr=num(STATE.settings.nightRate),pay=sc.day*dr+sc.night*nr,leftPay=sc.leftDay*dr+sc.leftNight*nr;var isCur=month===today().slice(0,7);var html='<div class="modal-card"><div class="modal-title">Смены · '+monthLabel(month)+'</div><div class="sp-grid"><div class="sp-item"><b>'+sc.day+'</b><span>День</span></div><div class="sp-item"><b>'+sc.night+'</b><span>Ночь</span></div><div class="sp-item"><b>'+sc.off+'</b><span>Выходной</span></div></div>'+(isCur?'<div class="sp-pay" style="margin-bottom:8px"><div class="muted">Осталось смен</div><div class="big" style="font-size:20px">'+sc.leftWork+' <span style="font-size:13px;font-weight:500;color:var(--muted)">('+sc.leftDay+'д + '+sc.leftNight+'н)</span></div></div>':'')+'<div class="sp-pay"><div class="muted">'+(isCur?'Осталось получить':'Ожидаемая зарплата')+'</div><div class="big" style="font-size:22px">'+fmt(isCur?leftPay:pay)+'</div>'+(dr||nr?'<div class="muted" style="margin-top:6px">день '+fmt(dr)+' · ночь '+fmt(nr)+(isCur?' · всего в месяце '+fmt(pay):'')+'</div>':'<div class="muted" style="margin-top:6px">Задай ставки в настройках ⚙</div>')+'</div><button type="button" class="btn-primary" id="spClose">Закрыть</button></div>';openModal(html,function(){var c=document.getElementById('spClose');if(c)c.onclick=closeModal;});}
+function countShifts(month){var p=month.split('-').map(Number),dim=new Date(p[0],p[1],0).getDate();var day=0,night=0,extra=0,off=0,leftDay=0,leftNight=0,leftExtra=0,leftOff=0;var t=today(),curM=t.slice(0,7),curD=Number(t.slice(8));for(var d=1;d<=dim;d++){var ds=month+'-'+String(d).padStart(2,'0');var s=shift(ds,STATE.shiftsOverride);if(s==='day')day++;else if(s==='night')night++;else if(s==='extra')extra++;else off++;if(month>curM||(month===curM&&d>=curD)){if(s==='day')leftDay++;else if(s==='night')leftNight++;else if(s==='extra')leftExtra++;else leftOff++;}}return{day:day,night:night,extra:extra,off:off,total:dim,leftDay:leftDay,leftNight:leftNight,leftExtra:leftExtra,leftOff:leftOff,leftWork:leftDay+leftNight+leftExtra};}
+function showShiftPay(){
+  var month=getViewMonth(),sc=countShifts(month),settings=STATE.settings||{};
+  var first=month+'-01',last=month+'-'+String(sc.total).padStart(2,'0'),t=today();
+  var pay=window.FinoFinancialEngine?window.FinoFinancialEngine.wages(STATE,first,last,addDaysISO(t,-1)):null;
+  var earned=pay?pay.earned/100:sc.day*num(settings.dayRate)+sc.night*num(settings.nightRate);
+  var expected=pay?pay.expected/100:0;
+  var html='<div class="modal-card"><div class="modal-title">Смены · '+monthLabel(month)+'</div>'+
+    '<div class="sp-grid"><div class="sp-item"><b>'+sc.day+'</b><span>Дневных</span></div><div class="sp-item"><b>'+sc.night+'</b><span>Ночных</span></div><div class="sp-item"><b>'+sc.extra+'</b><span>Дополнительных</span></div></div>'+
+    '<div class="sp-pay"><div class="muted">По прошедшим датам · расчёт</div><div class="big">'+fmt(earned)+'</div></div>'+
+    '<div class="sp-pay"><div class="muted">Предстоящие смены · прогноз</div><div class="big">'+fmt(expected)+'</div></div>'+
+    '<div class="hint">По графику за месяц: '+fmt(earned+expected)+'. Фактически полученную зарплату записывай как доход — расчёт по сменам не добавляет деньги в кассу.</div>'+
+    '<button type="button" class="btn-primary" id="spClose">Закрыть</button></div>';
+  openModal(html,function(){var c=document.getElementById('spClose');if(c)c.onclick=closeModal;});
+}
 function openModal(html,bind){var bg=document.getElementById('modalBg');if(!bg)return;bg.innerHTML=html;bg.classList.add('show');bg.onclick=function(e){if(e.target!==bg)return;var dlg=document.getElementById('dlgLayer');if(dlg&&dlg.classList.contains('show'))return;closeModal();};try{if(window.FinBridge&&window.FinBridge.setPullRefresh)window.FinBridge.setPullRefresh(false);}catch(e){}if(bind)bind();}
 function closeModal(){var bg=document.getElementById('modalBg');if(!bg)return;bg.classList.remove('show','full');bg.innerHTML='';document.body.classList.remove('fin-settings-open');document.documentElement.style.overflow='';document.body.style.overflow='';try{if(window.FinBridge&&window.FinBridge.setPullRefresh)window.FinBridge.setPullRefresh(false);}catch(e){}}
 function dlgLayer(){var el=document.getElementById('dlgLayer');if(el)return el;el=document.createElement('div');el.id='dlgLayer';el.className='modal-bg';el.style.zIndex='90';document.body.appendChild(el);return el;}
@@ -1295,10 +1319,7 @@ function openFullCalendar(){
       Array.prototype.forEach.call(document.querySelectorAll('#calBody [data-date]'),function(el){
         el.onclick=function(){
           var ds=el.getAttribute('data-date');
-          if(getViewMonth()!==today().slice(0,7)){viewMonth=today().slice(0,7);redrawCal();toast('Вернись к текущему месяцу');return;}
-          pushUndo();
-          var cur=shift(ds,STATE.shiftsOverride),n=cur==='day'?'night':cur==='night'?'off':'day';
-          STATE.shiftsOverride[ds]=n;save(true);redrawCal();toast('Смена: '+(SHIFT_LABEL[n]||n));
+          editShiftDay(ds,redrawCal);
         };
       });
     }
@@ -1457,10 +1478,12 @@ function showSettings(){
         var st=STATE.settings||{};
         return '<button type="button" class="set-row" id="setDay"><div class="set-main"><b>Оплата за день</b><span>Ставка дневной смены</span></div><span class="set-val">'+fmt(st.dayRate)+'</span></button>'+
       '<button type="button" class="set-row" id="setNight"><div class="set-main"><b>Оплата за ночь</b><span>Ставка ночной смены</span></div><span class="set-val">'+fmt(st.nightRate)+'</span></button>'+
+      '<button type="button" class="set-row" id="setShiftCycle"><div class="set-main"><b>Цикл смен</b><span>Д, Н, В · до 31 дня</span></div><span class="set-val">'+esc((st.shiftCycle||CYCLE).map(function(x){return {day:'Д',night:'Н',off:'В',extra:'ДОП',vacation:'О',sick:'Б'}[x]||'?';}).join(' '))+'</span></button>'+
+      '<button type="button" class="set-row" id="setShiftAnchor"><div class="set-main"><b>Дата начала цикла</b><span>Первый день указанного графика</span></div><span class="set-val">'+esc(st.shiftAnchor||ANCHOR)+'</span></button>'+
       '<button type="button" class="set-row" id="setPayday"><div class="set-main"><b>День зарплаты</b><span>Бюджет до этой даты (1–31, пусто = до конца месяца)</span></div><span class="set-val">'+(st.paydayDay?('«'+st.paydayDay+'»'):'—')+'</span></button>'+
       '<button type="button" class="set-row" id="setShiftNotif"><div class="set-main"><b>Напоминание о смене</b><span>Во сколько предупреждать о завтрашней смене</span></div><span class="set-val">'+(st.shiftNotifEnabled===false?'Выкл':(String(st.shiftNotifHour!=null?st.shiftNotifHour:20).padStart(2,'0')+':'+String(st.shiftNotifMinute!=null?st.shiftNotifMinute:0).padStart(2,'0')))+'</span></button>'+
-      '<button type="button" class="set-row" id="setDayTime"><div class="set-main"><b>Время дневной смены</b><span>Начало и конец</span></div><span class="set-val">'+(st.dayStart||'08:00')+'–'+(st.dayEnd||'20:00')+'</span></button>'+
-      '<button type="button" class="set-row" id="setNightTime"><div class="set-main"><b>Время ночной смены</b><span>Начало и конец</span></div><span class="set-val">'+(st.nightStart||'20:00')+'–'+(st.nightEnd||'08:00')+'</span></button>';})()+
+      '<button type="button" class="set-row" id="setDayTime"><div class="set-main"><b>Время дневной смены</b><span>Начало и конец</span></div><span class="set-val">'+(st.dayStart||'07:00')+'–'+(st.dayEnd||'19:00')+'</span></button>'+
+      '<button type="button" class="set-row" id="setNightTime"><div class="set-main"><b>Время ночной смены</b><span>Начало и конец</span></div><span class="set-val">'+(st.nightStart||'19:00')+'–'+(st.nightEnd||'07:00')+'</span></button>';})()+
     '</div>'+
     '<div class="set-group"><div class="set-group-title">Финна и данные</div>'+
       '<button type="button" class="set-row" id="setAi"><div class="set-main"><b>Ключ ИИ (Groq)</b><span>Нужен для умных ответов Финны · console.groq.com</span></div><span class="set-val" id="setAiStatus">—</span></button>'+
@@ -1515,6 +1538,23 @@ function showSettings(){
     if(setNightEl)setNightEl.onclick=function(){
       appPrompt('Оплата за ночную смену',String(num(STATE.settings.nightRate)),'Ночная ставка').then(function(o){
         if(o===null)return;pushUndo();STATE.settings.nightRate=num(o);save(true);render();toast('Ночь: '+fmt(num(o)));
+      });
+    };
+    var cycleEl=document.getElementById('setShiftCycle');
+    if(cycleEl)cycleEl.onclick=function(){
+      var codes={Д:'day',Н:'night',В:'off',О:'vacation',Б:'sick',ДОП:'extra'};
+      appPrompt('Цикл через запятую: Д, Д, Н, Н, В, В',(STATE.settings.shiftCycle||CYCLE).map(function(x){return {day:'Д',night:'Н',off:'В',vacation:'О',sick:'Б',extra:'ДОП'}[x];}).join(', '),'График',{text:true}).then(function(v){
+        if(v===null)return;var parts=String(v).toUpperCase().split(/[;,\s]+/).filter(Boolean),cycle=parts.map(function(x){return codes[x];});
+        if(!cycle.length||cycle.length>31||cycle.some(function(x){return !x;}))return toast('Используй Д, Н, В, О, Б или ДОП');
+        pushUndo();STATE.settings.shiftCycle=cycle;save(true);render();showSettings();toast('Цикл изменён');
+      });
+    };
+    var anchorEl=document.getElementById('setShiftAnchor');
+    if(anchorEl)anchorEl.onclick=function(){
+      appPrompt('Дата первого дня цикла (ГГГГ-ММ-ДД)',STATE.settings.shiftAnchor||ANCHOR,'Дата цикла',{text:true}).then(function(v){
+        if(v===null)return;
+        try{window.FinoFinancialEngine.date(String(v));}catch(err){return toast('Укажи действительную дату ГГГГ-ММ-ДД');}
+        pushUndo();STATE.settings.shiftAnchor=String(v);save(true);render();showSettings();toast('Дата цикла изменена');
       });
     };
     var setUserNameEl=document.getElementById('setUserName');
@@ -1574,8 +1614,8 @@ function showSettings(){
       var el=document.getElementById(btnId);if(!el)return;
       el.onclick=function(){
         var st=STATE.settings||{};
-        var s0=String(st[startKey]||'08:00').split(':');
-        var e0=String(st[endKey]||'20:00').split(':');
+        var s0=String(st[startKey]||(startKey==='dayStart'?'07:00':'19:00')).split(':');
+        var e0=String(st[endKey]||(endKey==='dayEnd'?'19:00':'07:00')).split(':');
         appTimePicker(title+' · начало', num(s0[0]), num(s0[1]||0)).then(function(a){
           if(a===null)return;
           if(a.enabled===false)return;
@@ -1885,8 +1925,8 @@ if(sh==='off'){
   var shiftName = sh==='day' ? 'Дневная смена' : 'Ночная смена';
   var stSet=STATE.settings||{};
   var timeStr = sh==='day'
-    ? ((stSet.dayStart||'08:00')+' → '+(stSet.dayEnd||'20:00'))
-    : ((stSet.nightStart||'20:00')+' → '+(stSet.nightEnd||'08:00'));
+    ? ((stSet.dayStart||'07:00')+' → '+(stSet.dayEnd||'19:00'))
+    : ((stSet.nightStart||'19:00')+' → '+(stSet.nightEnd||'07:00'));
   shiftInfo = '<div class="today-shift '+sh+'"><b>'+shiftName+'</b><span class="muted">'+timeStr+(expected?' · ожидается '+expected:'')+'</span></div>';
 }
 
@@ -2393,7 +2433,7 @@ if(t.id==='mPrev'){viewMonth=shiftMonth(getViewMonth(),-1);render();return;}if(t
   var ds=t.dataset.date;
   if(planMode){ dayPlanEditor(ds, function(){try{render();}catch(e){}}); return; }
   if(t.closest&&t.closest('.week-strip')) return;
-  var isCur=(getViewMonth()===today().slice(0,7));if(!isCur){viewMonth=today().slice(0,7);render();toast('Вернись к текущему месяцу');return;}pushUndo();var cur=shift(ds,STATE.shiftsOverride),n=cur==='day'?'night':cur==='night'?'off':'day';STATE.shiftsOverride[ds]=n;save(true);render();toast('Смена: '+(SHIFT_LABEL[n]||n));return;
+  editShiftDay(ds);return;
 }var id=t.dataset.id,k=t.dataset.k,month=getViewMonth();if(!id||!k)return;
 if(k==='in'){var inc=STATE.income.find(function(i){return i.id===id;});if(!inc)return;appChoice('Доход · '+fmt(inc.amount),['Изменить','Удалить'],'Доход').then(function(act){if(act===null)return;if(act===1){appConfirm('Удалить доход?','Удалить').then(function(ok){if(!ok)return;pushUndo();softDeleteIn('income',id,'income');if(STATE.lastOp&&STATE.lastOp.id===id)STATE.lastOp=null;save(true);render();toast('Удалено');});}else{appPrompt('Сумма',String(num(inc.amount)),'Изменить доход').then(function(av){if(av===null)return;appPrompt('Комментарий',inc.note||'','Комментарий',{text:true}).then(function(nn){if(nn===null)return;var a=num(av);if(a<=0)return toast('Укажи сумму');pushUndo();inc.amount=a;inc.note=String(nn||'Доход');inc.editedAt=new Date().toISOString();logOpChange('income',id,'edited',inc.note);save(true);render();toast('Доход обновлён');});});}});return;}
 if(k==='ex'){var exp=STATE.expenses.find(function(i){return i.id===id;});if(!exp)return;appChoice('Расход · '+fmt(exp.amount),['Изменить','Удалить'],'Расход').then(function(act){if(act===null)return;if(act===1){appConfirm('Удалить расход?','Удалить').then(function(ok){if(!ok)return;pushUndo();softDeleteIn('expenses',id,'expense');if(STATE.lastOp&&STATE.lastOp.id===id)STATE.lastOp=null;save(true);render();toast('Удалено');});}else{appPrompt('Сумма',String(num(exp.amount)),'Изменить расход').then(function(av){if(av===null)return;appPrompt('Категория / комментарий',exp.note||exp.category||'','Комментарий',{text:true}).then(function(nn){if(nn===null)return;var a=num(av);if(a<=0)return toast('Укажи сумму');pushUndo();exp.amount=a;var label=String(nn||exp.category||'Прочее');if(exp.category==='Долг'||exp.category==='Обязательные'){exp.note=label;}else{exp.category=label;exp.note=label;}exp.editedAt=new Date().toISOString();logOpChange('expense',id,'edited',label);save(true);render();toast('Расход обновлён');});});}});return;}
