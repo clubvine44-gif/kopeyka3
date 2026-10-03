@@ -620,10 +620,14 @@ assert.ok(bakSrc.indexOf('stale finna-latest.json must not beat') >= 0, 'stale l
 assert.ok(bakSrc.indexOf('if (latest && latest.state)') < 0 || bakSrc.indexOf('pickNewestEmergency') >= 0, 'latest is not an early return winner');
 
 var swSrc = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
-assert.ok(swSrc.indexOf("CACHE='kopeyka3-v90'") >= 0, 'sw cache v90');
+assert.ok(swSrc.indexOf("CACHE='kopeyka3-v91'") >= 0, 'sw cache v91');
 assert.ok(swSrc.indexOf("profile.js?v=") >= 0, 'sw precaches profile.js');
 assert.ok(idx.indexOf("profile.js?v=2026100201") >= 0, 'index loads profile with cache bust');
-assert.ok(idx.indexOf("sw.js?v=90") >= 0, 'index registers sw v90');
+assert.ok(idx.indexOf("sw.js?v=91") >= 0, 'index registers sw v91');
+['financial-engine.js?v=2026100301','fino-plan-view.js?v=2026100301','fino-theme.js?v=2026100302','fino-theme.css?v=2026100301'].forEach(function(asset){
+  assert.ok(idx.indexOf(asset) >= 0, 'index loads '+asset);
+  assert.ok(swSrc.indexOf(asset) >= 0, 'offline shell caches '+asset);
+});
 assert.ok(idx.indexOf("onboard.js?v=2026100201") >= 0, 'index onboard cache aligned');
 assert.ok(swSrc.indexOf("onboard.js?v=") >= 0 && swSrc.indexOf("2026100201") >= 0, 'sw onboard cache aligned');
 assert.ok(idx.indexOf("finn3d.js?v=2026100201") >= 0, 'index finn3d cache aligned');
@@ -1148,4 +1152,3 @@ function finish(extra){
   console.error(e && e.stack || e);
   process.exit(1);
 });
-
