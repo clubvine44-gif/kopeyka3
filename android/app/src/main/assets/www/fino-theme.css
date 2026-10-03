@@ -1,0 +1,21 @@
+/* FINO financial center: compact surfaces and legible mobile controls. */
+.fino-plan{--f-bg:#101719;--f-surface:#1a2427;--f-elevated:#223034;--f-border:#354548;--f-text:#edf4f2;--f-muted:#9fb1af;--f-accent:#65d4cb;--f-green:#8bdaa8;--f-red:#ee9897;color:var(--f-text);padding:12px 2px 24px}
+.fino-eyebrow{font-size:11px;letter-spacing:.16em;color:var(--f-accent);font-weight:700;margin:6px 2px 8px}
+.fino-plan h1{font-size:25px;line-height:1.18;letter-spacing:-.035em;margin:0 2px 18px}
+.fino-plan h2{font-size:16px;letter-spacing:-.02em;margin:0 0 14px}
+.fino-balance,.fino-panel,.fino-two>div{background:var(--f-surface);border:1px solid var(--f-border);border-radius:20px}
+.fino-balance{padding:22px 18px 18px;background:#203135}
+.fino-balance>span,.fino-two span,.fino-result>span{display:block;font-size:12px;color:var(--f-muted)}
+.fino-balance>strong{display:block;font-size:clamp(31px,9vw,43px);font-variant-numeric:tabular-nums;letter-spacing:-.055em;line-height:1.1;margin:8px 0 24px;overflow-wrap:anywhere}
+.fino-balance-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding-top:16px;border-top:1px solid var(--f-border)}
+.fino-balance-grid div{color:var(--f-muted);font-size:11px}.fino-balance-grid b{display:block;color:var(--f-text);font-size:15px;margin-top:5px;font-variant-numeric:tabular-nums}
+.fino-two{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0}.fino-two>div{padding:15px}.fino-two b{display:block;margin-top:7px;font-size:18px;overflow-wrap:anywhere}
+.fino-muted{font-size:12px;line-height:1.5;color:var(--f-muted);margin:12px 2px}
+.fino-panel{padding:18px;margin-top:12px}.fino-section-head{display:flex;justify-content:space-between;align-items:center;gap:10px}.fino-section-head h2{margin:0}
+.fino-section-head select{background:var(--f-elevated);color:var(--f-text);border:1px solid var(--f-border);border-radius:10px;padding:8px;font-size:13px;min-height:42px}
+.fino-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--f-border);font-size:13px}.fino-row:last-child{border-bottom:0}.fino-row b{font-variant-numeric:tabular-nums;white-space:nowrap}.fino-row small{display:block;font-size:11px;color:var(--f-muted);margin-top:3px}.fino-total{font-size:15px}.fino-positive{color:var(--f-green)}.fino-negative{color:var(--f-red)!important}
+.fino-goal{padding:12px 0;border-bottom:1px solid var(--f-border);display:grid;grid-template-columns:1fr auto;gap:8px}.fino-goal:last-child{border-bottom:0}.fino-goal b,.fino-goal span{display:block}.fino-goal span{font-size:12px;color:var(--f-muted);margin-top:3px}.fino-goal strong{color:var(--f-accent)}.fino-progress{height:5px;background:var(--f-elevated);border-radius:5px;grid-column:1/-1;overflow:hidden}.fino-progress i{display:block;height:100%;background:var(--f-accent);border-radius:5px}
+.fino-label{font-size:12px;color:var(--f-muted)}.fino-plan input{display:block;width:100%;height:52px;background:var(--f-elevated);border:1px solid var(--f-border);color:var(--f-text);border-radius:13px;padding:0 14px;font-size:19px;margin:8px 0 12px}.fino-plan input:focus{outline:2px solid var(--f-accent)}.fino-panel button{min-height:48px;width:100%;border:0;border-radius:13px;background:var(--f-accent);color:#112326;font-weight:700;font-size:14px}.fino-result{margin-top:16px;padding:15px;background:var(--f-elevated);border-radius:14px}.fino-result strong{display:block;font-size:26px;margin:4px 0}.fino-result small{color:var(--f-muted);line-height:1.5}
+.fino-more{display:grid;gap:9px}.fino-more button{min-height:54px;text-align:left;padding:0 18px;background:#1a2427;color:#edf4f2;border:1px solid #354548;border-radius:15px;font-size:15px}
+@media(max-width:360px){.fino-balance-grid{gap:6px}.fino-balance-grid b{font-size:13px}.fino-row{font-size:12px}}
+@media(prefers-reduced-motion:reduce){.fino-plan *, .fino-more *{animation:none!important;transition:none!important}}
