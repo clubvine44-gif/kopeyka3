@@ -52,4 +52,12 @@ jobs:
           unzip -p "$APK" assets/www/financial-engine.js | grep -q 'FinoFinancialEngine'
           unzip -p "$APK" assets/www/fino-theme.css | grep -q 'fino-plan'
           unzip -p "$APK" assets/www/fino-theme.js | grep -q 'FinoTheme'
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$APK" | grep -q "package: name='app.fin.kopeyka.debug'"
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$APK" | grep -q "application-label:'FINO Preview'"
           echo "Packaged APK: $(du -h "$APK" | cut -f1)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FINO-preview-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
