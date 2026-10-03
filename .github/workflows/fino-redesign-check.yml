@@ -1,0 +1,51 @@
+name: FINO redesign checks
+on:
+  push:
+    branches: [redesign/fino-financial-center]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Financial and legacy regression checks
+        run: |
+          node tools/check-financial-engine.cjs
+          node tools/check-logic.cjs
+          node --check app.js
+          node --check fino-plan-view.js
+          cmp app.js android/app/src/main/assets/www/app.js
+          cmp index.html android/app/src/main/assets/www/index.html
+          cmp financial-engine.js android/app/src/main/assets/www/financial-engine.js
+          cmp fino-plan-view.js android/app/src/main/assets/www/fino-plan-view.js
+          cmp fino-theme.css android/app/src/main/assets/www/fino-theme.css
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.2.1'
+      - name: Build debug APK without touching release
+        working-directory: android
+        run: gradle assembleDebug --no-daemon
+      - name: Verify packaged FINO assets
+        run: |
+          set -euo pipefail
+          APK=android/app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          unzip -p "$APK" assets/www/index.html | grep -q 'fino-plan-view.js'
+          unzip -p "$APK" assets/www/financial-engine.js | grep -q 'FinoFinancialEngine'
+          unzip -p "$APK" assets/www/fino-theme.css | grep -q 'fino-plan'
+          echo "Packaged APK: $(du -h "$APK" | cut -f1)"
