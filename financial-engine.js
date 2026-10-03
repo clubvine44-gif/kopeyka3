@@ -79,7 +79,9 @@
       var day=Number(o.day);if(!Number.isInteger(day)||day<1||day>31)return;
       for(var cursor=month(from)+'-01';cursor<=to;cursor=add(cursor,dim(cursor))){
         var on=cursor.slice(0,7)+'-'+String(Math.min(day,dim(cursor))).padStart(2,'0');
-        if(on<from||on>to)continue;
+        if(on>to)continue;
+        // An unpaid due date earlier this month is still owed today.
+        if(on<from){if(month(on)!==month(from))continue;on=from;}
         var paid=sum(state.obligationPays,function(p){return p.obligId===o.id&&p.month===month(on)?money(p.amount):0;});
         var remaining=Math.max(0,money(o.amount)-paid);
         if(remaining)items.push({id:o.id,date:on,name:o.name||'Платёж',amount:remaining});
