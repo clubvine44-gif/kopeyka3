@@ -1,7 +1,7 @@
 {
-  "versionCode": 178,
-  "versionName": "4.13.11",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.11/Fin.apk",
-  "sha256": "10324e8c191cc1e2155d892b5c08b23e1c92dfae188e59c13f60d880b84dacaf",
-  "notes": "4.13.11 — аварийное восстановление берёт самый новый снимок, автообновление повторяет пуш, PWA кэш совпадает со скриптами (versionCode 178)"
+  "versionCode": 179,
+  "versionName": "4.13.12",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.12/Fin.apk",
+  "sha256": "d3bede3279695178446aa0bbe3c9b439d5adbe62908135300c2561dc0b929670",
+  "notes": "4.13.12 — аварийные копии сравниваются по времени, слот пишется сразу при сворачивании (versionCode 179)"
 }
