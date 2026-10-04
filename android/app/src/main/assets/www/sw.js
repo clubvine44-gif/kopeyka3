@@ -1,5 +1,5 @@
-const CACHE='kopeyka3-v90';
-const V='2026100201';
+const CACHE='kopeyka3-v91';
+const V='2026100501';
 const APP_SHELL=['./','./index.html','./secure-store.js?v='+V,'./fin-core.js?v='+V,'./fin-plan.js?v='+V,'./fin-design.js?v='+V,'./finn-char.js?v='+V,'./fin-backup.js?v='+V,'./app.js?v='+V,'./budget-carry.js?v='+V,'./meal-plan.js?v='+V,'./profile.js?v='+V,'./cloud.js?v='+V,'./onboard.js?v='+V,'./products.js?v='+V,'./voice.js?v='+V,'./engine.js?v='+V,'./ai.js?v='+V,'./assistant-v2.js?v='+V,'./finn3d.js?v='+V,'./finn-wake.js?v='+V,'./matter.js?v='+V,'./matter-finn.js?v='+V,'./widget.html','./manifest.json','./icon.svg'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(APP_SHELL)).then(()=>self.skipWaiting()));});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim()));});

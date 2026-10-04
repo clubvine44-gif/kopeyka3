@@ -238,8 +238,8 @@ assert.ok(appSrc.indexOf('function flushLiveSave') >= 0, 'pagehide flushes live 
 assert.ok(storeSrc.indexOf('FinBridge.setInstallId') >= 0, 'install id mirrored to native prefs');
 
 var gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle'), 'utf8');
-assert.ok(/versionCode\s+178/.test(gradle), 'versionCode 178');
-assert.ok(/versionName\s+"4\.13\.11"/.test(gradle), 'versionName 4.13.11');
+assert.ok(/versionCode\s+179/.test(gradle), 'versionCode 179');
+assert.ok(/versionName\s+"4\.13\.12"/.test(gradle), 'versionName 4.13.12');
 
 var mainJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/MainActivity.java'), 'utf8');
 assert.ok(mainJava.indexOf('isTrustedApkUrl') >= 0, 'apk url allowlisted');
@@ -615,24 +615,26 @@ assert.strictEqual(Number(mergedMeal2.mealPlan.lastPlan.total), 7777, 'newer rem
   assert.strictEqual(cloudSandbox.window.kopeykaCloud.cashAtMonth(frac, '2026-09'), 10100, 'cloud cash rounds like the engine');
 })();
 
-assert.ok(bakSrc.indexOf('function pickNewestEmergency') >= 0, 'emergency restore ranks by savedAt');
+assert.ok(bakSrc.indexOf('function snapTimeMs') >= 0, 'emergency rank uses parsed timestamps');
+assert.ok(bakSrc.indexOf('writeSlotString(json)') >= 0, 'slots write immediately before seal');
+assert.ok(bakSrc.indexOf('seal then replaces slot 0') >= 0 || bakSrc.indexOf('Seal then replaces slot 0') >= 0, 'seal upgrades slot 0 in place');
 assert.ok(bakSrc.indexOf('stale finna-latest.json must not beat') >= 0, 'stale latest documented');
 assert.ok(bakSrc.indexOf('if (latest && latest.state)') < 0 || bakSrc.indexOf('pickNewestEmergency') >= 0, 'latest is not an early return winner');
 
 var swSrc = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
-assert.ok(swSrc.indexOf("CACHE='kopeyka3-v90'") >= 0, 'sw cache v90');
+assert.ok(swSrc.indexOf("CACHE='kopeyka3-v91'") >= 0, 'sw cache v91');
 assert.ok(swSrc.indexOf("profile.js?v=") >= 0, 'sw precaches profile.js');
-assert.ok(idx.indexOf("profile.js?v=2026100201") >= 0, 'index loads profile with cache bust');
-assert.ok(idx.indexOf("sw.js?v=90") >= 0, 'index registers sw v90');
-assert.ok(idx.indexOf("onboard.js?v=2026100201") >= 0, 'index onboard cache aligned');
-assert.ok(swSrc.indexOf("onboard.js?v=") >= 0 && swSrc.indexOf("2026100201") >= 0, 'sw onboard cache aligned');
-assert.ok(idx.indexOf("finn3d.js?v=2026100201") >= 0, 'index finn3d cache aligned');
+assert.ok(idx.indexOf("profile.js?v=2026100501") >= 0, 'index loads profile with cache bust');
+assert.ok(idx.indexOf("sw.js?v=91") >= 0, 'index registers sw v91');
+assert.ok(idx.indexOf("onboard.js?v=2026100501") >= 0, 'index onboard cache aligned');
+assert.ok(swSrc.indexOf("onboard.js?v=") >= 0 && swSrc.indexOf("2026100501") >= 0, 'sw onboard cache aligned');
+assert.ok(idx.indexOf("finn3d.js?v=2026100501") >= 0, 'index finn3d cache aligned');
 assert.ok(cloudSrc.indexOf('escHtml(currentUser.email') >= 0, 'cloud email escaped in auth UI');
 assert.ok(manifestXml.indexOf('android:allowBackup="false"') >= 0, 'android auto-backup off so cipher is not restored without key');
 assert.ok(updJava.indexOf('if (notifyUpdate(context, msg))') >= 0, 'notified_code only after successful push');
 assert.ok(updJava.indexOf('if (!can) return false') >= 0, 'no notify permission must retry later');
 assert.ok(bridgeJava.indexOf('pubMod > privMod') >= 0, 'backup read prefers newer Downloads copy');
-assert.ok(mainJava.indexOf('FinApp/4.13.11') >= 0, 'native UA matches release');
+assert.ok(mainJava.indexOf('FinApp/4.13.12') >= 0, 'native UA matches release');
 
 (function emergencyNewest(){
   var bakSandbox = {
@@ -663,6 +665,37 @@ assert.ok(mainJava.indexOf('FinApp/4.13.11') >= 0, 'native UA matches release');
   tieLatest.savedAt = newerDay.savedAt;
   var tie = pick([newerDay, tieLatest]);
   assert.ok(tie && tie.name === 'finna-latest.json', 'equal time prefers latest name');
+  // 4.13.12: filename date without ISO must still beat an older ISO latest.
+  var dayNoIso = {
+    name: 'finna-day-2026-10-01.json',
+    savedAt: '',
+    state: newerDay.state
+  };
+  var fromName = pick([staleLatest, dayNoIso]);
+  assert.ok(fromName && fromName.state && fromName.state.income && fromName.state.income[0].id === 'new', 'Oct filename date beats Sept ISO latest');
+  var monthNoIso = {
+    name: 'finna-month-2026-10.json',
+    savedAt: '',
+    state: newerDay.state
+  };
+  var fromMonth = pick([staleLatest, monthNoIso]);
+  assert.ok(fromMonth && fromMonth.state && fromMonth.state.income[0].id === 'new', 'Oct month filename beats Sept ISO latest');
+  var sameDayLatest = {
+    name: 'finna-latest.json',
+    savedAt: '2026-10-01T18:00:00.000Z',
+    state: staleLatest.state
+  };
+  var sameDayFile = {
+    name: 'finna-day-2026-10-01.json',
+    savedAt: '',
+    state: newerDay.state
+  };
+  var sameDay = pick([sameDayFile, sameDayLatest]);
+  assert.ok(sameDay && sameDay.name === 'finna-latest.json', 'same-day ISO latest beats date-only day file');
+  var ts = bakSandbox.window.FinBackup.snapTimeMs;
+  assert.ok(typeof ts === 'function', 'snapTimeMs exported');
+  assert.ok(ts({ savedAt: '2026-10-01T08:00:00.000Z' }) > ts({ savedAt: '2026-09-01T10:00:00.000Z' }), 'ISO October > ISO September');
+  assert.ok(ts({}, 'finna-day-2026-10-01.json') > ts({ savedAt: '2026-09-01T10:00:00.000Z' }), 'filename October > ISO September');
 })();
 
 

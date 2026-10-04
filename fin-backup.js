@@ -15,6 +15,9 @@
  * is applied only if it is not older than the live meal.
  * 4.13.11: emergency folder restore ranks by savedAt; stale finna-latest loses
  * to a newer day/month snapshot.
+ * 4.13.12: rank by parsed time (ISO vs filename date — '2026-10-01' must not
+ * lose to '2026-09-01T…'); native file mtime is a fallback; slots write
+ * immediately then seal in place so hide/crash cannot drop the snapshot.
  */
 (function (global) {
   'use strict';
@@ -130,6 +133,33 @@
   }
   function monthStr() { return todayStr().slice(0, 7); }
 
+  /**
+   * Comparable snapshot time in ms.
+   * ISO savedAt wins. Filename dates like 2026-10-01 must beat older ISO
+   * (string compare used to rank '2026-10-01' BELOW '2026-09-01T10:00:00Z').
+   * Date-only is start-of-day so a same-day ISO latest still wins.
+   */
+  function snapTimeMs(cand, name) {
+    var at = Date.parse(String((cand && cand.savedAt) || '')) || 0;
+    if (at > 0) return at;
+    var mod = Number(cand && cand.modified) || 0;
+    if (mod > 0) return mod;
+    var src = String(name || (cand && cand.name) || '');
+    var dm = src.match(/(\d{4})-(\d{2})(?:-(\d{2}))?/);
+    if (dm) {
+      var y = Number(dm[1]), mo = Number(dm[2]), d = dm[3] ? Number(dm[3]) : 1;
+      if (y >= 2000 && mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+        return Date.UTC(y, mo - 1, d, 0, 0, 0);
+      }
+    }
+    return 0;
+  }
+  function envelopeTime(cand, name) {
+    var ms = snapTimeMs(cand, name);
+    if (ms > 0) return new Date(ms).toISOString();
+    return String((cand && cand.savedAt) || '');
+  }
+
   function buildEnvelope(stateObj, kind) {
     var code = 0;
     try {
@@ -224,21 +254,23 @@
     };
     var json = JSON.stringify(env);
     var gen = ++_slotGen;
-    function persist(raw) {
+    // Immediate write so pagehide/crash cannot drop this snapshot while AES-GCM
+    // is still in flight. Seal then replaces slot 0 in place (no second rotate).
+    writeSlotString(json);
+    function persistSealed(raw) {
       if (gen !== _slotGen) return; // newer snapshot is already sealing
-      if (raw && String(raw).indexOf('FINENC1:') === 0) _encSlotCache[raw] = env;
-      writeSlotString(raw);
+      if (raw && String(raw).indexOf('FINENC1:') === 0) {
+        _encSlotCache[raw] = env;
+        try { localStorage.setItem(SLOT_PREFIX + '0', raw); } catch (e) {}
+      }
     }
     try {
       if (global.FinSecureStore && typeof global.FinSecureStore.seal === 'function') {
         global.FinSecureStore.seal(json).then(function (enc) {
-          if (enc && String(enc).indexOf('FINENC1:') === 0) persist(enc);
-          else persist(json);
-        }).catch(function () { persist(json); });
-        return;
+          if (enc && String(enc).indexOf('FINENC1:') === 0) persistSealed(enc);
+        }).catch(function () {});
       }
     } catch (e) {}
-    persist(json);
   }
   function hydrateSlots() {
     var tasks = [];
@@ -288,9 +320,9 @@
     // Newest snapshot wins. Ranking by alive-count resurrected deleted ops
     // from an older richer slot when live decrypt failed or was empty.
     slots.sort(function (a, b) {
-      var ta = String(a.savedAt || '');
-      var tb = String(b.savedAt || '');
-      if (tb !== ta) return tb.localeCompare(ta);
+      var ta = snapTimeMs(a);
+      var tb = snapTimeMs(b);
+      if (tb !== ta) return tb - ta;
       var aa = a.aliveCount != null ? a.aliveCount : countAlive(a.state);
       var bb = b.aliveCount != null ? b.aliveCount : countAlive(b.state);
       if (bb !== aa) return bb - aa;
@@ -384,36 +416,31 @@
     } catch (e) {}
     return null;
   }
-  function envelopeTime(cand, name) {
-    var at = String((cand && cand.savedAt) || '');
-    if (!at) {
-      var dm = String(name || '').match(/(\d{4}-\d{2}(?:-\d{2})?)/);
-      if (dm) at = dm[1];
-    }
-    return at;
-  }
   /**
    * Newest snapshot wins. A stale finna-latest.json must not beat a newer
    * day/month file — latest writes can fail while daily still succeeds.
+   * Compare parsed times, not raw strings (ISO vs filename date).
    * On equal timestamps prefer the dedicated latest name.
    */
   function pickNewestEmergency(cands) {
-    var best = null;
+    var best = null, bestTs = -1;
     (cands || []).forEach(function (cand) {
       if (!cand || !cand.state) return;
       var name = String(cand.name || '');
-      var at = envelopeTime(cand, name);
+      var ts = snapTimeMs(cand, name);
       var isLatest = name === LAST_JSON_NAME;
       if (!best) {
-        best = { state: cand.state, meal: cand.meal || null, savedAt: at, name: name };
+        best = { state: cand.state, meal: cand.meal || null, savedAt: cand.savedAt || '', name: name };
+        bestTs = ts;
         return;
       }
-      if (at > best.savedAt) {
-        best = { state: cand.state, meal: cand.meal || null, savedAt: at, name: name };
+      if (ts > bestTs) {
+        best = { state: cand.state, meal: cand.meal || null, savedAt: cand.savedAt || '', name: name };
+        bestTs = ts;
         return;
       }
-      if (at === best.savedAt && isLatest && best.name !== LAST_JSON_NAME) {
-        best = { state: cand.state, meal: cand.meal || null, savedAt: at, name: name };
+      if (ts === bestTs && isLatest && best.name !== LAST_JSON_NAME) {
+        best = { state: cand.state, meal: cand.meal || null, savedAt: cand.savedAt || '', name: name };
       }
     });
     return best;
@@ -430,6 +457,7 @@
             var cand = readNativeBackup(name);
             if (cand && cand.state) {
               cand.name = name;
+              if (x.modified) cand.modified = x.modified;
               cands.push(cand);
             }
           });
@@ -487,7 +515,7 @@
     var liveEmpty = !live || isEmptyState(live);
     if (slot && slot.state && !isEmptyState(slot.state)) {
       var liveAt = Date.parse((live && live.updatedAt) || 0) || 0;
-      var slotAt = Date.parse(slot.savedAt || 0) || 0;
+      var slotAt = snapTimeMs(slot) || Date.parse(slot.savedAt || 0) || 0;
       var take = liveEmpty || slotAt > liveAt + 2000;
       if (take) {
         if (slot.meal) applyMealIfNewer(slot.meal);
@@ -554,6 +582,7 @@
     countAlive: countAlive,
     bestSlot: bestSlot,
     pickNewestEmergency: pickNewestEmergency,
+    snapTimeMs: snapTimeMs,
     applyMealIfNewer: applyMealIfNewer,
     readMeal: readMeal,
     writeMeal: writeMeal,
