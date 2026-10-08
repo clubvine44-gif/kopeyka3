@@ -238,8 +238,8 @@ assert.ok(appSrc.indexOf('function flushLiveSave') >= 0, 'pagehide flushes live 
 assert.ok(storeSrc.indexOf('FinBridge.setInstallId') >= 0, 'install id mirrored to native prefs');
 
 var gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle'), 'utf8');
-assert.ok(/versionCode\s+179/.test(gradle), 'versionCode 179');
-assert.ok(/versionName\s+"4\.13\.12"/.test(gradle), 'versionName 4.13.12');
+assert.ok(/versionCode\s+180/.test(gradle), 'versionCode 180');
+assert.ok(/versionName\s+"4\.13\.13"/.test(gradle), 'versionName 4.13.13');
 
 var mainJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/MainActivity.java'), 'utf8');
 assert.ok(mainJava.indexOf('isTrustedApkUrl') >= 0, 'apk url allowlisted');
@@ -424,6 +424,15 @@ assert.strictEqual(Number(mergedSav.settings.budgetSavings['Транспорт']
 assert.strictEqual((mergedSav.settings.periodReports || []).length, 2, 'period reports unioned');
 assert.strictEqual(cloudSandbox.window.kopeykaCloud.isEmptyState({ settings: { budgetSavings: { 'Продукты': 1500 } } }), false, 'savings-only state is live');
 assert.strictEqual(cloudSandbox.window.kopeykaCloud.isEmptyState({ settings: { budgetLimits: { 'Продукты': 8000 } } }), false, 'limits-only state is live');
+
+var localSame = JSON.parse(JSON.stringify(base2));
+localSame.settings.budgetSavings = { 'Продукты': 3000 };
+localSame.settings.periodReports = [{ from: '2026-07-15', end: '2026-08-14', totalSaved: 3000, byCat: { 'Продукты': { leftover: 3000 } } }];
+var remoteSame = JSON.parse(JSON.stringify(base2));
+remoteSame.settings.budgetSavings = { 'Продукты': 2000 };
+remoteSame.settings.periodReports = [{ from: '2026-08-15', end: '2026-09-14', totalSaved: 2000, byCat: { 'Продукты': { leftover: 2000 } } }];
+var mergedSame = cloudSandbox.window.kopeykaCloud.threeWay(base2, localSame, remoteSame);
+assert.strictEqual(Number(mergedSame.settings.budgetSavings['Продукты']), 5000, 'same category leftovers from different periods add');
 
 var baseLim = JSON.parse(JSON.stringify(base2));
 baseLim.settings.budgetLimits = { 'Продукты': 10000 };
@@ -616,6 +625,10 @@ assert.strictEqual(Number(mergedMeal2.mealPlan.lastPlan.total), 7777, 'newer rem
 })();
 
 assert.ok(bakSrc.indexOf('function snapTimeMs') >= 0, 'emergency rank uses parsed timestamps');
+assert.ok(bakSrc.indexOf('__FIN_FORCE_BACKUP') >= 0, 'hide forces backup slot inside throttle');
+assert.ok(bakSrc.indexOf('refresh day file when cash changed') >= 0, 'day file is not first-write-only');
+assert.ok(appSrc.indexOf('__FIN_FORCE_BACKUP') >= 0, 'flushLiveSave forces backup');
+assert.ok(appSrc.indexOf('Это веб-версия') >= 0, 'web update check must not treat missing APK code as outdated');
 assert.ok(bakSrc.indexOf('writeSlotString(json)') >= 0, 'slots write immediately before seal');
 assert.ok(bakSrc.indexOf('seal then replaces slot 0') >= 0 || bakSrc.indexOf('Seal then replaces slot 0') >= 0, 'seal upgrades slot 0 in place');
 assert.ok(bakSrc.indexOf('stale finna-latest.json must not beat') >= 0, 'stale latest documented');
@@ -634,7 +647,7 @@ assert.ok(manifestXml.indexOf('android:allowBackup="false"') >= 0, 'android auto
 assert.ok(updJava.indexOf('if (notifyUpdate(context, msg))') >= 0, 'notified_code only after successful push');
 assert.ok(updJava.indexOf('if (!can) return false') >= 0, 'no notify permission must retry later');
 assert.ok(bridgeJava.indexOf('pubMod > privMod') >= 0, 'backup read prefers newer Downloads copy');
-assert.ok(mainJava.indexOf('FinApp/4.13.12') >= 0, 'native UA matches release');
+assert.ok(mainJava.indexOf('FinApp/4.13.13') >= 0, 'native UA matches release');
 
 (function emergencyNewest(){
   var bakSandbox = {
@@ -696,6 +709,43 @@ assert.ok(mainJava.indexOf('FinApp/4.13.12') >= 0, 'native UA matches release');
   assert.ok(typeof ts === 'function', 'snapTimeMs exported');
   assert.ok(ts({ savedAt: '2026-10-01T08:00:00.000Z' }) > ts({ savedAt: '2026-09-01T10:00:00.000Z' }), 'ISO October > ISO September');
   assert.ok(ts({}, 'finna-day-2026-10-01.json') > ts({ savedAt: '2026-09-01T10:00:00.000Z' }), 'filename October > ISO September');
+
+  // 4.13.13: a newer edit inside the 8s throttle must still land on hide.
+  var memF = {};
+  var gF = {
+    localStorage: {
+      getItem: function (k) { return Object.prototype.hasOwnProperty.call(memF, k) ? memF[k] : null; },
+      setItem: function (k, v) { memF[k] = String(v); },
+      removeItem: function (k) { delete memF[k]; }
+    },
+    Date: Date, JSON: JSON, Object: Object, Array: Array, Math: Math, Number: Number, String: String, Error: Error, console: console
+  };
+  gF.window = gF;
+  gF.global = gF;
+  vm.runInNewContext(bakSrc, gF, { filename: 'fin-backup-flush.js' });
+  var FBf = gF.FinBackup;
+  var snapA = {
+    settings: { openingBalance: 100, month: '2026-10' },
+    income: [{ id: 'a', amount: 1, date: '2026-10-01' }],
+    expenses: [], reserves: [], debts: [], reserveOps: [], obligations: [], obligationPays: [],
+    updatedAt: '2026-10-09T01:00:00.000Z'
+  };
+  FBf.onSave(snapA);
+  assert.ok(String(memF.finna_backup_slot_0 || '').indexOf('"id":"a"') >= 0, 'first save writes slot');
+  var snapB = JSON.parse(JSON.stringify(snapA));
+  snapB.income.push({ id: 'b', amount: 2, date: '2026-10-09' });
+  snapB.updatedAt = '2026-10-09T01:00:03.000Z';
+  FBf.onSave(snapB);
+  assert.ok(String(memF.finna_backup_slot_0 || '').indexOf('"id":"b"') < 0, 'second save inside 8s does not rotate');
+  gF.__FIN_FORCE_BACKUP = true;
+  FBf.onSave(snapB);
+  assert.ok(String(memF.finna_backup_slot_0 || '').indexOf('"id":"b"') >= 0, 'hide flush writes newer cash inside throttle');
+  var held = memF.finna_backup_slot_0;
+  var slot1 = memF.finna_backup_slot_1;
+  snapB.updatedAt = '2026-10-09T01:00:04.000Z';
+  FBf.onSave(snapB);
+  assert.strictEqual(memF.finna_backup_slot_0, held, 'hide with no cash change must not rotate slot 0');
+  assert.strictEqual(memF.finna_backup_slot_1, slot1, 'hide with no cash change must not rotate slot 1');
 })();
 
 

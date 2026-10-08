@@ -63,7 +63,7 @@ jobs:
           if [ -f "$WWW/app.js" ] && [ $(wc -c < "$WWW/app.js") -gt 50000 ]; then
             cp -f "$WWW/app.js" /tmp/good-app.js
           fi
-          for f in index.html app.js ai.js assistant-v2.js assistant.js cloud.js engine.js fin-core.js fin-plan.js fin-design.js secure-store.js fin-backup.js finn-char.js finn3d.js finn-wake.js matter.js matter-finn.js matter-room.jpg matter-room.mp3 matter-voice-1.mp3 matter-voice-2.mp3 matter-voice-3.mp3 matter-voice-4.mp3 matter-voice-5.mp3 voice.js onboard.js profile.js products.js sw.js manifest.json icon.svg widget.html ai-bootstrap.js budget-carry.js meal-plan.js; do
+          for f in index.html app.js ai.js assistant-v2.js assistant.js cloud.js engine.js fin-core.js fin-plan.js fin-design.js secure-store.js fin-backup.js finn-char.js finn3d.js finn-wake.js matter.js matter-finn.js matter-room.jpg matter-room.mp3 matter-voice-1.mp3 matter-voice-2.mp3 matter-voice-3.mp3 matter-voice-4.mp3 matter-voice-5.mp3 voice.js onboard.js profile.js products.js sw.js manifest.json icon.svg widget.html ai-bootstrap.js budget-carry.js meal-plan.js update.json; do
             if [ -f "$f" ]; then cp -f "$f" "$WWW/"; fi
           done
           # If root index overwrote with short file, restore again
@@ -154,7 +154,7 @@ jobs:
           gh release delete "$TAG" --yes 2>/dev/null || true
           timeout 120 gh release create "$TAG" Fin.apk Fin.apk.sha256 \
             --title "Финн ${RELEASE_VERSION_NAME}" \
-            --notes "APK ${RELEASE_VERSION_NAME} (versionCode ${RELEASE_VERSION_CODE}). Касса: аварийные копии сравниваются по времени (ISO и имя файла), слот пишется сразу при сворачивании, затем шифруется." \
+            --notes "APK ${RELEASE_VERSION_NAME} (versionCode ${RELEASE_VERSION_CODE}). Сворачивание сразу пишет аварийный слот, если касса изменилась. Дневная копия в Загрузки/Finna обновляется в течение дня. Веб-проверка обновления больше не путает сайт с APK." \
             --repo "${{ github.repository }}"
       - name: Update public update manifest
         run: |
@@ -169,7 +169,7 @@ jobs:
               'versionName':vn,
               'apkUrl':f'https://github.com/clubvine44-gif/kopeyka3/releases/download/v{vn}/Fin.apk',
               'sha256':sha,
-              'notes':f'{vn} — аварийные копии сравниваются по времени, слот пишется сразу при сворачивании (versionCode {vc})'
+              'notes':f'{vn} — сворачивание сразу пишет аварийный слот, дневная копия обновляется в течение дня (versionCode {vc})'
           },ensure_ascii=False,indent=2)+'\n')
           PY
           git config user.name 'github-actions[bot]'

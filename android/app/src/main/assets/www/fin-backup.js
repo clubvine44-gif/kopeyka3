@@ -18,6 +18,10 @@
  * 4.13.12: rank by parsed time (ISO vs filename date — '2026-10-01' must not
  * lose to '2026-09-01T…'); native file mtime is a fallback; slots write
  * immediately then seal in place so hide/crash cannot drop the snapshot.
+ * 4.13.13: hiding the app forces a slot + day file even inside the 8s/20s
+ * throttle, but only when the cash actually changed (updatedAt alone must
+ * not rotate slots). The day file is rewritten when cash changes, not only
+ * on the first save of the calendar day.
  */
 (function (global) {
   'use strict';
@@ -30,6 +34,7 @@
   var MIN_LATEST_FILE_MS = 20000;
   var _lastSnapAt = 0;
   var _lastLatestFileAt = 0;
+  var _lastContentSig = '';
   var _exportBusy = false;
   var _encSlotCache = {};
   var _slotGen = 0;
@@ -364,6 +369,15 @@
       return false;
     }
   }
+  function contentSig(stateObj) {
+    try {
+      var clone = JSON.parse(JSON.stringify(stateObj));
+      if (clone && typeof clone === 'object') delete clone.updatedAt;
+      return JSON.stringify(clone);
+    } catch (e) {
+      return '';
+    }
+  }
   function onSave(stateObj) {
     if (!stateObj || isEmptyState(stateObj)) return;
     try {
@@ -374,22 +388,28 @@
         }
       }
     } catch (e) {}
+    var force = false;
+    try { force = !!global.__FIN_FORCE_BACKUP; } catch (eF) {}
     var now = Date.now();
     var meta = readMeta();
     var items = countItems(stateObj);
-    if (now - _lastSnapAt >= MIN_SNAP_MS) {
+    var sig = contentSig(stateObj);
+    var changed = !!(sig && sig !== _lastContentSig);
+    // Hide/crash: write the slot even inside the 8s throttle, but skip if
+    // only updatedAt moved — otherwise every app switch rotates history away.
+    if (changed && (force || now - _lastSnapAt >= MIN_SNAP_MS)) {
       _lastSnapAt = now;
+      _lastContentSig = sig;
       rotateWrite(stateObj);
       meta.lastSnapAt = new Date().toISOString();
       meta.lastItemCount = items;
     }
-    if (now - _lastLatestFileAt >= MIN_LATEST_FILE_MS) {
+    // refresh day file when cash changed (not only the first save of the day)
+    if (changed && (force || now - _lastLatestFileAt >= MIN_LATEST_FILE_MS)) {
       _lastLatestFileAt = now;
       exportEnvelope(stateObj, LAST_JSON_NAME, 'latest');
       meta.lastLatestAt = new Date().toISOString();
-    }
-    var day = todayStr();
-    if (meta.lastExportDay !== day) {
+      var day = todayStr();
       if (exportEnvelope(stateObj, 'finna-day-' + day + '.json', 'daily')) {
         meta.lastExportDay = day;
         meta.lastExportAt = new Date().toISOString();

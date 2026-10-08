@@ -1,4 +1,4 @@
-(function(){/* v118.16 4.13.12 */'use strict';
+(function(){/* v118.17 4.13.13 */'use strict';
 var KEY='kopeyka3_state_v1',ANCHOR='2026-08-17',CYCLE=['day','day','night','night','off','off'];
 var CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье','Прочее'];
 var BUDGET_CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
@@ -546,7 +546,9 @@ function flushLiveSave(){
   try{
     if(window.__FIN_DECRYPT_FAILED||window.__FIN_LOAD_PENDING)return;
     if(!hasLiveData(STATE))return;
-    save(true);
+    // Сворачивание не должно ждать 8 с между аварийными слотами.
+    window.__FIN_FORCE_BACKUP=true;
+    try{save(true);}finally{window.__FIN_FORCE_BACKUP=false;}
   }catch(e){}
 }
 try{
@@ -1619,7 +1621,14 @@ function showSettings(){
         else if(window.FinBridge&&window.FinBridge.checkForUpdate){window.FinBridge.checkForUpdate();toast('Проверяю обновления…');}
         else{
           fetch('https://raw.githubusercontent.com/clubvine44-gif/kopeyka3/main/update.json?t='+Date.now()).then(function(r){return r.json();}).then(function(j){
-            var local=(window.FinBridge&&window.FinBridge.getVersionCode)?window.FinBridge.getVersionCode():0;
+            var native=!!(window.FinBridge&&typeof window.FinBridge.getVersionCode==='function');
+            if(!native){
+              var webVer=(window.FinApp&&window.FinApp.version)||'';
+              if(webVer&&j.versionName&&String(j.versionName)===String(webVer))toast('Веб-версия актуальна ('+webVer+')');
+              else toast('Это веб-версия'+(webVer?(' '+webVer):'')+'. APK на телефоне обновляется сам.');
+              return;
+            }
+            var local=Number(window.FinBridge.getVersionCode())||0;
             if(j.versionCode>local)toast('Доступна '+j.versionName+' — закрой и открой приложение или скачай APK');
             else toast('У тебя актуальная версия'+(j.versionName?(' '+j.versionName):''));
           }).catch(function(){toast('Не удалось проверить');});
