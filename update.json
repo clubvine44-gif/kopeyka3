@@ -1,7 +1,7 @@
 {
-  "versionCode": 179,
-  "versionName": "4.13.12",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.12/Fin.apk",
-  "sha256": "d3bede3279695178446aa0bbe3c9b439d5adbe62908135300c2561dc0b929670",
-  "notes": "4.13.12 — аварийные копии сравниваются по времени, слот пишется сразу при сворачивании (versionCode 179)"
+  "versionCode": 180,
+  "versionName": "4.13.13",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.13/Fin.apk",
+  "sha256": "24a7d70de081a1b88fb0cdf44c76fda4af5da74dd7dc1cd73106d3759e46d046",
+  "notes": "4.13.13 — сворачивание сразу пишет аварийный слот, дневная копия обновляется в течение дня (versionCode 180)"
 }
