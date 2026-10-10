@@ -1,7 +1,7 @@
 {
-  "versionCode": 180,
-  "versionName": "4.13.13",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.13/Fin.apk",
-  "sha256": "24a7d70de081a1b88fb0cdf44c76fda4af5da74dd7dc1cd73106d3759e46d046",
-  "notes": "4.13.13 — сворачивание сразу пишет аварийный слот, дневная копия обновляется в течение дня (versionCode 180)"
+  "versionCode": 181,
+  "versionName": "4.13.14",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.14/Fin.apk",
+  "sha256": "42fe24dea4091ef97933fc597aca7cfb0348e86d23abefe28a63de6b2b112008",
+  "notes": "4.13.14 — операции закрытого месяца двигают кассу, «уже погашено» не списывает повторно (versionCode 181)"
 }
