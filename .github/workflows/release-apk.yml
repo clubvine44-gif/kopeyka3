@@ -154,7 +154,7 @@ jobs:
           gh release delete "$TAG" --yes 2>/dev/null || true
           timeout 120 gh release create "$TAG" Fin.apk Fin.apk.sha256 \
             --title "Финн ${RELEASE_VERSION_NAME}" \
-            --notes "APK ${RELEASE_VERSION_NAME} (versionCode ${RELEASE_VERSION_CODE}). Сворачивание сразу пишет аварийный слот, если касса изменилась. Дневная копия в Загрузки/Finna обновляется в течение дня. Веб-проверка обновления больше не путает сайт с APK." \
+            --notes "APK ${RELEASE_VERSION_NAME} (versionCode ${RELEASE_VERSION_CODE}). Операции в уже закрытом месяце снова двигают кассу. Новый долг с «уже погашено» не списывает деньги второй раз. Голос правит последнюю операцию по времени." \
             --repo "${{ github.repository }}"
       - name: Update public update manifest
         run: |
@@ -164,16 +164,20 @@ jobs:
           from pathlib import Path
           vn=os.environ['RELEASE_VERSION_NAME']; vc=int(os.environ['RELEASE_VERSION_CODE'])
           sha=Path('Fin.apk.sha256').read_text(encoding='utf-8').split()[0].strip()
-          Path('update.json').write_text(json.dumps({
+          body=json.dumps({
               'versionCode':vc,
               'versionName':vn,
               'apkUrl':f'https://github.com/clubvine44-gif/kopeyka3/releases/download/v{vn}/Fin.apk',
               'sha256':sha,
-              'notes':f'{vn} — сворачивание сразу пишет аварийный слот, дневная копия обновляется в течение дня (versionCode {vc})'
-          },ensure_ascii=False,indent=2)+'\n')
+              'notes':f'{vn} — операции закрытого месяца двигают кассу, «уже погашено» не списывает повторно (versionCode {vc})'
+          },ensure_ascii=False,indent=2)+'\n'
+          Path('update.json').write_text(body)
+          www=Path('android/app/src/main/assets/www/update.json')
+          if www.parent.exists():
+              www.write_text(body)
           PY
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add update.json
+          git add update.json android/app/src/main/assets/www/update.json
           git commit -m "Update Fin release manifest to ${RELEASE_VERSION_NAME}" || true
           git push origin HEAD:main

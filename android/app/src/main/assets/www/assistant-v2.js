@@ -1337,6 +1337,18 @@ function dateOf(a){return/^\d{4}-\d{2}-\d{2}$/.test(a.date||'')?a.date:today();}
 function classify(name,fallback){try{return window.kopeykaEngine&&window.kopeykaEngine.classifyName?window.kopeykaEngine.classifyName(name,fallback):fallback||'Прочее';}catch(e){return fallback||'Прочее';}}
 function canonicalName(name){var q=norm(name);if(/зубн|зубы|щетк/.test(q))return 'Зубная щётка';if(/футбол.*мяч|футбольн.*мяч/.test(q))return 'Футбольный мяч';return String(name||'Прочее');}
 
+function newestAlive(arr){
+  var best=null;
+  (arr||[]).forEach(function(x){
+    if(!x||x.deleted)return;
+    if(!best){best=x;return;}
+    var xa=Number(x.createdAt)||0, ba=Number(best.createdAt)||0;
+    if(xa!==ba){if(xa>ba)best=x;return;}
+    var xd=String(x.date||''), bd=String(best.date||'');
+    if(xd>bd||(xd===bd&&String(x.id||'')>String(best.id||'')))best=x;
+  });
+  return best;
+}
 function execute(a){
   if(!a||!a.type)throw Error('Пустое действие');
   var s=clone(),t=a.type,amt=n(a.amount),d,idx,r,o,cat=classify(a.name,a.category||'Прочее');
@@ -1359,11 +1371,11 @@ function execute(a){
   else if(t==='delete_debt'){d=find(s.debts,a.name,0);if(!d)throw Error('Долг не найден: '+(a.name||'')+'. Есть: '+(liveList(s.debts).map(function(x){return x.name;}).join(', ')||'нет'));softDel(s,'debts',d.id);}
   else if(t==='delete_reserve'){r=find(s.reserves,a.name||a.reserve,0);if(!r)throw Error('Резерв не найден');var back=n(r.saved);if(back>0){r.saved=0;s.reserveOps.push({id:id(),reserveId:r.id,type:'withdraw',amount:back,date:dateOf(a)});}softDel(s,'reserves',r.id);}
   else if(t==='delete_obligation'){o=find(s.obligations,a.name,a.amount);if(!o)throw Error('Обязательный не найден');softDel(s,'obligations',o.id);}
-  else if(t==='delete_expense'){var q=norm(a.name||'');idx=-1;for(var i=s.expenses.length-1;i>=0;i--){if(s.expenses[i]&&s.expenses[i].deleted)continue;if(!q||norm(s.expenses[i].note||s.expenses[i].category).indexOf(q)!==-1){idx=i;break;}}if(idx<0)throw Error('Расход не найден');softDel(s,'expenses',s.expenses[idx].id);}
+  else if(t==='delete_expense'){var q=norm(a.name||'');var victim=null;if(!q){if(s.lastOp&&s.lastOp.kind==='expense')victim=(s.expenses||[]).find(function(x){return x&&x.id===s.lastOp.id&&!x.deleted;})||null;if(!victim)victim=newestAlive(s.expenses);}else{for(var i=s.expenses.length-1;i>=0;i--){var ex=s.expenses[i];if(!ex||ex.deleted)continue;if(norm(ex.note||ex.category).indexOf(q)!==-1){victim=ex;break;}}}if(!victim)throw Error('Расход не найден');softDel(s,'expenses',victim.id);}
   else if(t==='delete_income'){var qi=norm(a.name||'');idx=-1;for(var j=s.income.length-1;j>=0;j--){if(s.income[j]&&s.income[j].deleted)continue;if(!qi||norm(s.income[j].note).indexOf(qi)!==-1){idx=j;break;}}if(idx<0)throw Error('Доход не найден');softDel(s,'income',s.income[idx].id);}
   else if(t==='delete_last'){
     var removed=false, last=s.lastOp||null;
-    function newest(arr){if(!arr||!arr.length)return null;var best=null;for(var i=0;i<arr.length;i++){var x=arr[i];if(!x||x.deleted)continue;if(!best){best=x;continue;}var xd=String(x.date||''),bd=String(best.date||'');if(xd>bd||(xd===bd&&String(x.id||'')>String(best.id||'')))best=x;}return best;}
+    function newest(arr){return newestAlive(arr);}
     if(last&&last.id&&last.kind){
       if(last.kind==='expense')removed=!!softDel(s,'expenses',last.id);
       else if(last.kind==='income')removed=!!softDel(s,'income',last.id);
@@ -1392,7 +1404,7 @@ function execute(a){
       s.lastOp=null;
     }
   }
-  else if(t==='change_last'){var target2=a.target||'expense',arr=target2==='income'?s.income:s.expenses;var lastLive=null;for(var ci=arr.length-1;ci>=0;ci--){if(arr[ci]&&!arr[ci].deleted){lastLive=arr[ci];break;}}if(!lastLive)throw Error('Нет операции');if(amt<=0)throw Error('Сумма > 0');lastLive.amount=amt;if(a.name)lastLive.note=String(a.name);}
+  else if(t==='change_last'){var target2=a.target||'expense',arr=target2==='income'?s.income:s.expenses;var lastLive=null;if(s.lastOp&&s.lastOp.id&&((target2==='income'&&s.lastOp.kind==='income')||(target2!=='income'&&s.lastOp.kind==='expense'))){lastLive=(arr||[]).find(function(x){return x&&x.id===s.lastOp.id&&!x.deleted;})||null;}if(!lastLive)lastLive=newestAlive(arr);if(!lastLive)throw Error('Нет операции');if(amt<=0)throw Error('Сумма > 0');lastLive.amount=amt;if(a.name)lastLive.note=String(a.name);lastLive.editedAt=new Date().toISOString();}
   else if(t==='set_opening_balance'){s.settings=s.settings||{};s.settings.openingBalance=amt;}
   else if(t==='set_day_rate'){s.settings=s.settings||{};s.settings.dayRate=amt;}
   else if(t==='set_night_rate'){s.settings=s.settings||{};s.settings.nightRate=amt;}

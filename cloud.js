@@ -242,6 +242,7 @@ writeLocal(n);suppressSave=true;try{
   window.STATE=n;
   try{applyMeal(n);}catch(_){}
   try{if(typeof window.ensureMonth==='function')window.ensureMonth();}catch(_){}
+  try{if(typeof window.trustPreAnchorCash==='function')window.trustPreAnchorCash();}catch(_){}
   var next=JSON.stringify(window.STATE||n);
   if(prev!==next&&typeof window.render==='function')window.render();
 }finally{suppressSave=false;}lastSent=JSON.stringify(window.STATE||n);if(label)toast(label);}

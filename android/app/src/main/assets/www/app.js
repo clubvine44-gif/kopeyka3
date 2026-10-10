@@ -1,4 +1,4 @@
-(function(){/* v118.17 4.13.13 */'use strict';
+(function(){/* v118.18 4.13.14 */'use strict';
 var KEY='kopeyka3_state_v1',ANCHOR='2026-08-17',CYCLE=['day','day','night','night','off','off'];
 var CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье','Прочее'];
 var BUDGET_CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
@@ -483,7 +483,7 @@ function syncDebtPaid(d, newPaid, nameHint){
   }
 }
 
-function undoLast(){if(!undoStack.length){toast('Нечего отменять');return;}try{STATE=norm(JSON.parse(undoStack.pop()));save(true);render();toast('Отменено');}catch(e){toast('Не удалось отменить');}}
+function undoLast(){if(!undoStack.length){toast('Нечего отменять');return;}try{STATE=norm(JSON.parse(undoStack.pop()));trustPreAnchorCash();save(true);render();toast('Отменено');}catch(e){toast('Не удалось отменить');}}
 function ensureOpLog(){if(!STATE.opLog||!Array.isArray(STATE.opLog))STATE.opLog=[];}
 function logOpChange(kind,id,action,note){
   ensureOpLog();
@@ -511,6 +511,49 @@ function softDeleteIn(arrKey,id,kind,note){
   return row;
 }
 
+function preAnchorDeltaSum(){
+  var anchor=(STATE.settings&&STATE.settings.month)||today().slice(0,7);
+  if(!/^\d{4}-\d{2}$/.test(String(anchor)))return 0;
+  var seen={};
+  function mark(arr){
+    (arr||[]).forEach(function(x){
+      if(!alive(x))return;
+      var m=String(x.date||'').slice(0,7);
+      if(/^\d{4}-\d{2}$/.test(m)&&cmpMonth(m,anchor)<0)seen[m]=1;
+    });
+  }
+  mark(STATE.income);mark(STATE.expenses);mark(STATE.reserveOps);
+  var sum=0;
+  Object.keys(seen).forEach(function(m){sum+=monthOps(m).delta;});
+  return sum;
+}
+/** Снимок уже свёрнутых месяцев. Само открытие кассы его не двигает. */
+function trustPreAnchorCash(){
+  try{window.__FIN_BAKED_PRE=preAnchorDeltaSum();}catch(e){window.__FIN_BAKED_PRE=0;}
+}
+/**
+ * Операции старше якоря месяца не входят в текущую кассу сами по себе:
+ * их сумма уже сидит в openingBalance. Правка, удаление или задним числом
+ * добавленная операция должна сдвинуть якорь на ту же дельту, иначе
+ * расход виден в списке, а деньги не меняются.
+ */
+function rebalancePreAnchorCash(){
+  try{
+    if(window.__FIN_DECRYPT_FAILED||window.__FIN_LOAD_PENDING)return;
+    if(!STATE||!STATE.settings)return;
+    var now=preAnchorDeltaSum();
+    if(window.__FIN_BAKED_PRE==null||window.__FIN_BAKED_PRE===undefined){
+      window.__FIN_BAKED_PRE=now;
+      return;
+    }
+    var diff=now-Number(window.__FIN_BAKED_PRE);
+    if(!diff)return;
+    STATE.settings.openingBalance=num(STATE.settings.openingBalance)+diff;
+    window.__FIN_BAKED_PRE=now;
+  }catch(e){}
+}
+window.trustPreAnchorCash=trustPreAnchorCash;
+window.rebalancePreAnchorCash=rebalancePreAnchorCash;
 function save(skipUndo){
   try{
     // Locked encrypted blob: never write over it (even with "recovered" data).
@@ -519,6 +562,7 @@ function save(skipUndo){
     var existing=localStorage.getItem(KEY);
     if(existing&&String(existing).indexOf('FINENC1:')===0&&!hasLiveData(STATE))return;
   }catch(e){}
+  try{rebalancePreAnchorCash();}catch(eR){}
 
   STATE.updatedAt=new Date().toISOString();
   try{
@@ -570,6 +614,7 @@ function recoverLockedState(stateObj, source){
     window.__FIN_LOAD_PENDING=false;
   }catch(e){}
   STATE=n;
+  try{trustPreAnchorCash();}catch(eT){}
   try{save(true);}catch(e){}
   try{if(typeof render==='function')render();}catch(e){}
   return true;
@@ -639,7 +684,7 @@ function computeReminders(){
 }
 function syncReminders(){try{if(window.FinBridge&&window.FinBridge.scheduleReminders)window.FinBridge.scheduleReminders(JSON.stringify(computeReminders()));}catch(e){}}
 function exportData(){try{if(window.FinBackup&&window.FinBackup.forceFileBackup){window.FinBackup.forceSnapshot(STATE);window.FinBackup.forceFileBackup(STATE);var fold='Загрузки / Finna';try{if(window.FinBridge&&window.FinBridge.getBackupFolderHint)fold=window.FinBridge.getBackupFolderHint();}catch(e){}toast('Копия сохранена: '+fold);return;}var data=JSON.stringify(STATE,null,2),filename='finna-backup-'+today()+'.json';if(window.FinBridge&&window.FinBridge.saveBackup){window.FinBridge.saveBackup(data,filename);}else{var blob=new Blob([data],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(function(){URL.revokeObjectURL(url);},2000);}toast('Экспорт запущен');}catch(e){toast('Не удалось сделать экспорт');}}
-function importData(){var inp=document.getElementById('importFileInput');if(!inp){inp=document.createElement('input');inp.type='file';inp.accept='.json,application/json';inp.style.display='none';inp.id='importFileInput';document.body.appendChild(inp);inp.onchange=function(){var f=inp.files&&inp.files[0];if(!f){return;}var reader=new FileReader();reader.onload=function(){try{var parsed=JSON.parse(reader.result);var stateObj=parsed;var mealRestore=null;try{if(window.FinBackup&&typeof window.FinBackup.inspectBackup==='function'){var env=window.FinBackup.inspectBackup(parsed);if(env&&env.state){stateObj=env.state;mealRestore=env.meal||null;}}else if(window.FinBackup&&window.FinBackup.parseBackupPayload){var un=window.FinBackup.parseBackupPayload(parsed);if(un)stateObj=un;}}catch(e){}if(!stateObj||typeof stateObj!=='object')throw new Error('bad');appConfirm('Заменить текущие данные данными из файла?\nБудет восстановлен полный снимок (все операции, долги, резервы).\nТекущие можно вернуть через «Отменить».','Импорт').then(function(ok){if(!ok)return;var incoming=norm(stateObj);if(!hasLiveData(incoming)){toast('Файл пустой или без кассы');return;}pushUndo();if(window.__FIN_DECRYPT_FAILED){if(!recoverLockedState(incoming,'import')){toast('Файл пустой или без кассы');return;}}else{STATE=incoming;save(true);}try{if(mealRestore&&window.FinBackup&&typeof window.FinBackup.writeMeal==='function')window.FinBackup.writeMeal(mealRestore);}catch(eM){}render();toast('Данные восстановлены из копии');});}catch(e){toast('Файл повреждён или не в формате Финны');}};reader.readAsText(f);inp.value='';};}inp.click();}
+function importData(){var inp=document.getElementById('importFileInput');if(!inp){inp=document.createElement('input');inp.type='file';inp.accept='.json,application/json';inp.style.display='none';inp.id='importFileInput';document.body.appendChild(inp);inp.onchange=function(){var f=inp.files&&inp.files[0];if(!f){return;}var reader=new FileReader();reader.onload=function(){try{var parsed=JSON.parse(reader.result);var stateObj=parsed;var mealRestore=null;try{if(window.FinBackup&&typeof window.FinBackup.inspectBackup==='function'){var env=window.FinBackup.inspectBackup(parsed);if(env&&env.state){stateObj=env.state;mealRestore=env.meal||null;}}else if(window.FinBackup&&window.FinBackup.parseBackupPayload){var un=window.FinBackup.parseBackupPayload(parsed);if(un)stateObj=un;}}catch(e){}if(!stateObj||typeof stateObj!=='object')throw new Error('bad');appConfirm('Заменить текущие данные данными из файла?\nБудет восстановлен полный снимок (все операции, долги, резервы).\nТекущие можно вернуть через «Отменить».','Импорт').then(function(ok){if(!ok)return;var incoming=norm(stateObj);if(!hasLiveData(incoming)){toast('Файл пустой или без кассы');return;}pushUndo();if(window.__FIN_DECRYPT_FAILED){if(!recoverLockedState(incoming,'import')){toast('Файл пустой или без кассы');return;}}else{STATE=incoming;trustPreAnchorCash();save(true);}try{if(mealRestore&&window.FinBackup&&typeof window.FinBackup.writeMeal==='function')window.FinBackup.writeMeal(mealRestore);}catch(eM){}render();toast('Данные восстановлены из копии');});}catch(e){toast('Файл повреждён или не в формате Финны');}};reader.readAsText(f);inp.value='';};}inp.click();}
 window.kopeykaExport=exportData;window.kopeykaImport=importData;
 window.defaultState=def;window.setAppState=function(s){pushUndo();STATE=norm(s);ensureMonth();save(true);render();};window.saveState=function(){save(true);};
 Object.defineProperty(window,'STATE',{get:function(){return STATE;},set:function(v){STATE=norm(v);}});
@@ -765,6 +810,8 @@ function ensureMonth(){
   STATE.settings.month=cur;
   viewMonth=cur;
   try{delete STATE.settings.carryCashRepaired;}catch(e){STATE.settings.carryCashRepaired=false;}
+  // Якорь уже включает свёрнутые месяцы — не вычитать их повторно в save().
+  try{trustPreAnchorCash();}catch(eT){}
   save(true);
   toast('Новый месяц: остаток кассы '+fmt(STATE.settings.openingBalance)+' перенесён');
 }
@@ -1964,7 +2011,7 @@ if(nearestObl.length && nearestObl[0].overdue){
 }else if(nearestObl.length && nearestObl[0].daysUntil <= 3){
   attention.push('До платежа «'+nearestObl[0].name+'» осталось '+nearestObl[0].daysUntil+' дн. Нужно '+fmt(nearestObl[0].amount)+'.');
 }
-if(c.available > 0 && pacePerDay > c.daily * 1.2 && daysPassed > 3){
+if(c.available > 0 && c.daily > 0 && pacePerDay > c.daily * 1.2 && daysPassed > 3){
   attention.push('Текущий темп расходов выше безопасного на '+Math.round((pacePerDay/c.daily-1)*100)+'%.');
 }
 (STATE.reserves||[]).forEach(function(r){
@@ -2443,13 +2490,13 @@ if(k==='res'){var r=STATE.reserves.find(function(i){return i.id===id;});if(!r)re
     });
   } else if(act===1){
     appPrompt('Снять','0','Снять с резерва').then(function(av){
-      var a=num(av);if(a>0&&a<=num(r.saved)){pushUndo();r.saved=num(r.saved)-a;
-        STATE.reserveOps.push({id:uid(),reserveId:id,type:'withdraw',amount:a,date:today()});save(true);render();toast('Снято');}
+      var a=num(av);if(!(a>0))return;if(a>num(r.saved))return toast('В резерве только '+fmt(num(r.saved)));pushUndo();r.saved=num(r.saved)-a;
+        STATE.reserveOps.push(stampOp({id:uid(),reserveId:id,type:'withdraw',amount:a,date:today()}));save(true);render();toast('Снято');
     });
   } else if(act===0){
     appPrompt('Пополнить','0','Пополнить резерв').then(function(av){
       var a2=num(av);if(a2>0){pushUndo();r.saved=num(r.saved)+a2;
-        STATE.reserveOps.push({id:uid(),reserveId:id,type:'deposit',amount:a2,date:today()});save(true);render();toast('Пополнено');}
+        STATE.reserveOps.push(stampOp({id:uid(),reserveId:id,type:'deposit',amount:a2,date:today()}));save(true);render();toast('Пополнено');}
     });
   }
 });return;}
@@ -2629,11 +2676,10 @@ function addDebt(){
     if(pd<0)pd=0;if(pd>tot)pd=tot;
     pushUndo();
     var _id=uid();
-    STATE.debts.push({id:_id,name:name,total:tot,paid:0});
-    var d=STATE.debts[STATE.debts.length-1];
-    if(pd>0)syncDebtPaid(d,pd);
+    // Уже погашенное — это история до начала кассы, а не сегодняшний расход.
+    STATE.debts.push({id:_id,name:name,total:tot,paid:pd});
     trackLastOp('debt',_id);
-    save(true);render();toast(pd>0?('Долг · погашено '+fmt(pd)):'Долг добавлен');
+    save(true);render();toast(pd>0?('Долг добавлен · уже погашено '+fmt(pd)+' (касса не списана)'):'Долг добавлен');
   });
 }
 function addObligation(){appPrompt('Название (Алименты, Аренда…)','','Платёж').then(function(n){if(!n)return;appPrompt('Сумма каждый месяц','','Сумма').then(function(a){a=num(a);if(a<=0)return toast('Укажи сумму');appPrompt('Число месяца (1–31)','25','День').then(function(d){d=num(d);if(d<1||d>31)return toast('День 1–31');pushUndo();STATE.obligations.push({id:uid(),name:n,amount:a,day:d,active:true});save(true);render();toast('Обязательный платёж добавлен');});});});}
@@ -2810,6 +2856,7 @@ function runAppBoot(){
     if(!window.__FIN_DECRYPT_FAILED){
       STATE=norm(STATE);
       ensureMonth();
+      if(window.__FIN_BAKED_PRE==null)trustPreAnchorCash();
       try{if(typeof maybeRepairCarryCash==='function')maybeRepairCarryCash();}catch(e){}
       var c=compute();
     }
