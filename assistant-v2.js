@@ -1341,13 +1341,24 @@ function newestAlive(arr){
   var best=null;
   (arr||[]).forEach(function(x){
     if(!x||x.deleted)return;
-    if(!best){best=x;return;}
-    var xa=Number(x.createdAt)||0, ba=Number(best.createdAt)||0;
-    if(xa!==ba){if(xa>ba)best=x;return;}
-    var xd=String(x.date||''), bd=String(best.date||'');
-    if(xd>bd||(xd===bd&&String(x.id||'')>String(best.id||'')))best=x;
+    if(!best||isNewerOp(x,best))best=x;
   });
   return best;
+}
+function isNewerOp(a,b){
+  if(!b)return !!a;
+  if(!a)return false;
+  var xa=Number(a.createdAt)||0, ba=Number(b.createdAt)||0;
+  if(xa!==ba)return xa>ba;
+  var xd=String(a.date||''), bd=String(b.date||'');
+  if(xd!==bd)return xd>bd;
+  return String(a.id||'')>String(b.id||'');
+}
+function dropExpense(s,id){
+  var row=(s.expenses||[]).find(function(x){return x&&x.id===id&&!x.deleted;});
+  if(!row)return false;
+  try{if(typeof window.finAdjustLinkedExpense==='function')window.finAdjustLinkedExpense(s,row,null);}catch(e){}
+  return !!softDel(s,'expenses',id);
 }
 function execute(a){
   if(!a||!a.type)throw Error('Пустое действие');
@@ -1371,13 +1382,13 @@ function execute(a){
   else if(t==='delete_debt'){d=find(s.debts,a.name,0);if(!d)throw Error('Долг не найден: '+(a.name||'')+'. Есть: '+(liveList(s.debts).map(function(x){return x.name;}).join(', ')||'нет'));softDel(s,'debts',d.id);}
   else if(t==='delete_reserve'){r=find(s.reserves,a.name||a.reserve,0);if(!r)throw Error('Резерв не найден');var back=n(r.saved);if(back>0){r.saved=0;s.reserveOps.push({id:id(),reserveId:r.id,type:'withdraw',amount:back,date:dateOf(a)});}softDel(s,'reserves',r.id);}
   else if(t==='delete_obligation'){o=find(s.obligations,a.name,a.amount);if(!o)throw Error('Обязательный не найден');softDel(s,'obligations',o.id);}
-  else if(t==='delete_expense'){var q=norm(a.name||'');var victim=null;if(!q){if(s.lastOp&&s.lastOp.kind==='expense')victim=(s.expenses||[]).find(function(x){return x&&x.id===s.lastOp.id&&!x.deleted;})||null;if(!victim)victim=newestAlive(s.expenses);}else{for(var i=s.expenses.length-1;i>=0;i--){var ex=s.expenses[i];if(!ex||ex.deleted)continue;if(norm(ex.note||ex.category).indexOf(q)!==-1){victim=ex;break;}}}if(!victim)throw Error('Расход не найден');softDel(s,'expenses',victim.id);}
-  else if(t==='delete_income'){var qi=norm(a.name||'');idx=-1;for(var j=s.income.length-1;j>=0;j--){if(s.income[j]&&s.income[j].deleted)continue;if(!qi||norm(s.income[j].note).indexOf(qi)!==-1){idx=j;break;}}if(idx<0)throw Error('Доход не найден');softDel(s,'income',s.income[idx].id);}
+  else if(t==='delete_expense'){var q=norm(a.name||'');var victim=null;if(!q){if(s.lastOp&&s.lastOp.kind==='expense')victim=(s.expenses||[]).find(function(x){return x&&x.id===s.lastOp.id&&!x.deleted;})||null;if(!victim)victim=newestAlive(s.expenses);}else{var bestEx=null;(s.expenses||[]).forEach(function(ex){if(!ex||ex.deleted)return;if(norm(ex.note||ex.category).indexOf(q)===-1)return;if(!bestEx||isNewerOp(ex,bestEx))bestEx=ex;});victim=bestEx;}if(!victim)throw Error('Расход не найден');dropExpense(s,victim.id);}
+  else if(t==='delete_income'){var qi=norm(a.name||'');var victimI=null;if(!qi){if(s.lastOp&&s.lastOp.kind==='income')victimI=(s.income||[]).find(function(x){return x&&x.id===s.lastOp.id&&!x.deleted;})||null;if(!victimI)victimI=newestAlive(s.income);}else{(s.income||[]).forEach(function(x){if(!x||x.deleted)return;if(norm(x.note).indexOf(qi)===-1)return;if(!victimI||isNewerOp(x,victimI))victimI=x;});}if(!victimI)throw Error('Доход не найден');softDel(s,'income',victimI.id);}
   else if(t==='delete_last'){
     var removed=false, last=s.lastOp||null;
     function newest(arr){return newestAlive(arr);}
     if(last&&last.id&&last.kind){
-      if(last.kind==='expense')removed=!!softDel(s,'expenses',last.id);
+      if(last.kind==='expense')removed=dropExpense(s,last.id);
       else if(last.kind==='income')removed=!!softDel(s,'income',last.id);
       else if(last.kind==='debt')removed=!!softDel(s,'debts',last.id);
       else if(last.kind==='reserve'){
@@ -1394,17 +1405,17 @@ function execute(a){
       if(target==='expense'&&ne){pick=ne;kind='expense';}
       else if(target==='income'&&ni){pick=ni;kind='income';}
       else {
-        if(ne&&ni){var nde=String(ne.date||''),ndi=String(ni.date||'');if(nde>ndi||(nde===ndi&&String(ne.id)>String(ni.id))){pick=ne;kind='expense';}else{pick=ni;kind='income';}}
+        if(ne&&ni){if(isNewerOp(ne,ni)){pick=ne;kind='expense';}else{pick=ni;kind='income';}}
         else if(ne){pick=ne;kind='expense';}
         else if(ni){pick=ni;kind='income';}
       }
       if(!pick)throw Error('Нечего удалять');
-      if(kind==='expense')softDel(s,'expenses',pick.id);
+      if(kind==='expense')dropExpense(s,pick.id);
       else softDel(s,'income',pick.id);
       s.lastOp=null;
     }
   }
-  else if(t==='change_last'){var target2=a.target||'expense',arr=target2==='income'?s.income:s.expenses;var lastLive=null;if(s.lastOp&&s.lastOp.id&&((target2==='income'&&s.lastOp.kind==='income')||(target2!=='income'&&s.lastOp.kind==='expense'))){lastLive=(arr||[]).find(function(x){return x&&x.id===s.lastOp.id&&!x.deleted;})||null;}if(!lastLive)lastLive=newestAlive(arr);if(!lastLive)throw Error('Нет операции');if(amt<=0)throw Error('Сумма > 0');lastLive.amount=amt;if(a.name)lastLive.note=String(a.name);lastLive.editedAt=new Date().toISOString();}
+  else if(t==='change_last'){var target2=a.target||'expense',arr=target2==='income'?s.income:s.expenses;var lastLive=null;if(s.lastOp&&s.lastOp.id&&((target2==='income'&&s.lastOp.kind==='income')||(target2!=='income'&&s.lastOp.kind==='expense'))){lastLive=(arr||[]).find(function(x){return x&&x.id===s.lastOp.id&&!x.deleted;})||null;}if(!lastLive)lastLive=newestAlive(arr);if(!lastLive)throw Error('Нет операции');if(amt<=0)throw Error('Сумма > 0');if(target2!=='income'){try{if(typeof window.finAdjustLinkedExpense==='function')window.finAdjustLinkedExpense(s,lastLive,amt);}catch(e){}}lastLive.amount=amt;if(a.name)lastLive.note=String(a.name);lastLive.editedAt=new Date().toISOString();}
   else if(t==='set_opening_balance'){s.settings=s.settings||{};s.settings.openingBalance=amt;}
   else if(t==='set_day_rate'){s.settings=s.settings||{};s.settings.dayRate=amt;}
   else if(t==='set_night_rate'){s.settings=s.settings||{};s.settings.nightRate=amt;}

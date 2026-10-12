@@ -238,8 +238,8 @@ assert.ok(appSrc.indexOf('function flushLiveSave') >= 0, 'pagehide flushes live 
 assert.ok(storeSrc.indexOf('FinBridge.setInstallId') >= 0, 'install id mirrored to native prefs');
 
 var gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle'), 'utf8');
-assert.ok(/versionCode\s+181/.test(gradle), 'versionCode 181');
-assert.ok(/versionName\s+"4\.13\.14"/.test(gradle), 'versionName 4.13.14');
+assert.ok(/versionCode\s+182/.test(gradle), 'versionCode 182');
+assert.ok(/versionName\s+"4\.13\.15"/.test(gradle), 'versionName 4.13.15');
 
 var mainJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/MainActivity.java'), 'utf8');
 assert.ok(mainJava.indexOf('isTrustedApkUrl') >= 0, 'apk url allowlisted');
@@ -635,26 +635,91 @@ assert.ok(bakSrc.indexOf('stale finna-latest.json must not beat') >= 0, 'stale l
 assert.ok(bakSrc.indexOf('if (latest && latest.state)') < 0 || bakSrc.indexOf('pickNewestEmergency') >= 0, 'latest is not an early return winner');
 
 var swSrc = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
-assert.ok(swSrc.indexOf("CACHE='kopeyka3-v92'") >= 0, 'sw cache v92');
+assert.ok(swSrc.indexOf("CACHE='kopeyka3-v93'") >= 0, 'sw cache v93');
 assert.ok(swSrc.indexOf("profile.js?v=") >= 0, 'sw precaches profile.js');
-assert.ok(idx.indexOf("profile.js?v=2026101101") >= 0, 'index loads profile with cache bust');
-assert.ok(idx.indexOf("sw.js?v=92") >= 0, 'index registers sw v92');
-assert.ok(idx.indexOf("onboard.js?v=2026101101") >= 0, 'index onboard cache aligned');
-assert.ok(swSrc.indexOf("onboard.js?v=") >= 0 && swSrc.indexOf("2026101101") >= 0, 'sw onboard cache aligned');
-assert.ok(idx.indexOf("finn3d.js?v=2026101101") >= 0, 'index finn3d cache aligned');
+assert.ok(idx.indexOf("profile.js?v=2026101301") >= 0, 'index loads profile with cache bust');
+assert.ok(idx.indexOf("sw.js?v=93") >= 0, 'index registers sw v93');
+assert.ok(idx.indexOf("onboard.js?v=2026101301") >= 0, 'index onboard cache aligned');
+assert.ok(swSrc.indexOf("onboard.js?v=") >= 0 && swSrc.indexOf("2026101301") >= 0, 'sw onboard cache aligned');
+assert.ok(idx.indexOf("finn3d.js?v=2026101301") >= 0, 'index finn3d cache aligned');
 assert.ok(cloudSrc.indexOf('escHtml(currentUser.email') >= 0, 'cloud email escaped in auth UI');
 assert.ok(manifestXml.indexOf('android:allowBackup="false"') >= 0, 'android auto-backup off so cipher is not restored without key');
 assert.ok(updJava.indexOf('if (notifyUpdate(context, msg))') >= 0, 'notified_code only after successful push');
 assert.ok(updJava.indexOf('if (!can) return false') >= 0, 'no notify permission must retry later');
 assert.ok(bridgeJava.indexOf('pubMod > privMod') >= 0, 'backup read prefers newer Downloads copy');
-assert.ok(mainJava.indexOf('FinApp/4.13.14') >= 0, 'native UA matches release');
+assert.ok(mainJava.indexOf('FinApp/4.13.15') >= 0, 'native UA matches release');
 assert.ok(cloudSrc.indexOf('trustPreAnchorCash') >= 0, 'cloud apply trusts folded opening');
 assert.ok(appSrc.indexOf('function rebalancePreAnchorCash') >= 0, 'past-month edits move the cash anchor');
 assert.ok(appSrc.indexOf('function trustPreAnchorCash') >= 0, 'import/undo/fold do not double-count anchor');
 assert.ok(appSrc.indexOf('rebalancePreAnchorCash()') >= 0, 'save rebalances pre-anchor cash');
 assert.ok(appSrc.indexOf('if(pd>0)syncDebtPaid(d,pd)') < 0, 'new debt already-paid must not create a cash expense');
 assert.ok(appSrc.indexOf('касса не списана') >= 0, 'new debt explains historical paid');
-assert.ok(asstSrc.indexOf('function newestAlive') >= 0, 'assistant picks newest op, not array tail');
+assert.ok(appSrc.indexOf('function finAdjustLinkedExpense') >= 0, 'linked expense keeps debt/obligation in sync');
+assert.ok(appSrc.indexOf('obligMonth:month') >= 0, 'obligation expense remembers the billed month');
+assert.ok(appSrc.indexOf('__payDates') >= 0, 'reset obligation matches expense by pay date');
+assert.ok(appSrc.indexOf('debtId:found.id') >= 0, 'day-plan debt expense is linked');
+assert.ok(asstSrc.indexOf('function dropExpense') >= 0, 'voice delete adjusts linked debt');
+assert.ok(asstSrc.indexOf('finAdjustLinkedExpense') >= 0, 'voice amount change adjusts linked debt');
+assert.ok(asstSrc.indexOf('function isNewerOp') >= 0, 'voice compares ops by time');
+(function linkedExpenseSync(){
+  var appSandbox = {
+    window: {},
+    document: {
+      readyState: 'loading',
+      addEventListener: function () {},
+      getElementById: function () { return null; },
+      querySelector: function () { return null; },
+      querySelectorAll: function () { return []; }
+    },
+    navigator: { onLine: true, userAgent: 'test', hardwareConcurrency: 8, deviceMemory: 8 },
+    localStorage: {
+      _d: {},
+      getItem: function (k) { return this._d[k] || null; },
+      setItem: function (k, v) { this._d[k] = String(v); },
+      removeItem: function (k) { delete this._d[k]; }
+    },
+    console: console,
+    setTimeout: function () {},
+    clearTimeout: function () {},
+    requestAnimationFrame: function () {},
+    history: { pushState: function () {} },
+    Date: Date, JSON: JSON, Object: Object, Array: Array, Math: Math, Number: Number,
+    String: String, Error: Error, Promise: Promise, isFinite: isFinite, parseInt: parseInt, parseFloat: parseFloat
+  };
+  appSandbox.window = appSandbox;
+  appSandbox.global = appSandbox;
+  appSandbox.window.localStorage = appSandbox.localStorage;
+  appSandbox.window.document = appSandbox.document;
+  appSandbox.window.navigator = appSandbox.navigator;
+  appSandbox.window.addEventListener = function () {};
+  appSandbox.window.dispatchEvent = function () {};
+  appSandbox.window.history = appSandbox.history;
+  vm.runInNewContext(appSrc, appSandbox, { filename: 'app.js' });
+  var adj = appSandbox.finAdjustLinkedExpense;
+  assert.strictEqual(typeof adj, 'function', 'finAdjustLinkedExpense exported');
+  var st = {
+    debts: [{ id: 'd1', name: 'Папа', total: 10000, paid: 5000 }],
+    expenses: [{ id: 'e1', amount: 1000, category: 'Долг', note: 'Папа', date: '2026-10-01', debtId: 'd1' }],
+    obligationPays: [], obligations: []
+  };
+  adj(st, st.expenses[0], null);
+  assert.strictEqual(st.debts[0].paid, 4000, 'deleting a debt payment lowers paid, keeps historical remainder');
+  st.expenses[0].amount = 1000;
+  st.debts[0].paid = 5000;
+  adj(st, st.expenses[0], 2500);
+  assert.strictEqual(st.debts[0].paid, 6500, 'raising a debt expense raises paid');
+  adj(st, st.expenses[0], 9000);
+  assert.strictEqual(st.debts[0].paid, 10000, 'paid cannot exceed debt total');
+  var ob = {
+    debts: [],
+    expenses: [{ id: 'oe', amount: 2000, category: 'Обязательные', note: 'Аренда', date: '2026-10-13', obligId: 'ob1', obligMonth: '2026-09' }],
+    obligationPays: [{ id: 'p1', obligId: 'ob1', month: '2026-09', amount: 2000, date: '2026-10-13' }],
+    obligations: [{ id: 'ob1', amount: 2000, deleted: false }]
+  };
+  adj(ob, ob.expenses[0], null);
+  assert.ok(ob.obligationPays[0].deleted, 'deleting obligation expense voids the pay even if months differ');
+})();
+
 (function preAnchorRebalance(){
   var opening=7000, baked=-3000, now=0;
   var diff=now-baked;
