@@ -1,7 +1,7 @@
 {
-  "versionCode": 181,
-  "versionName": "4.13.14",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.14/Fin.apk",
-  "sha256": "42fe24dea4091ef97933fc597aca7cfb0348e86d23abefe28a63de6b2b112008",
-  "notes": "4.13.14 — операции закрытого месяца двигают кассу, «уже погашено» не списывает повторно (versionCode 181)"
+  "versionCode": 182,
+  "versionName": "4.13.15",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.15/Fin.apk",
+  "sha256": "4cbb1ed9078181f8ab888646d82c7f9959640648cd7604f2530f9bed3559bc3e",
+  "notes": "4.13.15 — удаление платежа по долгу двигает «погашено» вместе с кассой (versionCode 182)"
 }
