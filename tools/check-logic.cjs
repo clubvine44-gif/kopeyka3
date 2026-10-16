@@ -238,8 +238,8 @@ assert.ok(appSrc.indexOf('function flushLiveSave') >= 0, 'pagehide flushes live 
 assert.ok(storeSrc.indexOf('FinBridge.setInstallId') >= 0, 'install id mirrored to native prefs');
 
 var gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle'), 'utf8');
-assert.ok(/versionCode\s+182/.test(gradle), 'versionCode 182');
-assert.ok(/versionName\s+"4\.13\.15"/.test(gradle), 'versionName 4.13.15');
+assert.ok(/versionCode\s+183/.test(gradle), 'versionCode 183');
+assert.ok(/versionName\s+"4\.13\.16"/.test(gradle), 'versionName 4.13.16');
 
 var mainJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/MainActivity.java'), 'utf8');
 assert.ok(mainJava.indexOf('isTrustedApkUrl') >= 0, 'apk url allowlisted');
@@ -635,19 +635,19 @@ assert.ok(bakSrc.indexOf('stale finna-latest.json must not beat') >= 0, 'stale l
 assert.ok(bakSrc.indexOf('if (latest && latest.state)') < 0 || bakSrc.indexOf('pickNewestEmergency') >= 0, 'latest is not an early return winner');
 
 var swSrc = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
-assert.ok(swSrc.indexOf("CACHE='kopeyka3-v93'") >= 0, 'sw cache v93');
+assert.ok(swSrc.indexOf("CACHE='kopeyka3-v94'") >= 0, 'sw cache v94');
 assert.ok(swSrc.indexOf("profile.js?v=") >= 0, 'sw precaches profile.js');
-assert.ok(idx.indexOf("profile.js?v=2026101301") >= 0, 'index loads profile with cache bust');
-assert.ok(idx.indexOf("sw.js?v=93") >= 0, 'index registers sw v93');
-assert.ok(idx.indexOf("onboard.js?v=2026101301") >= 0, 'index onboard cache aligned');
-assert.ok(swSrc.indexOf("onboard.js?v=") >= 0 && swSrc.indexOf("2026101301") >= 0, 'sw onboard cache aligned');
-assert.ok(idx.indexOf("finn3d.js?v=2026101301") >= 0, 'index finn3d cache aligned');
+assert.ok(idx.indexOf("profile.js?v=2026101701") >= 0, 'index loads profile with cache bust');
+assert.ok(idx.indexOf("sw.js?v=94") >= 0, 'index registers sw v94');
+assert.ok(idx.indexOf("onboard.js?v=2026101701") >= 0, 'index onboard cache aligned');
+assert.ok(swSrc.indexOf("onboard.js?v=") >= 0 && swSrc.indexOf("2026101701") >= 0, 'sw onboard cache aligned');
+assert.ok(idx.indexOf("finn3d.js?v=2026101701") >= 0, 'index finn3d cache aligned');
 assert.ok(cloudSrc.indexOf('escHtml(currentUser.email') >= 0, 'cloud email escaped in auth UI');
 assert.ok(manifestXml.indexOf('android:allowBackup="false"') >= 0, 'android auto-backup off so cipher is not restored without key');
 assert.ok(updJava.indexOf('if (notifyUpdate(context, msg))') >= 0, 'notified_code only after successful push');
 assert.ok(updJava.indexOf('if (!can) return false') >= 0, 'no notify permission must retry later');
 assert.ok(bridgeJava.indexOf('pubMod > privMod') >= 0, 'backup read prefers newer Downloads copy');
-assert.ok(mainJava.indexOf('FinApp/4.13.15') >= 0, 'native UA matches release');
+assert.ok(mainJava.indexOf('FinApp/4.13.16') >= 0, 'native UA matches release');
 assert.ok(cloudSrc.indexOf('trustPreAnchorCash') >= 0, 'cloud apply trusts folded opening');
 assert.ok(appSrc.indexOf('function rebalancePreAnchorCash') >= 0, 'past-month edits move the cash anchor');
 assert.ok(appSrc.indexOf('function trustPreAnchorCash') >= 0, 'import/undo/fold do not double-count anchor');
@@ -656,7 +656,8 @@ assert.ok(appSrc.indexOf('if(pd>0)syncDebtPaid(d,pd)') < 0, 'new debt already-pa
 assert.ok(appSrc.indexOf('касса не списана') >= 0, 'new debt explains historical paid');
 assert.ok(appSrc.indexOf('function finAdjustLinkedExpense') >= 0, 'linked expense keeps debt/obligation in sync');
 assert.ok(appSrc.indexOf('obligMonth:month') >= 0, 'obligation expense remembers the billed month');
-assert.ok(appSrc.indexOf('__payDates') >= 0, 'reset obligation matches expense by pay date');
+assert.ok(appSrc.indexOf('function finResetObligationMonth') >= 0, 'reset obligation matches expense by billed month');
+assert.ok(appSrc.indexOf('q.indexOf(nm)') < 0, 'day-plan debt match is exact, not substring');
 assert.ok(appSrc.indexOf('debtId:found.id') >= 0, 'day-plan debt expense is linked');
 assert.ok(asstSrc.indexOf('function dropExpense') >= 0, 'voice delete adjusts linked debt');
 assert.ok(asstSrc.indexOf('finAdjustLinkedExpense') >= 0, 'voice amount change adjusts linked debt');
@@ -718,6 +719,40 @@ assert.ok(asstSrc.indexOf('function isNewerOp') >= 0, 'voice compares ops by tim
   };
   adj(ob, ob.expenses[0], null);
   assert.ok(ob.obligationPays[0].deleted, 'deleting obligation expense voids the pay even if months differ');
+  var debtCap = {
+    debts: [{ id: 'd1', name: 'Папа', total: 10000, paid: 7000 }],
+    expenses: [{ id: 'e1', amount: 3000, category: 'Долг', note: 'Папа', date: '2026-10-01', debtId: 'd1' }],
+    obligationPays: [], obligations: []
+  };
+  var capped = adj(debtCap, debtCap.expenses[0], 9000);
+  assert.strictEqual(capped, 6000, 'debt expense cannot grow past the remaining balance');
+  assert.strictEqual(debtCap.debts[0].paid, 10000, 'paid stops at the debt total');
+  debtCap.expenses[0].amount = capped;
+  adj(debtCap, debtCap.expenses[0], null);
+  assert.strictEqual(debtCap.debts[0].paid, 4000, 'deleting the cash payment keeps historical already-paid');
+  var ob2 = {
+    debts: [],
+    expenses: [
+      { id: 'eSep', amount: 2000, category: 'Обязательные', date: '2026-10-13', obligId: 'ob1', obligMonth: '2026-09' },
+      { id: 'eOct', amount: 2000, category: 'Обязательные', date: '2026-10-20', obligId: 'ob1', obligMonth: '2026-10' }
+    ],
+    obligationPays: [
+      { id: 'pSep', obligId: 'ob1', month: '2026-09', amount: 2000, date: '2026-10-13' },
+      { id: 'pOct', obligId: 'ob1', month: '2026-10', amount: 2000, date: '2026-10-20' }
+    ],
+    obligations: [{ id: 'ob1', amount: 2000 }]
+  };
+  adj(ob2, ob2.expenses[1], 500);
+  assert.strictEqual(ob2.obligationPays[0].amount, 2000, 'September bill stays when October expense shrinks');
+  assert.ok(!ob2.obligationPays[0].deleted, 'September pay is not voided');
+  assert.strictEqual(ob2.obligationPays[1].amount, 500, 'October pay follows the October expense');
+  var reset = appSandbox.finResetObligationMonth;
+  assert.strictEqual(typeof reset, 'function', 'finResetObligationMonth exported');
+  reset(ob2, 'ob1', '2026-10');
+  assert.ok(!ob2.expenses[0].deleted, 'October reset does not refund a September bill paid in October');
+  assert.ok(ob2.expenses[1].deleted, 'October expense is voided');
+  assert.ok(!ob2.obligationPays[0].deleted, 'September pay survives an October reset');
+  assert.ok(ob2.obligationPays[1].deleted, 'October pay is voided');
 })();
 
 (function preAnchorRebalance(){
