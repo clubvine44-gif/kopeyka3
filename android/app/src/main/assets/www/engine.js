@@ -24,7 +24,28 @@ function debtActiveInMonth(d,month){
   if(du.length>=10&&month===today().slice(0,7)&&today()<du.slice(0,10))return false;
   return true;
 }
-function calc(m){var s=state(),o=monthOps(m),cash=opening(m)+o.delta,debt=0,res=0,obDue=0,obPaid=0;(s.debts||[]).forEach(function(d){if(!debtActiveInMonth(d,m))return;debt+=Math.max(0,n(d.total)-n(d.paid));});(s.reserves||[]).forEach(function(r){if(!alive(r))return;res+=n(r.saved);});(s.obligations||[]).forEach(function(ob){if(ob.active===false||ob.deleted)return;var p=0;(s.obligationPays||[]).forEach(function(x){if(!alive(x))return;if(x.obligId===ob.id&&x.month===m)p+=n(x.amount);});obPaid+=p;obDue+=Math.max(0,n(ob.amount)-p);});var available=cash-debt-obDue,p=m.split('-').map(Number),last=new Date(p[0],p[1],0).getDate(),cur=today().slice(0,7),dayNum=Number(today().slice(8)),left=m===cur?Math.max(1,last-dayNum+1):last;
+function debtPaidThroughMonth(s,d,month){
+  var paid=n(d.paid),future=0;
+  (s.expenses||[]).forEach(function(e){
+    if(!alive(e))return;
+    var linked=false;
+    if(e.debtId&&e.debtId===d.id)linked=true;
+    else if(e.category==='Долг'){
+      var note=String(e.note||'').toLowerCase().replace(/ё/g,'е').trim();
+      var nm=String(d.name||'').toLowerCase().replace(/ё/g,'е').trim();
+      if(note&&nm&&note===nm)linked=true;
+    }
+    if(!linked)return;
+    var em=monthOf(e.date);
+    if(/^\d{4}-\d{2}$/.test(em)&&cmpMonth(em,month)>0)future+=n(e.amount);
+  });
+  var eff=paid-future;
+  if(eff<0)eff=0;
+  var tot=n(d.total);
+  if(eff>tot)eff=tot;
+  return eff;
+}
+function calc(m){var s=state(),o=monthOps(m),cash=opening(m)+o.delta,debt=0,res=0,obDue=0,obPaid=0;(s.debts||[]).forEach(function(d){if(!debtActiveInMonth(d,m))return;debt+=Math.max(0,n(d.total)-debtPaidThroughMonth(s,d,m));});(s.reserves||[]).forEach(function(r){if(!alive(r))return;res+=n(r.saved);});(s.obligations||[]).forEach(function(ob){if(ob.active===false||ob.deleted)return;var p=0;(s.obligationPays||[]).forEach(function(x){if(!alive(x))return;if(x.obligId===ob.id&&x.month===m)p+=n(x.amount);});obPaid+=p;obDue+=Math.max(0,n(ob.amount)-p);});var available=cash-debt-obDue,p=m.split('-').map(Number),last=new Date(p[0],p[1],0).getDate(),cur=today().slice(0,7),dayNum=Number(today().slice(8)),left=m===cur?Math.max(1,last-dayNum+1):last;
 var payday=s.settings&&s.settings.paydayDay!=null?n(s.settings.paydayDay):0;
 var daysToMonthEnd=m===cur?Math.max(1,last-dayNum+1):last;
 var daysToPayday=daysToMonthEnd;

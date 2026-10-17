@@ -1,4 +1,4 @@
-(function(){/* v118.20 4.13.16 */'use strict';
+(function(){/* v118.21 4.13.17 */'use strict';
 var KEY='kopeyka3_state_v1',ANCHOR='2026-08-17',CYCLE=['day','day','night','night','off','off'];
 var CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье','Прочее'];
 var BUDGET_CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
@@ -474,14 +474,42 @@ function syncDebtPaid(d, newPaid, nameHint){
     }
     else{e.amount=a-need;e.editedAt=new Date().toISOString();need=0;}
   }
-  // остаток — доходом; связанные расходы не вырезаем из массива (tombstone для облака)
-  // Всегда возвращаем остаток доходом — даже если расходов не нашли
-  if(need>0){
-    var iid=uid();
-    STATE.income.push({id:iid,amount:need,note:'Возврат по долгу «'+d.name+'»',date:today(),debtId:d.id,fromDebtAdjust:true});
-    trackLastOp('income',iid);
-  }
+  // need>0 — это «уже погашено» до кассы. Доход не создаём: этих денег в кассе не было.
 }
+/** Правка поля «уже погашено». История до кассы деньги не двигает.
+ *  Если новое погашение меньше уже проведённых расходов — лишние расходы снимаются.
+ *  Новый платёж из кассы создаёт только кнопка «Платёж», не эта правка. */
+function setDebtBookPaid(state, d, newPaid, nameHint){
+  if(!state||!d)return num(newPaid);
+  newPaid=num(newPaid);
+  if(newPaid<0)newPaid=0;
+  var tot=num(d.total);
+  if(newPaid>tot)newPaid=tot;
+  var hint=nameHint!=null?nameHint:d.name;
+  var rows=[];
+  (state.expenses||[]).forEach(function(e){
+    if(!e||e.deleted)return;
+    if(debtExpenseLinked(e,d,hint))rows.push(e);
+  });
+  var cash=0;
+  rows.forEach(function(e){cash+=num(e.amount);});
+  if(newPaid>=cash){
+    d.paid=newPaid;
+    return newPaid;
+  }
+  var need=cash-newPaid;
+  for(var i=rows.length-1;i>=0&&need>0;i--){
+    var e=rows[i];
+    if(!e||e.deleted)continue;
+    var a=num(e.amount);
+    if(a<=0)continue;
+    if(a<=need){finSoftRow(state,'expenses',e);need-=a;}
+    else{e.amount=a-need;e.editedAt=new Date().toISOString();need=0;}
+  }
+  d.paid=newPaid;
+  return newPaid;
+}
+window.setDebtBookPaid=setDebtBookPaid;
 function finTomb(state, collection, id){
   if(!state._deleted||typeof state._deleted!=='object')state._deleted={};
   if(!state._deleted[collection]||typeof state._deleted[collection]!=='object')state._deleted[collection]={};
@@ -831,7 +859,23 @@ function debtActiveInMonth(d,month){
   if(du.length>=10&&month===today().slice(0,7)&&today()<du.slice(0,10))return false;
   return true;
 }
-function computeForMonth(month){month=String(month||today().slice(0,7));var ops=monthOps(month);var open=openingForMonth(month);var cash=open+ops.delta;var resT=0;(STATE.reserves||[]).forEach(function(r){if(!alive(r))return;resT+=num(r.saved);});var debt=0;(STATE.debts||[]).forEach(function(d){if(!debtActiveInMonth(d,month))return;debt+=Math.max(0,num(d.total)-num(d.paid));});var obligDue=0,obligPaid=0;(STATE.obligations||[]).forEach(function(ob){if(!alive(ob)||ob.active===false)return;var paid=0;(STATE.obligationPays||[]).forEach(function(p){if(!alive(p))return;if(p.obligId===ob.id&&p.month===month)paid+=num(p.amount);});obligPaid+=paid;obligDue+=Math.max(0,num(ob.amount)-paid);});var avail=cash-debt-obligDue;var t=today(),p=month.split('-').map(Number);var last=new Date(p[0],p[1],0).getDate();var dayNum=Number(t.slice(8));
+/** Сколько долга уже погашено к концу месяца. Платёж с датой в будущем месяце ещё не уменьшает остаток. */
+function debtPaidThrough(d, month){
+  var paid=num(d&&d.paid);
+  var future=0;
+  (STATE.expenses||[]).forEach(function(e){
+    if(!alive(e)||!d)return;
+    if(!debtExpenseLinked(e,d,d.name))return;
+    var em=String(e.date||'').slice(0,7);
+    if(/^\d{4}-\d{2}$/.test(em)&&cmpMonth(em,month)>0)future+=num(e.amount);
+  });
+  var eff=paid-future;
+  if(eff<0)eff=0;
+  var tot=num(d&&d.total);
+  if(eff>tot)eff=tot;
+  return eff;
+}
+function computeForMonth(month){month=String(month||today().slice(0,7));var ops=monthOps(month);var open=openingForMonth(month);var cash=open+ops.delta;var resT=0;(STATE.reserves||[]).forEach(function(r){if(!alive(r))return;resT+=num(r.saved);});var debt=0;(STATE.debts||[]).forEach(function(d){if(!debtActiveInMonth(d,month))return;debt+=Math.max(0,num(d.total)-debtPaidThrough(d,month));});var obligDue=0,obligPaid=0;(STATE.obligations||[]).forEach(function(ob){if(!alive(ob)||ob.active===false)return;var paid=0;(STATE.obligationPays||[]).forEach(function(p){if(!alive(p))return;if(p.obligId===ob.id&&p.month===month)paid+=num(p.amount);});obligPaid+=paid;obligDue+=Math.max(0,num(ob.amount)-paid);});var avail=cash-debt-obligDue;var t=today(),p=month.split('-').map(Number);var last=new Date(p[0],p[1],0).getDate();var dayNum=Number(t.slice(8));
 var payday=STATE.settings&&STATE.settings.paydayDay!=null?num(STATE.settings.paydayDay):0;
 var daysToMonthEnd=month===t.slice(0,7)?Math.max(1,last-dayNum+1):last;
 // Календарные дни до даты зарплаты (0 = сегодня день зарплаты)
@@ -1410,8 +1454,9 @@ function dayPlanEditor(ds, onDone){
             if(amount>room)pay=room;
             found.paid=num(found.paid)+pay;
           } else {
-            found={id:uid(),name:title,total:amount,paid:amount};
-            STATE.debts.push(found);
+            if(undoStack.length)undoStack.pop();
+            toast('Долг «'+title+'» не найден. Имя должно совпадать со списком.');
+            return;
           }
           STATE.expenses.push(stampOp({id:opId,amount:pay,category:'Долг',note:found.name||title,date:ds,fromPlan:true,debtId:found.id}));
         }
@@ -1932,7 +1977,7 @@ function _renderNow(){
   var liveRes=(STATE.reserves||[]).filter(alive);
   var resH=liveRes.length?sortReservesList(liveRes).map(function(r){var pct=r.target>0?Math.min(100,Math.round(num(r.saved)/num(r.target)*100)):0;var pr=num(r.priority);var prBadge=(pr>=1&&pr<=3)?('<span class="res-priority p'+pr+'">'+pr+'</span> '):'';var urg=(r.urgent&&r.urgentDate)?('<span class="res-urgent">срочный · '+r.urgentDate.slice(8,10)+'.'+r.urgentDate.slice(5,7)+'</span> '):'';return '<div class="item'+(pr>=1&&pr<=3?' item-priority p'+pr:'')+'" data-id="'+r.id+'" data-k="res"><div class="left">'+prBadge+'<b>'+esc(r.name)+'</b> '+urg+'<span class="muted">'+fmt(r.saved)+(r.target?' / '+fmt(r.target)+' · '+pct+'%':'')+'</span></div></div>';}).join(''):'<div class="empty tight">Резервов нет</div>';
   var liveDeb=(STATE.debts||[]).filter(alive);
-  var debH=liveDeb.length?liveDeb.map(function(d){var left=Math.max(0,num(d.total)-num(d.paid)),pd=num(d.paid);var active=debtActiveInMonth(d,month);var sub=pd<=0?(fmt(d.total)+' · не погашено'):('осталось '+fmt(left)+' · погашено '+fmt(pd)+' из '+fmt(d.total));if(d.deferUntil&&!active){var du=String(d.deferUntil);sub+=' · перенесён на '+(du.length>=10?(du.slice(8,10)+'.'+du.slice(5,7)+'.'+du.slice(0,4)):du);}else if(d.deferUntil&&active){sub+=' · был перенос';}return '<div class="item'+(active?'':' item-deferred')+'" data-id="'+d.id+'" data-k="debt" data-deferred="'+(active?'0':'1')+'"><div class="left"><b>'+esc(d.name)+'</b><span class="muted">'+sub+'</span></div><div class="amt '+(active?'minus':'muted')+'">'+(active?fmt(left):'→')+'</div></div>';}).join(''):'<div class="empty tight">Долгов нет</div>';
+  var debH=liveDeb.length?liveDeb.map(function(d){var paidShown=debtPaidThrough(d,month);var left=Math.max(0,num(d.total)-paidShown),pd=paidShown;var active=debtActiveInMonth(d,month);var sub=pd<=0?(fmt(d.total)+' · не погашено'):('осталось '+fmt(left)+' · погашено '+fmt(pd)+' из '+fmt(d.total));if(d.deferUntil&&!active){var du=String(d.deferUntil);sub+=' · перенесён на '+(du.length>=10?(du.slice(8,10)+'.'+du.slice(5,7)+'.'+du.slice(0,4)):du);}else if(d.deferUntil&&active){sub+=' · был перенос';}return '<div class="item'+(active?'':' item-deferred')+'" data-id="'+d.id+'" data-k="debt" data-deferred="'+(active?'0':'1')+'"><div class="left"><b>'+esc(d.name)+'</b><span class="muted">'+sub+'</span></div><div class="amt '+(active?'minus':'muted')+'">'+(active?fmt(left):'→')+'</div></div>';}).join(''):'<div class="empty tight">Долгов нет</div>';
   var liveObl=(STATE.obligations||[]).filter(alive);
   var oblH=liveObl.length?liveObl.map(function(ob){var paid=0;(STATE.obligationPays||[]).forEach(function(p){if(!alive(p))return;if(p.obligId===ob.id&&p.month===month)paid+=num(p.amount);});var left=Math.max(0,num(ob.amount)-paid),isPaid=left<=0;return '<div class="item'+(isPaid?' item-paid':'')+'" data-id="'+ob.id+'" data-k="obl" data-paid="'+(isPaid?'1':'0')+'"><div class="left"><b>'+esc(ob.name)+'</b><span class="muted">'+fmt(ob.amount)+' / мес · '+(isPaid?'✓ оплачено':'до '+ob.day+'-го · '+fmt(left))+'</span></div>'+(isPaid?'<div class="amt plus check-paid">✓</div>':'<div class="amt minus">−'+fmt(left)+'</div>')+'</div>';}).join(''):'<div class="empty tight">Нет платежей</div>';
   var ops=[];
@@ -2336,8 +2381,8 @@ if(c.debtLeft > 0){
   homeHtml += '<div class="card tight">';
   homeHtml += '<div class="sec-title-sm">ДОЛГИ</div>';
   homeHtml += '<div class="res-total neg">Осталось: '+fmt(c.debtLeft)+'</div>';
-  (STATE.debts||[]).filter(function(d){return debtActiveInMonth(d,month)&&Math.max(0,num(d.total)-num(d.paid))>0;}).slice(0,3).forEach(function(d){
-    var left=Math.max(0,num(d.total)-num(d.paid)),pd=num(d.paid);
+  (STATE.debts||[]).filter(function(d){return debtActiveInMonth(d,month)&&Math.max(0,num(d.total)-debtPaidThrough(d,month))>0;}).slice(0,3).forEach(function(d){
+    var left=Math.max(0,num(d.total)-debtPaidThrough(d,month)),pd=debtPaidThrough(d,month);
     var sub=pd<=0?(fmt(d.total)+' · не погашено'):('осталось '+fmt(left)+' из '+fmt(d.total));
     homeHtml += '<div class="item" data-id="'+d.id+'" data-k="debt"><div class="left"><b>'+esc(d.name)+'</b><span class="muted">'+sub+'</span></div><div class="amt minus">'+fmt(left)+'</div></div>';
   });
@@ -2707,7 +2752,7 @@ if(k==='debt'){var d=STATE.debts.find(function(i){return i.id===id;});if(!d)retu
       d.total=tot;
       // синхронизация кассы только если изменилось погашение
       if(pd!==oldPaid){
-        syncDebtPaid(d,pd,oldName);
+        setDebtBookPaid(STATE,d,pd,oldName);
       }else{
         d.paid=pd;
       }
