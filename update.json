@@ -1,7 +1,7 @@
 {
-  "versionCode": 183,
-  "versionName": "4.13.16",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.16/Fin.apk",
-  "sha256": "2f60f7f2fc22442b0b69e67801148e28c6e623261415748e2d12cf07319bcae2",
-  "notes": "4.13.16 — правка долга не выше остатка, обязательные платежи не путают месяцы (versionCode 183)"
+  "versionCode": 184,
+  "versionName": "4.13.17",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.17/Fin.apk",
+  "sha256": "3f13ec3088d853561ceac568f1ca98345602e86bde93aa8aee9fe2a41acedcde",
+  "notes": "4.13.17 — история долга не двигает кассу, будущий платёж не раздувает «Доступно» (versionCode 184)"
 }
