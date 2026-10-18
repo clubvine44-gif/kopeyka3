@@ -1,4 +1,4 @@
-(function(){/* v118.21 4.13.17 */'use strict';
+(function(){/* v118.22 4.13.18 */'use strict';
 var KEY='kopeyka3_state_v1',ANCHOR='2026-08-17',CYCLE=['day','day','night','night','off','off'];
 var CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье','Прочее'];
 var BUDGET_CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
@@ -476,37 +476,53 @@ function syncDebtPaid(d, newPaid, nameHint){
   }
   // need>0 — это «уже погашено» до кассы. Доход не создаём: этих денег в кассе не было.
 }
-/** Правка поля «уже погашено». История до кассы деньги не двигает.
- *  Если новое погашение меньше уже проведённых расходов — лишние расходы снимаются.
+/** Правка поля «уже погашено» на экране месяца.
+ *  Число — это погашение к этому месяцу (как в списке), без будущих платежей.
+ *  История до кассы деньги не двигает. Будущий платёж не снимается, если он ещё помещается в долг.
+ *  Если новое погашение меньше уже проведённых расходов этого месяца — лишние расходы снимаются.
  *  Новый платёж из кассы создаёт только кнопка «Платёж», не эта правка. */
-function setDebtBookPaid(state, d, newPaid, nameHint){
+function setDebtBookPaid(state, d, newPaid, nameHint, month){
   if(!state||!d)return num(newPaid);
+  var tot=num(d.total);
   newPaid=num(newPaid);
   if(newPaid<0)newPaid=0;
-  var tot=num(d.total);
   if(newPaid>tot)newPaid=tot;
   var hint=nameHint!=null?nameHint:d.name;
-  var rows=[];
+  month=String(month||'').slice(0,7);
+  if(!/^\d{4}-\d{2}$/.test(month))month=today().slice(0,7);
+  var nowRows=[], futureRows=[];
   (state.expenses||[]).forEach(function(e){
     if(!e||e.deleted)return;
-    if(debtExpenseLinked(e,d,hint))rows.push(e);
+    if(!debtExpenseLinked(e,d,hint))return;
+    var em=String(e.date||'').slice(0,7);
+    if(/^\d{4}-\d{2}$/.test(em)&&cmpMonth(em,month)>0)futureRows.push(e);
+    else nowRows.push(e);
   });
-  var cash=0;
-  rows.forEach(function(e){cash+=num(e.amount);});
-  if(newPaid>=cash){
-    d.paid=newPaid;
-    return newPaid;
+  function sumRows(rows){
+    var s=0;
+    rows.forEach(function(e){if(e&&!e.deleted)s+=num(e.amount);});
+    return s;
   }
-  var need=cash-newPaid;
-  for(var i=rows.length-1;i>=0&&need>0;i--){
-    var e=rows[i];
-    if(!e||e.deleted)continue;
-    var a=num(e.amount);
-    if(a<=0)continue;
-    if(a<=need){finSoftRow(state,'expenses',e);need-=a;}
-    else{e.amount=a-need;e.editedAt=new Date().toISOString();need=0;}
+  function shrinkRows(rows, need){
+    for(var i=rows.length-1;i>=0&&need>0;i--){
+      var e=rows[i];
+      if(!e||e.deleted)continue;
+      var a=num(e.amount);
+      if(a<=0)continue;
+      if(a<=need){finSoftRow(state,'expenses',e);need-=a;}
+      else{e.amount=a-need;e.editedAt=new Date().toISOString();need=0;}
+    }
   }
-  d.paid=newPaid;
+  var nowCash=sumRows(nowRows);
+  if(newPaid<nowCash)shrinkRows(nowRows, nowCash-newPaid);
+  var futureSum=sumRows(futureRows);
+  var futureRoom=Math.max(0, tot-newPaid);
+  if(futureSum>futureRoom)shrinkRows(futureRows, futureSum-futureRoom);
+  futureSum=sumRows(futureRows);
+  var raw=newPaid+futureSum;
+  if(raw>tot)raw=tot;
+  if(raw<0)raw=0;
+  d.paid=raw;
   return newPaid;
 }
 window.setDebtBookPaid=setDebtBookPaid;
@@ -778,7 +794,7 @@ function computeReminders(){
   var out=[],t=today(),day=Number(t.slice(8)),month=(STATE.settings&&STATE.settings.month)||t.slice(0,7);
   (STATE.obligations||[]).forEach(function(ob){
     if(!alive(ob)||ob.active===false)return;
-    var paid=0;(STATE.obligationPays||[]).forEach(function(p){if(!alive(p))return;if(p.obligId===ob.id&&p.month===month)paid+=num(p.amount);});
+    var paid=0;(STATE.obligationPays||[]).forEach(function(p){if(!alive(p))return;if(p.obligId===ob.id&&finPayHitsMonth(p,month))paid+=num(p.amount);});
     var remain=Math.max(0,num(ob.amount)-paid);if(remain<=0)return;
     var y=Number(t.slice(0,4)),m=Number(t.slice(5,7)),dim=new Date(y,m,0).getDate(),d=Math.min(Math.max(1,num(ob.day)||1),dim);
     if(d<day){m+=1;if(m>12){m=1;y+=1;}var dim2=new Date(y,m,0).getDate();d=Math.min(Math.max(1,num(ob.day)||1),dim2);}
@@ -875,7 +891,7 @@ function debtPaidThrough(d, month){
   if(eff>tot)eff=tot;
   return eff;
 }
-function computeForMonth(month){month=String(month||today().slice(0,7));var ops=monthOps(month);var open=openingForMonth(month);var cash=open+ops.delta;var resT=0;(STATE.reserves||[]).forEach(function(r){if(!alive(r))return;resT+=num(r.saved);});var debt=0;(STATE.debts||[]).forEach(function(d){if(!debtActiveInMonth(d,month))return;debt+=Math.max(0,num(d.total)-debtPaidThrough(d,month));});var obligDue=0,obligPaid=0;(STATE.obligations||[]).forEach(function(ob){if(!alive(ob)||ob.active===false)return;var paid=0;(STATE.obligationPays||[]).forEach(function(p){if(!alive(p))return;if(p.obligId===ob.id&&p.month===month)paid+=num(p.amount);});obligPaid+=paid;obligDue+=Math.max(0,num(ob.amount)-paid);});var avail=cash-debt-obligDue;var t=today(),p=month.split('-').map(Number);var last=new Date(p[0],p[1],0).getDate();var dayNum=Number(t.slice(8));
+function computeForMonth(month){month=String(month||today().slice(0,7));var ops=monthOps(month);var open=openingForMonth(month);var cash=open+ops.delta;var resT=0;(STATE.reserves||[]).forEach(function(r){if(!alive(r))return;resT+=num(r.saved);});var debt=0;(STATE.debts||[]).forEach(function(d){if(!debtActiveInMonth(d,month))return;debt+=Math.max(0,num(d.total)-debtPaidThrough(d,month));});var obligDue=0,obligPaid=0;(STATE.obligations||[]).forEach(function(ob){if(!alive(ob)||ob.active===false)return;var paid=0;(STATE.obligationPays||[]).forEach(function(p){if(!alive(p))return;if(p.obligId===ob.id&&finPayHitsMonth(p,month))paid+=num(p.amount);});obligPaid+=paid;obligDue+=Math.max(0,num(ob.amount)-paid);});var avail=cash-debt-obligDue;var t=today(),p=month.split('-').map(Number);var last=new Date(p[0],p[1],0).getDate();var dayNum=Number(t.slice(8));
 var payday=STATE.settings&&STATE.settings.paydayDay!=null?num(STATE.settings.paydayDay):0;
 var daysToMonthEnd=month===t.slice(0,7)?Math.max(1,last-dayNum+1):last;
 // Календарные дни до даты зарплаты (0 = сегодня день зарплаты)
@@ -1578,7 +1594,7 @@ function buildSmartNotifs(){
   var month=(STATE.settings&&STATE.settings.month)||t.slice(0,7);
   (STATE.obligations||[]).forEach(function(ob){
     if(!alive(ob)||ob.active===false)return;
-    var paid=0;(STATE.obligationPays||[]).forEach(function(p){if(!alive(p))return;if(p.obligId===ob.id&&p.month===month)paid+=num(p.amount);});
+    var paid=0;(STATE.obligationPays||[]).forEach(function(p){if(!alive(p))return;if(p.obligId===ob.id&&finPayHitsMonth(p,month))paid+=num(p.amount);});
     var remain=Math.max(0,num(ob.amount)-paid);if(remain<=0)return;
     var day=Number(t.slice(8)), y=Number(t.slice(0,4)), m=Number(t.slice(5,7));
     var dim=new Date(y,m,0).getDate();
@@ -1979,7 +1995,7 @@ function _renderNow(){
   var liveDeb=(STATE.debts||[]).filter(alive);
   var debH=liveDeb.length?liveDeb.map(function(d){var paidShown=debtPaidThrough(d,month);var left=Math.max(0,num(d.total)-paidShown),pd=paidShown;var active=debtActiveInMonth(d,month);var sub=pd<=0?(fmt(d.total)+' · не погашено'):('осталось '+fmt(left)+' · погашено '+fmt(pd)+' из '+fmt(d.total));if(d.deferUntil&&!active){var du=String(d.deferUntil);sub+=' · перенесён на '+(du.length>=10?(du.slice(8,10)+'.'+du.slice(5,7)+'.'+du.slice(0,4)):du);}else if(d.deferUntil&&active){sub+=' · был перенос';}return '<div class="item'+(active?'':' item-deferred')+'" data-id="'+d.id+'" data-k="debt" data-deferred="'+(active?'0':'1')+'"><div class="left"><b>'+esc(d.name)+'</b><span class="muted">'+sub+'</span></div><div class="amt '+(active?'minus':'muted')+'">'+(active?fmt(left):'→')+'</div></div>';}).join(''):'<div class="empty tight">Долгов нет</div>';
   var liveObl=(STATE.obligations||[]).filter(alive);
-  var oblH=liveObl.length?liveObl.map(function(ob){var paid=0;(STATE.obligationPays||[]).forEach(function(p){if(!alive(p))return;if(p.obligId===ob.id&&p.month===month)paid+=num(p.amount);});var left=Math.max(0,num(ob.amount)-paid),isPaid=left<=0;return '<div class="item'+(isPaid?' item-paid':'')+'" data-id="'+ob.id+'" data-k="obl" data-paid="'+(isPaid?'1':'0')+'"><div class="left"><b>'+esc(ob.name)+'</b><span class="muted">'+fmt(ob.amount)+' / мес · '+(isPaid?'✓ оплачено':'до '+ob.day+'-го · '+fmt(left))+'</span></div>'+(isPaid?'<div class="amt plus check-paid">✓</div>':'<div class="amt minus">−'+fmt(left)+'</div>')+'</div>';}).join(''):'<div class="empty tight">Нет платежей</div>';
+  var oblH=liveObl.length?liveObl.map(function(ob){var paid=0;(STATE.obligationPays||[]).forEach(function(p){if(!alive(p))return;if(p.obligId===ob.id&&finPayHitsMonth(p,month))paid+=num(p.amount);});var left=Math.max(0,num(ob.amount)-paid),isPaid=left<=0;return '<div class="item'+(isPaid?' item-paid':'')+'" data-id="'+ob.id+'" data-k="obl" data-paid="'+(isPaid?'1':'0')+'"><div class="left"><b>'+esc(ob.name)+'</b><span class="muted">'+fmt(ob.amount)+' / мес · '+(isPaid?'✓ оплачено':'до '+ob.day+'-го · '+fmt(left))+'</span></div>'+(isPaid?'<div class="amt plus check-paid">✓</div>':'<div class="amt minus">−'+fmt(left)+'</div>')+'</div>';}).join(''):'<div class="empty tight">Нет платежей</div>';
   var ops=[];
   STATE.income.forEach(function(i){if(inMonth(i.date,month))ops.push({t:i.date,type:'in',a:i.amount,n:i.note||'Доход',id:i.id,deleted:!!i.deleted,edited:!!i.editedAt,at:Number(i.createdAt)||0});});
   STATE.expenses.forEach(function(e){if(!inMonth(e.date,month))return;var label=e.category||'Расход';if(e.category==='Долг')label='Долг'+(e.note?(' · '+e.note):'');else if(e.category==='Обязательные'&&e.note)label=e.note;else if(e.note&&e.note!==label)label=label+' · '+e.note;ops.push({t:e.date,type:'ex',a:e.amount,n:label,id:e.id,deleted:!!e.deleted,edited:!!e.editedAt,at:Number(e.createdAt)||0});});
@@ -2042,7 +2058,7 @@ var nearestObl = [];
 (STATE.obligations||[]).forEach(function(ob){
   if(!alive(ob)||ob.active===false)return;
   var paid=0;
-  (STATE.obligationPays||[]).forEach(function(p){if(!alive(p))return;if(p.obligId===ob.id&&p.month===month)paid+=num(p.amount);});
+  (STATE.obligationPays||[]).forEach(function(p){if(!alive(p))return;if(p.obligId===ob.id&&finPayHitsMonth(p,month))paid+=num(p.amount);});
   var left=Math.max(0,num(ob.amount)-paid);
   if(left<=0)return;
   var day=Math.min(Math.max(1,num(ob.day)||1), new Date(ym[0],ym[1],0).getDate());
@@ -2736,7 +2752,7 @@ if(k==='debt'){var d=STATE.debts.find(function(i){return i.id===id;});if(!d)retu
     appForm('Изменить долг',[
       {name:'name',label:'Название',value:d.name||'',placeholder:'Папа…'},
       {name:'total',label:'Полная сумма долга',value:String(num(d.total)),inputmode:'decimal'},
-      {name:'paid',label:'Уже погашено',value:String(num(d.paid)),inputmode:'decimal'}
+      {name:'paid',label:'Уже погашено к этому месяцу',value:String(debtPaidThrough(d,month)),inputmode:'decimal'}
     ],'Сохранить').then(function(v){
       if(!v)return;
       var name=String(v.name||'').trim()||d.name;
@@ -2746,15 +2762,12 @@ if(k==='debt'){var d=STATE.debts.find(function(i){return i.id===id;});if(!d)retu
       pushUndo();
       var oldName=d.name;
       var oldTotal=num(d.total);
-      var oldPaid=num(d.paid);
-      // Явно пишем в объект долга
+      var shownPaid=debtPaidThrough(d,month);
       d.name=name;
       d.total=tot;
-      // синхронизация кассы только если изменилось погашение
-      if(pd!==oldPaid){
-        setDebtBookPaid(STATE,d,pd,oldName);
-      }else{
-        d.paid=pd;
+      // Число в форме — погашение к месяцу на экране, без будущего платежа.
+      if(pd!==shownPaid||tot!==oldTotal){
+        setDebtBookPaid(STATE,d,pd,oldName,month);
       }
       (STATE.expenses||[]).forEach(function(e){
         if(!e)return;
@@ -2770,10 +2783,13 @@ if(k==='debt'){var d=STATE.debts.find(function(i){return i.id===id;});if(!d)retu
   appPrompt('Сумма платежа','0','Платёж по долгу').then(function(av){
     if(av===null)return;
     var a=num(av);if(a<=0)return toast('Укажи сумму');
+    var asked=a;
     var left=Math.max(0,num(d.total)-num(d.paid));
+    var shownLeft=Math.max(0,num(d.total)-debtPaidThrough(d,month));
+    if(left<=0)return toast(shownLeft>0?'Этот остаток уже заложен платежом на будущий месяц':'Долг уже закрыт');
     if(a>left)a=left;
-    if(a<=0)return toast('Долг уже закрыт');
-    pushUndo();syncDebtPaid(d,num(d.paid)+a);save(true);render();toast('Платёж: '+d.name+' · '+fmt(a));
+    pushUndo();syncDebtPaid(d,num(d.paid)+a);save(true);render();
+    toast(asked>a?('Платёж: '+d.name+' · '+fmt(a)+' · остальное уже в будущем месяце'):('Платёж: '+d.name+' · '+fmt(a)));
   });
 });return;}
 if(k==='obl'){var ob=STATE.obligations.find(function(i){return i.id===id;});if(!ob)return;
@@ -2781,10 +2797,10 @@ if(t.dataset.paid==='1'){appConfirm('Сбросить оплату «'+ob.name+'
 appChoice('«'+ob.name+'»',['Оплачено','Частичная оплата','Изменить','Удалить'],'Платёж').then(function(act){if(act===null)return;
 if(act===3){appConfirm('Удалить?','Удалить').then(function(ok){if(!ok)return;pushUndo();softDeleteIn('obligations',id,'obligation',ob.name);save(true);render();toast('Удалено');});}
 else if(act===2){appPrompt('Название',ob.name,'Изменить').then(function(nn){if(nn===null)return;appPrompt('Сумма',String(ob.amount),'Сумма').then(function(aa){appPrompt('День 1–31',String(ob.day),'День').then(function(dd){aa=num(aa);dd=num(dd);if(aa>0&&dd>=1&&dd<=31){pushUndo();ob.name=nn;ob.amount=aa;ob.day=dd;save(true);render();toast('Обновлено');}});});});}
-else if(act===1){var paid=0;STATE.obligationPays.forEach(function(p){if(!alive(p))return;if(p.obligId===id&&p.month===month)paid+=num(p.amount);});var left=Math.max(0,num(ob.amount)-paid);if(left<=0)return toast('Уже оплачено');appPrompt('Сумма (осталось '+left+')',String(left),'Оплата').then(function(av){var a=num(av);if(a<=0)return;if(a>left)a=left;pushUndo();STATE.obligationPays.push({id:uid(),obligId:id,month:month,amount:a,date:today()});STATE.expenses.push({id:uid(),amount:a,category:'Обязательные',note:ob.name,date:today(),obligId:id,obligMonth:month});save(true);render();toast('Оплата учтена');});}
+else if(act===1){var paid=0;STATE.obligationPays.forEach(function(p){if(!alive(p))return;if(p.obligId===id&&finPayHitsMonth(p,month))paid+=num(p.amount);});var left=Math.max(0,num(ob.amount)-paid);if(left<=0)return toast('Уже оплачено');appPrompt('Сумма (осталось '+left+')',String(left),'Оплата').then(function(av){var a=num(av);if(a<=0)return;if(a>left)a=left;pushUndo();STATE.obligationPays.push({id:uid(),obligId:id,month:month,amount:a,date:today()});STATE.expenses.push({id:uid(),amount:a,category:'Обязательные',note:ob.name,date:today(),obligId:id,obligMonth:month});save(true);render();toast('Оплата учтена');});}
 else{
   // Оплачено полностью — списывается с кассы, пункт зелёный
-  var paid0=0;STATE.obligationPays.forEach(function(p){if(!alive(p))return;if(p.obligId===id&&p.month===month)paid0+=num(p.amount);});
+  var paid0=0;STATE.obligationPays.forEach(function(p){if(!alive(p))return;if(p.obligId===id&&finPayHitsMonth(p,month))paid0+=num(p.amount);});
   var left0=Math.max(0,num(ob.amount)-paid0);
   if(left0<=0)return toast('Уже оплачено');
   pushUndo();

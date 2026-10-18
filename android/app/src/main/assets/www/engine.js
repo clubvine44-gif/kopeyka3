@@ -45,7 +45,13 @@ function debtPaidThroughMonth(s,d,month){
   if(eff>tot)eff=tot;
   return eff;
 }
-function calc(m){var s=state(),o=monthOps(m),cash=opening(m)+o.delta,debt=0,res=0,obDue=0,obPaid=0;(s.debts||[]).forEach(function(d){if(!debtActiveInMonth(d,m))return;debt+=Math.max(0,n(d.total)-debtPaidThroughMonth(s,d,m));});(s.reserves||[]).forEach(function(r){if(!alive(r))return;res+=n(r.saved);});(s.obligations||[]).forEach(function(ob){if(ob.active===false||ob.deleted)return;var p=0;(s.obligationPays||[]).forEach(function(x){if(!alive(x))return;if(x.obligId===ob.id&&x.month===m)p+=n(x.amount);});obPaid+=p;obDue+=Math.max(0,n(ob.amount)-p);});var available=cash-debt-obDue,p=m.split('-').map(Number),last=new Date(p[0],p[1],0).getDate(),cur=today().slice(0,7),dayNum=Number(today().slice(8)),left=m===cur?Math.max(1,last-dayNum+1):last;
+function obligPayInMonth(x,m){
+  var pm=String(x&&x.month||'').slice(0,7);
+  if(/^\d{4}-\d{2}$/.test(pm))return pm===m;
+  var pd=String(x&&x.date||'').slice(0,7);
+  return /^\d{4}-\d{2}$/.test(pd)&&pd===m;
+}
+function calc(m){var s=state(),o=monthOps(m),cash=opening(m)+o.delta,debt=0,res=0,obDue=0,obPaid=0;(s.debts||[]).forEach(function(d){if(!debtActiveInMonth(d,m))return;debt+=Math.max(0,n(d.total)-debtPaidThroughMonth(s,d,m));});(s.reserves||[]).forEach(function(r){if(!alive(r))return;res+=n(r.saved);});(s.obligations||[]).forEach(function(ob){if(ob.active===false||ob.deleted)return;var p=0;(s.obligationPays||[]).forEach(function(x){if(!alive(x))return;if(x.obligId===ob.id&&obligPayInMonth(x,m))p+=n(x.amount);});obPaid+=p;obDue+=Math.max(0,n(ob.amount)-p);});var available=cash-debt-obDue,p=m.split('-').map(Number),last=new Date(p[0],p[1],0).getDate(),cur=today().slice(0,7),dayNum=Number(today().slice(8)),left=m===cur?Math.max(1,last-dayNum+1):last;
 var payday=s.settings&&s.settings.paydayDay!=null?n(s.settings.paydayDay):0;
 var daysToMonthEnd=m===cur?Math.max(1,last-dayNum+1):last;
 var daysToPayday=daysToMonthEnd;

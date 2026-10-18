@@ -157,6 +157,70 @@ assert.strictEqual(closed2.cash, 10000, 'withdraw offsets deposit after reserve 
   assert.strictEqual(octSame.cash, 7000, 'same-month debt payment still leaves cash');
 })();
 
+(function obligPayStoredAsDate(){
+  var eng = loadEngine({
+    settings: { openingBalance: 5000, month: '2026-10', paydayDay: null, limitHorizon: 'month' },
+    income: [], expenses: [], reserves: [], debts: [], reserveOps: [],
+    obligations: [{ id: 'ob1', amount: 2000, day: 10, active: true }],
+    obligationPays: [{ id: 'p1', obligId: 'ob1', month: '2026-10-03', amount: 2000, date: '2026-10-03' }],
+    shiftsOverride: {}
+  });
+  var octP = eng.month('2026-10');
+  assert.strictEqual(octP.obligationsRemaining, 0, 'obligation pay stored as a full date still closes October');
+  var sepP = eng.month('2026-09');
+  assert.strictEqual(sepP.obligationsRemaining, 2000, 'October pay must not close September');
+})();
+
+(function debtBookKeepsFuturePayment(){
+  var appSrc = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+  function extractFn(name){
+    var key = 'function ' + name + '(';
+    var i = appSrc.indexOf(key);
+    assert.ok(i >= 0, 'missing ' + name);
+    var depth = 0, started = false, j = i;
+    for (; j < appSrc.length; j++) {
+      var c = appSrc[j];
+      if (c === '{') { depth++; started = true; }
+      else if (c === '}') { depth--; if (started && depth === 0) { j++; break; } }
+    }
+    return appSrc.slice(i, j);
+  }
+  var sandbox = {
+    STATE: null,
+    num: function (v) { var x = Number(v); return isFinite(x) ? Math.round(x) : 0; },
+    today: function () { return '2026-10-19'; },
+    cmpMonth: function (a, b) { return String(a || '').localeCompare(String(b || '')); }
+  };
+  sandbox.global = sandbox;
+  var src = [
+    extractFn('debtExpenseLinked'),
+    extractFn('finTomb'),
+    extractFn('finSoftRow'),
+    extractFn('setDebtBookPaid')
+  ].join('\n');
+  vm.runInNewContext(src + '\nthis.debtExpenseLinked=debtExpenseLinked;this.finSoftRow=finSoftRow;this.setDebtBookPaid=setDebtBookPaid;', sandbox, { filename: 'debt-book.js' });
+  var state = {
+    expenses: [{ id: 'e-nov', amount: 3000, category: 'Долг', note: 'Папа', date: '2026-11-02', debtId: 'd1' }],
+    debts: [],
+    _deleted: {}
+  };
+  var d = { id: 'd1', name: 'Папа', total: 10000, paid: 10000 };
+  state.debts.push(d);
+  var shown = sandbox.setDebtBookPaid(state, d, 7000, 'Папа', '2026-10');
+  assert.strictEqual(shown, 7000, 'edit keeps the shown paid amount');
+  assert.strictEqual(d.paid, 10000, 'raw paid still includes the future expense');
+  assert.strictEqual(state.expenses[0].deleted, undefined, 'future debt payment is not deleted by a no-op edit');
+  assert.strictEqual(state.expenses[0].amount, 3000);
+  var shown2 = sandbox.setDebtBookPaid(state, d, 5000, 'Папа', '2026-10');
+  assert.strictEqual(shown2, 5000);
+  assert.strictEqual(d.paid, 8000, 'lowering history does not drop the future payment');
+  assert.strictEqual(state.expenses[0].amount, 3000);
+  assert.ok(!state.expenses[0].deleted);
+  sandbox.setDebtBookPaid(state, d, 0, 'Папа', '2026-11');
+  assert.strictEqual(state.expenses[0].deleted, true, 'lowering paid in the payment month removes that expense');
+  assert.strictEqual(d.paid, 0);
+})();
+
 // Payday today: horizon must open the next period, not collapse to 1 day.
 sandbox.window.STATE = {
   settings: { openingBalance: 30000, month: (function(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');})(), paydayDay: (new Date()).getDate(), limitHorizon: 'payday' },
@@ -222,6 +286,8 @@ assert.ok(cloudSrc.indexOf('!ld[id]&&!rd[id]&&!bd[id]') >= 0, 'tombstone map wit
 var asstSrc = fs.readFileSync(path.join(ROOT, 'assistant-v2.js'), 'utf8');
 assert.ok(asstSrc.indexOf("s.reserveOps=s.reserveOps.filter") < 0, 'assistant must not strip reserveOps');
 assert.ok(asstSrc.indexOf('function softDel') >= 0, 'assistant must soft-delete');
+assert.ok(asstSrc.indexOf('function findDebt') >= 0, 'voice debt match is exact');
+assert.ok(asstSrc.indexOf('find(s.debts') < 0, 'voice must not fuzzy-match a debt');
 assert.ok(asstSrc.indexOf("type:'withdraw'") >= 0, 'assistant reserve delete must return cash');
 
 var storeSrc = fs.readFileSync(path.join(ROOT, 'secure-store.js'), 'utf8');
@@ -266,8 +332,8 @@ assert.ok(appSrc.indexOf('function flushLiveSave') >= 0, 'pagehide flushes live 
 assert.ok(storeSrc.indexOf('FinBridge.setInstallId') >= 0, 'install id mirrored to native prefs');
 
 var gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle'), 'utf8');
-assert.ok(/versionCode\s+184/.test(gradle), 'versionCode 184');
-assert.ok(/versionName\s+"4\.13\.17"/.test(gradle), 'versionName 4.13.17');
+assert.ok(/versionCode\s+185/.test(gradle), 'versionCode 185');
+assert.ok(/versionName\s+"4\.13\.18"/.test(gradle), 'versionName 4.13.18');
 
 var mainJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/MainActivity.java'), 'utf8');
 assert.ok(mainJava.indexOf('isTrustedApkUrl') >= 0, 'apk url allowlisted');
@@ -287,6 +353,9 @@ assert.ok(engineSrc.indexOf('function debtPaidThroughMonth') >= 0, 'engine defer
 assert.ok(engineSrc.indexOf('isPaydayToday') >= 0, 'engine payday-today matches app');
 assert.ok(appSrc.indexOf('function debtPaidThrough') >= 0, 'app defers future debt payments');
 assert.ok(appSrc.indexOf('function setDebtBookPaid') >= 0, 'debt edit keeps historical paid off cash');
+assert.ok(appSrc.indexOf('futureRows') >= 0, 'debt edit must keep a future payment');
+assert.ok(appSrc.indexOf('debtPaidThrough(d,month)') >= 0, 'debt form shows paid through the viewed month');
+assert.ok(appSrc.indexOf('finPayHitsMonth(p,month)') >= 0, 'obligation pay matches by month even if a date was stored');
 assert.ok(appSrc.indexOf('fromDebtAdjust') < 0, 'historical debt edit must not create a refund income');
 assert.ok(appSrc.indexOf('Имя должно совпадать со списком') >= 0, 'day plan must not invent a debt');
 assert.ok(engineSrc.indexOf('pdNext0-1') >= 0, 'engine payday period excludes next payday');
@@ -668,19 +737,19 @@ assert.ok(bakSrc.indexOf('stale finna-latest.json must not beat') >= 0, 'stale l
 assert.ok(bakSrc.indexOf('if (latest && latest.state)') < 0 || bakSrc.indexOf('pickNewestEmergency') >= 0, 'latest is not an early return winner');
 
 var swSrc = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
-assert.ok(swSrc.indexOf("CACHE='kopeyka3-v95'") >= 0, 'sw cache v95');
+assert.ok(swSrc.indexOf("CACHE='kopeyka3-v96'") >= 0, 'sw cache v96');
 assert.ok(swSrc.indexOf("profile.js?v=") >= 0, 'sw precaches profile.js');
-assert.ok(idx.indexOf("profile.js?v=2026101801") >= 0, 'index loads profile with cache bust');
-assert.ok(idx.indexOf("sw.js?v=95") >= 0, 'index registers sw v95');
-assert.ok(idx.indexOf("onboard.js?v=2026101801") >= 0, 'index onboard cache aligned');
-assert.ok(swSrc.indexOf("onboard.js?v=") >= 0 && swSrc.indexOf("2026101801") >= 0, 'sw onboard cache aligned');
-assert.ok(idx.indexOf("finn3d.js?v=2026101801") >= 0, 'index finn3d cache aligned');
+assert.ok(idx.indexOf("profile.js?v=2026101902") >= 0, 'index loads profile with cache bust');
+assert.ok(idx.indexOf("sw.js?v=96") >= 0, 'index registers sw v96');
+assert.ok(idx.indexOf("onboard.js?v=2026101902") >= 0, 'index onboard cache aligned');
+assert.ok(swSrc.indexOf("onboard.js?v=") >= 0 && swSrc.indexOf("2026101902") >= 0, 'sw onboard cache aligned');
+assert.ok(idx.indexOf("finn3d.js?v=2026101902") >= 0, 'index finn3d cache aligned');
 assert.ok(cloudSrc.indexOf('escHtml(currentUser.email') >= 0, 'cloud email escaped in auth UI');
 assert.ok(manifestXml.indexOf('android:allowBackup="false"') >= 0, 'android auto-backup off so cipher is not restored without key');
 assert.ok(updJava.indexOf('if (notifyUpdate(context, msg))') >= 0, 'notified_code only after successful push');
 assert.ok(updJava.indexOf('if (!can) return false') >= 0, 'no notify permission must retry later');
 assert.ok(bridgeJava.indexOf('pubMod > privMod') >= 0, 'backup read prefers newer Downloads copy');
-assert.ok(mainJava.indexOf('FinApp/4.13.17') >= 0, 'native UA matches release');
+assert.ok(mainJava.indexOf('FinApp/4.13.18') >= 0, 'native UA matches release');
 assert.ok(cloudSrc.indexOf('trustPreAnchorCash') >= 0, 'cloud apply trusts folded opening');
 assert.ok(appSrc.indexOf('function rebalancePreAnchorCash') >= 0, 'past-month edits move the cash anchor');
 assert.ok(appSrc.indexOf('function trustPreAnchorCash') >= 0, 'import/undo/fold do not double-count anchor');
