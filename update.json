@@ -1,7 +1,7 @@
 {
-  "versionCode": 184,
-  "versionName": "4.13.17",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.17/Fin.apk",
-  "sha256": "3f13ec3088d853561ceac568f1ca98345602e86bde93aa8aee9fe2a41acedcde",
-  "notes": "4.13.17 — история долга не двигает кассу, будущий платёж не раздувает «Доступно» (versionCode 184)"
+  "versionCode": 185,
+  "versionName": "4.13.18",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.18/Fin.apk",
+  "sha256": "fbbcfff2479e01f8075de6644e968377cdab0012197613ef34ce29f72ca2e46e",
+  "notes": "4.13.18 — правка долга не задевает будущий платёж, голос только по точному имени (versionCode 185)"
 }
