@@ -1,4 +1,4 @@
-/* cloud.js v29 — mealPlan last-write, newest-slot recovery, tombstone-without-row kept, cash-anchor reconcile */
+/* cloud.js v30 — mealPlan last-write, cash-anchor reconcile, debt/reserve counters follow merged ops */
 (function(){
 'use strict';
 const URL='https://cqslrfphsjllhltsvvuq.supabase.co';
@@ -227,7 +227,99 @@ function reconcileCashAnchor(out,local,remote,base){
   }catch(e){}
   return out;
 }
-function threeWay(base,local,remote){base=normalize(base||{});local=normalize(local||{});remote=normalize(remote||{});var out=Object.assign({},remote),allDeleted={},conflicts=[];COLLECTIONS.forEach(function(k){var m=mergeArray(base[k],local[k],remote[k],k,conflicts,deletedMap(base,k),deletedMap(local,k),deletedMap(remote,k));out[k]=m.items;allDeleted[k]=m.deleted;});out._deleted=allDeleted;out.shiftsOverride=mergeObject(base.shiftsOverride||{},local.shiftsOverride||{},remote.shiftsOverride||{},'shiftsOverride',conflicts);out.dayPlans=mergeObject(base.dayPlans||{},local.dayPlans||{},remote.dayPlans||{},'dayPlans',conflicts);out.voiceMap=mergeObject(base.voiceMap||{},local.voiceMap||{},remote.voiceMap||{},'voiceMap',conflicts);out.settings=mergeSettings(base.settings||{},local.settings||{},remote.settings||{},conflicts);out.mealPlan=mergeMeal(local,remote);out._conflicts=(remote._conflicts||[]).concat(local._conflicts||[],conflicts).slice(-100);out.version=Math.max(Number(local.version)||0,Number(remote.version)||0,6);out.app='kopeyka3';out.updatedAt=new Date().toISOString();return normalize(reconcileCashAnchor(out,local,remote,base));}
+function normDebtName(s){return String(s||'').toLowerCase().replace(/ё/g,'е').replace(/\s+/g,' ').trim();}
+function debtIdForExpense(e, debts){
+  if(!e||e.deleted)return null;
+  var list=debts||[];
+  if(e.debtId){
+    for(var i=0;i<list.length;i++){
+      if(list[i]&&list[i].id===e.debtId&&!list[i].deleted)return list[i].id;
+    }
+  }
+  if(e.category!=='Долг')return null;
+  var note=normDebtName(e.note);
+  if(!note)return null;
+  var hit=null;
+  for(var j=0;j<list.length;j++){
+    var d=list[j];
+    if(!d||d.deleted)continue;
+    if(normDebtName(d.name)!==note)continue;
+    if(hit)return null;
+    hit=d.id;
+  }
+  return hit;
+}
+function linkedDebtPaid(expenses, debts, debtId){
+  var s=0;
+  (expenses||[]).forEach(function(e){
+    if(!e||e.deleted)return;
+    if(debtIdForExpense(e, debts)===debtId)s+=num0(e.amount);
+  });
+  return s;
+}
+function reserveNet(ops, id){
+  var s=0;
+  (ops||[]).forEach(function(o){
+    if(!o||o.deleted||o.reserveId!==id)return;
+    var a=num0(o.amount);
+    if(o.type==='withdraw')s-=a; else s+=a;
+  });
+  return s;
+}
+function pick3num(b,l,r){
+  var hasL=l!==null&&l!==undefined, hasR=r!==null&&r!==undefined, hasB=b!==null&&b!==undefined;
+  if(!hasL&&!hasR)return hasB?b:0;
+  if(hasL&&!hasR)return l;
+  if(!hasL&&hasR)return r;
+  if(!hasB)return l===r?l:l;
+  var lc=l!==b, rc=r!==b;
+  if(lc&&!rc)return l;
+  if(!lc&&rc)return r;
+  if(lc&&rc)return l===r?l:l;
+  return l;
+}
+function bookOfDebt(state, id){
+  if(!state)return null;
+  var debts=state.debts||[];
+  var row=null;
+  for(var i=0;i<debts.length;i++){if(debts[i]&&debts[i].id===id&&!debts[i].deleted){row=debts[i];break;}}
+  if(!row)return null;
+  var book=num0(row.paid)-linkedDebtPaid(state.expenses, debts, id);
+  if(book<0)book=0;
+  return book;
+}
+function bookOfReserve(state, id){
+  if(!state)return null;
+  var row=null;
+  (state.reserves||[]).forEach(function(r){if(r&&r.id===id&&!r.deleted)row=r;});
+  if(!row)return null;
+  var book=num0(row.saved)-reserveNet(state.reserveOps, id);
+  if(book<0)book=0;
+  return book;
+}
+/** Две копии могли добавить разные платежи и пополнения. Поле paid/saved — не максимум и не «чья копия последняя»: история без кассы сливается как обычно, а проведённые операции складываются. */
+function reconcileLinkedMoney(out, local, remote, base){
+  try{
+    (out.debts||[]).forEach(function(d){
+      if(!d||d.deleted||!d.id)return;
+      var book=pick3num(bookOfDebt(base,d.id), bookOfDebt(local,d.id), bookOfDebt(remote,d.id));
+      var paid=book+linkedDebtPaid(out.expenses, out.debts, d.id);
+      if(paid<0)paid=0;
+      var tot=num0(d.total);
+      if(tot>0&&paid>tot)paid=tot;
+      d.paid=paid;
+    });
+    (out.reserves||[]).forEach(function(r){
+      if(!r||r.deleted||!r.id)return;
+      var bookR=pick3num(bookOfReserve(base,r.id), bookOfReserve(local,r.id), bookOfReserve(remote,r.id));
+      var saved=bookR+reserveNet(out.reserveOps, r.id);
+      if(saved<0)saved=0;
+      r.saved=saved;
+    });
+  }catch(e){}
+  return out;
+}
+function threeWay(base,local,remote){base=normalize(base||{});local=normalize(local||{});remote=normalize(remote||{});var out=Object.assign({},remote),allDeleted={},conflicts=[];COLLECTIONS.forEach(function(k){var m=mergeArray(base[k],local[k],remote[k],k,conflicts,deletedMap(base,k),deletedMap(local,k),deletedMap(remote,k));out[k]=m.items;allDeleted[k]=m.deleted;});out._deleted=allDeleted;out.shiftsOverride=mergeObject(base.shiftsOverride||{},local.shiftsOverride||{},remote.shiftsOverride||{},'shiftsOverride',conflicts);out.dayPlans=mergeObject(base.dayPlans||{},local.dayPlans||{},remote.dayPlans||{},'dayPlans',conflicts);out.voiceMap=mergeObject(base.voiceMap||{},local.voiceMap||{},remote.voiceMap||{},'voiceMap',conflicts);out.settings=mergeSettings(base.settings||{},local.settings||{},remote.settings||{},conflicts);out.mealPlan=mergeMeal(local,remote);out._conflicts=(remote._conflicts||[]).concat(local._conflicts||[],conflicts).slice(-100);out.version=Math.max(Number(local.version)||0,Number(remote.version)||0,6);out.app='kopeyka3';out.updatedAt=new Date().toISOString();var anchored=reconcileCashAnchor(out,local,remote,base);reconcileLinkedMoney(anchored,local,remote,base);return normalize(anchored);}
 function localChanged(base,local){return !same(normalize(base||{}),normalize(local||{}));}
 function liveDivergedFrom(captured){
   try{

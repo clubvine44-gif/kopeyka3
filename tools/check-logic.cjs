@@ -277,7 +277,7 @@ assert.ok(cloudSrc.indexOf('function liveDivergedFrom') >= 0, 'cloud must detect
 assert.ok(cloudSrc.indexOf('writeRemote(merged,remote,local)') >= 0, 'cloud write must keep a snapshot of local');
 assert.ok(cloudSrc.indexOf('n>=300') >= 0, 'cloud must wait long enough for PBKDF2 on slow phones');
 assert.ok(cloudSrc.indexOf('function mergeLimitsMap') >= 0, 'category limits last-write, not max');
-assert.ok(cloudSrc.indexOf('function reconcileCashAnchor') >= 0, 'cloud must reconcile cash anchor after merge');
+assert.ok(cloudSrc.indexOf('function reconcileLinkedMoney') >= 0, 'cloud keeps debt paid and reserve saved in step with merged ops');
 assert.ok(cloudSrc.indexOf('!(l.deleted)') >= 0, 'must not drop tombstone of a locally-deleted new row');
 assert.ok(cloudSrc.indexOf('l.deleted') >= 0, 'deleted flag seeds tombstone');
 assert.ok(cloudSrc.indexOf('function hasDel') >= 0, 'cloud empty-check sees tombstones');
@@ -332,8 +332,8 @@ assert.ok(appSrc.indexOf('function flushLiveSave') >= 0, 'pagehide flushes live 
 assert.ok(storeSrc.indexOf('FinBridge.setInstallId') >= 0, 'install id mirrored to native prefs');
 
 var gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle'), 'utf8');
-assert.ok(/versionCode\s+185/.test(gradle), 'versionCode 185');
-assert.ok(/versionName\s+"4\.13\.18"/.test(gradle), 'versionName 4.13.18');
+assert.ok(/versionCode\s+186/.test(gradle), 'versionCode 186');
+assert.ok(/versionName\s+"4\.13\.19"/.test(gradle), 'versionName 4.13.19');
 
 var mainJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/MainActivity.java'), 'utf8');
 assert.ok(mainJava.indexOf('isTrustedApkUrl') >= 0, 'apk url allowlisted');
@@ -724,6 +724,37 @@ assert.strictEqual(Number(mergedMeal2.mealPlan.lastPlan.total), 7777, 'newer rem
     expenses: [], reserves: [], debts: [], reserveOps: [], obligations: [], obligationPays: []
   };
   assert.strictEqual(cloudSandbox.window.kopeykaCloud.cashAtMonth(frac, '2026-09'), 10100, 'cloud cash rounds like the engine');
+  var debtBase = {
+    settings: { openingBalance: 10000, month: '2026-10' },
+    income: [], expenses: [], reserves: [], debts: [{ id: 'd1', name: 'Папа', total: 10000, paid: 4000 }],
+    reserveOps: [], obligations: [], obligationPays: []
+  };
+  var debtLocal = JSON.parse(JSON.stringify(debtBase));
+  debtLocal.debts[0].paid = 5000;
+  debtLocal.expenses = [{ id: 'e-local', amount: 1000, category: 'Долг', note: 'Папа', date: '2026-10-02', debtId: 'd1' }];
+  var debtRemote = JSON.parse(JSON.stringify(debtBase));
+  debtRemote.debts[0].paid = 4500;
+  debtRemote.expenses = [{ id: 'e-remote', amount: 500, category: 'Долг', note: 'Папа', date: '2026-10-03', debtId: 'd1' }];
+  var debtMerged = cloudSandbox.window.kopeykaCloud.threeWay(debtBase, debtLocal, debtRemote);
+  assert.strictEqual(debtMerged.debts[0].paid, 5500, 'two phones paying one debt keep both payments, got ' + debtMerged.debts[0].paid);
+  assert.strictEqual((debtMerged.expenses||[]).filter(function(e){return e&&!e.deleted;}).length, 2, 'both debt expenses survive merge');
+  var resBase = {
+    settings: { openingBalance: 10000, month: '2026-10' },
+    income: [], expenses: [],
+    reserves: [{ id: 'r1', name: 'Отпуск', saved: 1000, target: 5000 }],
+    debts: [],
+    reserveOps: [{ id: 'o0', reserveId: 'r1', amount: 1000, type: 'deposit', date: '2026-10-01' }],
+    obligations: [], obligationPays: []
+  };
+  var resLocal = JSON.parse(JSON.stringify(resBase));
+  resLocal.reserves[0].saved = 1500;
+  resLocal.reserveOps.push({ id: 'oL', reserveId: 'r1', amount: 500, type: 'deposit', date: '2026-10-02' });
+  var resRemote = JSON.parse(JSON.stringify(resBase));
+  resRemote.reserves[0].saved = 1800;
+  resRemote.reserveOps.push({ id: 'oR', reserveId: 'r1', amount: 800, type: 'deposit', date: '2026-10-03' });
+  var resMerged = cloudSandbox.window.kopeykaCloud.threeWay(resBase, resLocal, resRemote);
+  assert.strictEqual(resMerged.reserves[0].saved, 2300, 'reserve balance keeps both phones deposits, got ' + resMerged.reserves[0].saved);
+  assert.strictEqual(cloudSandbox.window.kopeykaCloud.cashAtMonth(resMerged, '2026-10'), 7700, 'cash still drops by every reserve deposit');
 })();
 
 assert.ok(bakSrc.indexOf('function snapTimeMs') >= 0, 'emergency rank uses parsed timestamps');
@@ -737,19 +768,19 @@ assert.ok(bakSrc.indexOf('stale finna-latest.json must not beat') >= 0, 'stale l
 assert.ok(bakSrc.indexOf('if (latest && latest.state)') < 0 || bakSrc.indexOf('pickNewestEmergency') >= 0, 'latest is not an early return winner');
 
 var swSrc = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
-assert.ok(swSrc.indexOf("CACHE='kopeyka3-v96'") >= 0, 'sw cache v96');
+assert.ok(swSrc.indexOf("CACHE='kopeyka3-v97'") >= 0, 'sw cache v97');
 assert.ok(swSrc.indexOf("profile.js?v=") >= 0, 'sw precaches profile.js');
-assert.ok(idx.indexOf("profile.js?v=2026101902") >= 0, 'index loads profile with cache bust');
-assert.ok(idx.indexOf("sw.js?v=96") >= 0, 'index registers sw v96');
-assert.ok(idx.indexOf("onboard.js?v=2026101902") >= 0, 'index onboard cache aligned');
-assert.ok(swSrc.indexOf("onboard.js?v=") >= 0 && swSrc.indexOf("2026101902") >= 0, 'sw onboard cache aligned');
-assert.ok(idx.indexOf("finn3d.js?v=2026101902") >= 0, 'index finn3d cache aligned');
+assert.ok(idx.indexOf("profile.js?v=2026102101") >= 0, 'index loads profile with cache bust');
+assert.ok(idx.indexOf("sw.js?v=97") >= 0, 'index registers sw v97');
+assert.ok(idx.indexOf("onboard.js?v=2026102101") >= 0, 'index onboard cache aligned');
+assert.ok(swSrc.indexOf("onboard.js?v=") >= 0 && swSrc.indexOf("2026102101") >= 0, 'sw onboard cache aligned');
+assert.ok(idx.indexOf("finn3d.js?v=2026102101") >= 0, 'index finn3d cache aligned');
 assert.ok(cloudSrc.indexOf('escHtml(currentUser.email') >= 0, 'cloud email escaped in auth UI');
 assert.ok(manifestXml.indexOf('android:allowBackup="false"') >= 0, 'android auto-backup off so cipher is not restored without key');
 assert.ok(updJava.indexOf('if (notifyUpdate(context, msg))') >= 0, 'notified_code only after successful push');
 assert.ok(updJava.indexOf('if (!can) return false') >= 0, 'no notify permission must retry later');
 assert.ok(bridgeJava.indexOf('pubMod > privMod') >= 0, 'backup read prefers newer Downloads copy');
-assert.ok(mainJava.indexOf('FinApp/4.13.18') >= 0, 'native UA matches release');
+assert.ok(mainJava.indexOf('FinApp/4.13.19') >= 0, 'native UA matches release');
 assert.ok(cloudSrc.indexOf('trustPreAnchorCash') >= 0, 'cloud apply trusts folded opening');
 assert.ok(appSrc.indexOf('function rebalancePreAnchorCash') >= 0, 'past-month edits move the cash anchor');
 assert.ok(appSrc.indexOf('function trustPreAnchorCash') >= 0, 'import/undo/fold do not double-count anchor');
@@ -896,6 +927,32 @@ assert.ok(asstSrc.indexOf('function isNewerOp') >= 0, 'voice compares ops by tim
   assert.strictEqual(still.debts[0].paid, 5000, 'historical part can shrink without touching cash');
   assert.strictEqual(still.expenses[0].amount, 3000, 'cash payment stays when book paid still covers it');
   assert.ok(!still.expenses[0].deleted, 'expense is kept');
+  var named = {
+    debts: [{ id: 'd1', name: 'Папа', total: 10000, paid: 1000 }],
+    expenses: [{ id: 'e1', amount: 1000, category: 'Долг', note: 'Папа', date: '2026-10-01' }],
+    obligationPays: [], obligations: []
+  };
+  adj(named, named.expenses[0], 1000);
+  assert.strictEqual(named.expenses[0].debtId, 'd1', 'name-linked debt expense gets a stable id');
+  assert.strictEqual(named.debts[0].paid, 1000, 'stamping the link does not change paid');
+  var editLabel = appSandbox.applyExpenseEditLabel;
+  assert.strictEqual(typeof editLabel, 'function', 'applyExpenseEditLabel exported');
+  var food = { category: 'Продукты', note: 'Пятёрочка', amount: 400 };
+  editLabel(food, 'Пятёрочка');
+  assert.strictEqual(food.category, 'Продукты', 'editing a note must not kick the expense out of its budget category');
+  assert.strictEqual(food.note, 'Пятёрочка');
+  editLabel(food, 'Транспорт');
+  assert.strictEqual(food.category, 'Транспорт', 'typing a real category still moves the expense');
+  assert.strictEqual(food.note, 'Пятёрочка', 'category change keeps the shop note');
+  var dateOnly = {
+    debts: [],
+    expenses: [{ id: 'e1', amount: 2000, category: 'Обязательные', date: '2026-10-03', obligId: 'ob1' }],
+    obligationPays: [{ id: 'p1', obligId: 'ob1', month: '', amount: 2000, date: '2026-10-03' }],
+    obligations: [{ id: 'ob1', amount: 2000 }]
+  };
+  reset(dateOnly, 'ob1', '2026-10');
+  assert.ok(dateOnly.obligationPays[0].deleted, 'reset clears a pay whose month was stored only on the date');
+  assert.ok(dateOnly.expenses[0].deleted, 'reset returns the matching cash expense');
 })();
 
 (function preAnchorRebalance(){
