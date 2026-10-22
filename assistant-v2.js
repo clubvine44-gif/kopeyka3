@@ -1405,7 +1405,7 @@ function execute(a){
   }
   else if(t==='add_obligation'){if(amt<=0)throw Error('Сумма > 0');var day=n(a.day||25);if(day<1||day>31)throw Error('День 1–31');s.obligations.push({id:id(),name:String(a.name||'Платёж'),amount:amt,day:day,active:true});}
   else if(t==='delete_debt'){d=findDebt(s.debts,a.name);if(!d)throw Error('Долг «'+(a.name||'')+'» не найден. Имя должно совпадать со списком. Есть: '+(liveList(s.debts).map(function(x){return x.name;}).join(', ')||'нет'));softDel(s,'debts',d.id);}
-  else if(t==='delete_reserve'){r=find(s.reserves,a.name||a.reserve,0);if(!r)throw Error('Резерв не найден');var back=n(r.saved);if(back>0){r.saved=0;s.reserveOps.push({id:id(),reserveId:r.id,type:'withdraw',amount:back,date:dateOf(a)});}softDel(s,'reserves',r.id);}
+  else if(t==='delete_reserve'){r=find(s.reserves,a.name||a.reserve,0);if(!r)throw Error('Резерв не найден');if(typeof window.releaseReserveCash==='function')window.releaseReserveCash(s,r,dateOf(a));else{var back=n(r.saved);if(back>0){r.saved=0;s.reserveOps.push({id:id(),reserveId:r.id,type:'withdraw',amount:back,date:dateOf(a)});}}softDel(s,'reserves',r.id);}
   else if(t==='delete_obligation'){o=find(s.obligations,a.name,a.amount);if(!o)throw Error('Обязательный не найден');softDel(s,'obligations',o.id);}
   else if(t==='delete_expense'){var q=norm(a.name||'');var victim=null;if(!q){if(s.lastOp&&s.lastOp.kind==='expense')victim=(s.expenses||[]).find(function(x){return x&&x.id===s.lastOp.id&&!x.deleted;})||null;if(!victim)victim=newestAlive(s.expenses);}else{var bestEx=null;(s.expenses||[]).forEach(function(ex){if(!ex||ex.deleted)return;if(norm(ex.note||ex.category).indexOf(q)===-1)return;if(!bestEx||isNewerOp(ex,bestEx))bestEx=ex;});victim=bestEx;}if(!victim)throw Error('Расход не найден');dropExpense(s,victim.id);}
   else if(t==='delete_income'){var qi=norm(a.name||'');var victimI=null;if(!qi){if(s.lastOp&&s.lastOp.kind==='income')victimI=(s.income||[]).find(function(x){return x&&x.id===s.lastOp.id&&!x.deleted;})||null;if(!victimI)victimI=newestAlive(s.income);}else{(s.income||[]).forEach(function(x){if(!x||x.deleted)return;if(norm(x.note).indexOf(qi)===-1)return;if(!victimI||isNewerOp(x,victimI))victimI=x;});}if(!victimI)throw Error('Доход не найден');softDel(s,'income',victimI.id);}
@@ -1418,7 +1418,7 @@ function execute(a){
       else if(last.kind==='debt')removed=!!softDel(s,'debts',last.id);
       else if(last.kind==='reserve'){
         var rr=(s.reserves||[]).find(function(x){return x&&x.id===last.id;});
-        if(rr&&!rr.deleted){var rb=n(rr.saved);if(rb>0){rr.saved=0;s.reserveOps.push({id:id(),reserveId:rr.id,type:'withdraw',amount:rb,date:dateOf(a)});}}
+        if(rr&&!rr.deleted){if(typeof window.releaseReserveCash==='function')window.releaseReserveCash(s,rr,dateOf(a));else{var rb=n(rr.saved);if(rb>0){rr.saved=0;s.reserveOps.push({id:id(),reserveId:rr.id,type:'withdraw',amount:rb,date:dateOf(a)});}}}
         removed=!!softDel(s,'reserves',last.id);
       }
       else if(last.kind==='obligation')removed=!!softDel(s,'obligations',last.id);

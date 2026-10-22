@@ -1,4 +1,4 @@
-(function(){/* v118.23 4.13.19 */'use strict';
+(function(){/* v118.24 4.13.20 */'use strict';
 var KEY='kopeyka3_state_v1',ANCHOR='2026-08-17',CYCLE=['day','day','night','night','off','off'];
 var CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье','Прочее'];
 var BUDGET_CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
@@ -725,6 +725,59 @@ function rebalancePreAnchorCash(){
 }
 window.trustPreAnchorCash=trustPreAnchorCash;
 window.rebalancePreAnchorCash=rebalancePreAnchorCash;
+/** Сколько по резерву реально ушло из кассы: депозиты минус выводы. История «уже накоплено» сюда не входит. */
+function reserveNetOf(state, reserveId){
+  var net=0;
+  ((state&&state.reserveOps)||[]).forEach(function(o){
+    if(!alive(o)||o.reserveId!==reserveId)return;
+    var a=num(o.amount);
+    if(o.type==='withdraw')net-=a;
+    else net+=a;
+  });
+  return net;
+}
+function reserveCashHeld(state, reserve){
+  if(!state||!reserve)return 0;
+  var net=reserveNetOf(state, reserve.id);
+  if(net<0)net=0;
+  var saved=num(reserve.saved);
+  if(net>saved)net=saved;
+  return net;
+}
+function pushReserveOp(state, reserveId, type, amount, dateStr){
+  if(!(amount>0))return null;
+  if(!state.reserveOps)state.reserveOps=[];
+  var op=stampOp({id:uid(),reserveId:reserveId,type:type,amount:amount,date:dateStr||today()});
+  state.reserveOps.push(op);
+  return op;
+}
+/** Правка поля «уже накоплено».
+ *  История до учёта кассы деньги не двигает и кассу не списывает.
+ *  Если новое накопленное меньше уже проведённых пополнений — лишнее возвращается в кассу.
+ *  Возвращает сумму, которая вернулась в кассу. */
+function applyReserveSaved(state, reserve, newSaved, dateStr){
+  if(!state||!reserve)return 0;
+  newSaved=Math.max(0, num(newSaved));
+  var held=reserveCashHeld(state, reserve);
+  var back=0;
+  if(newSaved<held){
+    back=held-newSaved;
+    pushReserveOp(state, reserve.id, 'withdraw', back, dateStr);
+  }
+  reserve.saved=newSaved;
+  return back;
+}
+/** Удаление резерва: в кассу возвращается только то, что из неё уходило. */
+function releaseReserveCash(state, reserve, dateStr){
+  if(!state||!reserve)return 0;
+  var back=reserveCashHeld(state, reserve);
+  if(back>0)pushReserveOp(state, reserve.id, 'withdraw', back, dateStr);
+  reserve.saved=0;
+  return back;
+}
+window.reserveCashHeld=reserveCashHeld;
+window.applyReserveSaved=applyReserveSaved;
+window.releaseReserveCash=releaseReserveCash;
 function save(skipUndo){
   try{
     // Locked encrypted blob: never write over it (even with "recovered" data).
@@ -2657,33 +2710,32 @@ if(k==='ex'){var exp=STATE.expenses.find(function(i){return i.id===id;});if(!exp
 if(k==='res'){var r=STATE.reserves.find(function(i){return i.id===id;});if(!r)return;appChoice('Резерв «'+r.name+'»',['Пополнить','Снять','Значимость','Изменить','Удалить'],'Резерв').then(function(act){
   if(act===null)return;
   if(act===4){
-    appConfirm('Удалить резерв? Накопленное вернётся в кассу.','Удалить').then(function(ok){
+    appConfirm('Удалить резерв? В кассу вернётся только то, что туда уходило из неё.','Удалить').then(function(ok){
       if(!ok)return;pushUndo();
-      var back=num(r.saved);
-      if(back>0){
-        r.saved=0;
-        STATE.reserveOps.push(stampOp({id:uid(),reserveId:id,type:'withdraw',amount:back,date:today()}));
-      }
+      var had=num(r.saved);
+      var back=releaseReserveCash(STATE, r);
       softDeleteIn('reserves',id,'reserve',r.name);
       save(true);render();
-      toast(back>0?('Резерв удалён · в кассу '+fmt(back)):'Удалено');
+      if(back>0&&back<had)toast('Резерв удалён · в кассу '+fmt(back)+' (остальное было до учёта кассы)');
+      else if(back>0)toast('Резерв удалён · в кассу '+fmt(back));
+      else toast('Удалено');
     });
   } else if(act===3){
     appForm('Изменить резерв',[
       {name:'name',label:'Название',value:r.name||''},
       {name:'target',label:'Цель (0 — без цели)',value:String(num(r.target)),inputmode:'decimal'},
-      {name:'saved',label:'Уже накоплено',value:String(num(r.saved)),inputmode:'decimal'}
+      {name:'saved',label:'Уже накоплено (история не списывает кассу)',value:String(num(r.saved)),inputmode:'decimal'}
     ],'Сохранить').then(function(v){
       if(!v)return;pushUndo();
       var oldS=num(r.saved);
       var newS=Math.max(0,num(v.saved));
       r.name=String(v.name||r.name).trim()||r.name;
       r.target=Math.max(0,num(v.target));
-      r.saved=newS;
-      var delta=newS-oldS;
-      if(delta>0) STATE.reserveOps.push(stampOp({id:uid(),reserveId:id,type:'deposit',amount:delta,date:today()}));
-      else if(delta<0) STATE.reserveOps.push(stampOp({id:uid(),reserveId:id,type:'withdraw',amount:-delta,date:today()}));
-      save(true);render();toast('Резерв обновлён');
+      var back=applyReserveSaved(STATE, r, newS);
+      save(true);render();
+      if(back>0)toast('Резерв обновлён · в кассу '+fmt(back));
+      else if(newS>oldS)toast('Резерв обновлён · касса не списана. Пополнить — отдельной кнопкой');
+      else toast('Резерв обновлён');
     });
   } else if(act===2){
     var cur=num(r.priority);
@@ -2843,16 +2895,16 @@ function addReserve(){
       if(!nm)return;
       appPrompt('Цель (0 если без цели)','0','Цель').then(function(tv){
         var t=num(tv);
-        appPrompt('Уже накоплено','0','Накоплено').then(function(sv){
+        appPrompt('Уже накоплено (касса не списывается)','0','Накоплено').then(function(sv){
           var s=num(sv);
           appChoice('Это срочный резерв? (деньги списываются только когда пополняешь из кассы)',['Обычный','Срочный — указать дату'],'Тип резерва').then(function(ti){
             function finish(urgent, urgentDate){
               var id=uid();
               pushUndo();
               STATE.reserves.push({id:id,name:nm,category:nm,target:t,saved:s,urgent:!!urgent,urgentDate:urgentDate||''});
-              if(s>0)STATE.reserveOps.push(stampOp({id:uid(),reserveId:id,type:'deposit',amount:s,date:today()}));
+              // Уже накоплено — история до кассы, как «уже погашено» у долга. Списание только через «Пополнить».
               save(true);render();
-              toast(urgent?('Срочный резерв «'+nm+'» до '+urgentDate):('Резерв «'+nm+'» создан — переносится на все месяцы'));
+              toast(s>0?(urgent?('Срочный резерв «'+nm+'» до '+urgentDate+' · уже '+fmt(s)+' (касса не списана)'):('Резерв «'+nm+'» · уже накоплено '+fmt(s)+' (касса не списана)')):(urgent?('Срочный резерв «'+nm+'» до '+urgentDate):('Резерв «'+nm+'» создан — переносится на все месяцы')));
             }
             if(ti===1){
               appDatePicker('К какой дате нужен резерв', today()).then(function(iso){

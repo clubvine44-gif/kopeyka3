@@ -332,8 +332,8 @@ assert.ok(appSrc.indexOf('function flushLiveSave') >= 0, 'pagehide flushes live 
 assert.ok(storeSrc.indexOf('FinBridge.setInstallId') >= 0, 'install id mirrored to native prefs');
 
 var gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle'), 'utf8');
-assert.ok(/versionCode\s+186/.test(gradle), 'versionCode 186');
-assert.ok(/versionName\s+"4\.13\.19"/.test(gradle), 'versionName 4.13.19');
+assert.ok(/versionCode\s+187/.test(gradle), 'versionCode 187');
+assert.ok(/versionName\s+"4\.13\.20"/.test(gradle), 'versionName 4.13.20');
 
 var mainJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/MainActivity.java'), 'utf8');
 assert.ok(mainJava.indexOf('isTrustedApkUrl') >= 0, 'apk url allowlisted');
@@ -768,19 +768,19 @@ assert.ok(bakSrc.indexOf('stale finna-latest.json must not beat') >= 0, 'stale l
 assert.ok(bakSrc.indexOf('if (latest && latest.state)') < 0 || bakSrc.indexOf('pickNewestEmergency') >= 0, 'latest is not an early return winner');
 
 var swSrc = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
-assert.ok(swSrc.indexOf("CACHE='kopeyka3-v97'") >= 0, 'sw cache v97');
+assert.ok(swSrc.indexOf("CACHE='kopeyka3-v98'") >= 0, 'sw cache v98');
 assert.ok(swSrc.indexOf("profile.js?v=") >= 0, 'sw precaches profile.js');
-assert.ok(idx.indexOf("profile.js?v=2026102101") >= 0, 'index loads profile with cache bust');
-assert.ok(idx.indexOf("sw.js?v=97") >= 0, 'index registers sw v97');
-assert.ok(idx.indexOf("onboard.js?v=2026102101") >= 0, 'index onboard cache aligned');
-assert.ok(swSrc.indexOf("onboard.js?v=") >= 0 && swSrc.indexOf("2026102101") >= 0, 'sw onboard cache aligned');
-assert.ok(idx.indexOf("finn3d.js?v=2026102101") >= 0, 'index finn3d cache aligned');
+assert.ok(idx.indexOf("profile.js?v=2026102301") >= 0, 'index loads profile with cache bust');
+assert.ok(idx.indexOf("sw.js?v=98") >= 0, 'index registers sw v98');
+assert.ok(idx.indexOf("onboard.js?v=2026102301") >= 0, 'index onboard cache aligned');
+assert.ok(swSrc.indexOf("onboard.js?v=") >= 0 && swSrc.indexOf("2026102301") >= 0, 'sw onboard cache aligned');
+assert.ok(idx.indexOf("finn3d.js?v=2026102301") >= 0, 'index finn3d cache aligned');
 assert.ok(cloudSrc.indexOf('escHtml(currentUser.email') >= 0, 'cloud email escaped in auth UI');
 assert.ok(manifestXml.indexOf('android:allowBackup="false"') >= 0, 'android auto-backup off so cipher is not restored without key');
 assert.ok(updJava.indexOf('if (notifyUpdate(context, msg))') >= 0, 'notified_code only after successful push');
 assert.ok(updJava.indexOf('if (!can) return false') >= 0, 'no notify permission must retry later');
 assert.ok(bridgeJava.indexOf('pubMod > privMod') >= 0, 'backup read prefers newer Downloads copy');
-assert.ok(mainJava.indexOf('FinApp/4.13.19') >= 0, 'native UA matches release');
+assert.ok(mainJava.indexOf('FinApp/4.13.20') >= 0, 'native UA matches release');
 assert.ok(cloudSrc.indexOf('trustPreAnchorCash') >= 0, 'cloud apply trusts folded opening');
 assert.ok(appSrc.indexOf('function rebalancePreAnchorCash') >= 0, 'past-month edits move the cash anchor');
 assert.ok(appSrc.indexOf('function trustPreAnchorCash') >= 0, 'import/undo/fold do not double-count anchor');
@@ -795,6 +795,10 @@ assert.ok(appSrc.indexOf('debtId:found.id') >= 0, 'day-plan debt expense is link
 assert.ok(asstSrc.indexOf('function dropExpense') >= 0, 'voice delete adjusts linked debt');
 assert.ok(asstSrc.indexOf('finAdjustLinkedExpense') >= 0, 'voice amount change adjusts linked debt');
 assert.ok(asstSrc.indexOf('function isNewerOp') >= 0, 'voice compares ops by time');
+assert.ok(appSrc.indexOf('function releaseReserveCash') >= 0, 'reserve delete returns only cash-backed savings');
+assert.ok(appSrc.indexOf('function applyReserveSaved') >= 0, 'reserve saved edit does not invent cash');
+assert.ok(appSrc.indexOf("type:'deposit',amount:s,date:today()") < 0, 'new reserve already-saved must not deposit from cash');
+assert.ok(asstSrc.indexOf('releaseReserveCash') >= 0, 'voice reserve delete uses cash-backed release');
 (function linkedExpenseSync(){
   var appSandbox = {
     window: {},
@@ -953,6 +957,31 @@ assert.ok(asstSrc.indexOf('function isNewerOp') >= 0, 'voice compares ops by tim
   reset(dateOnly, 'ob1', '2026-10');
   assert.ok(dateOnly.obligationPays[0].deleted, 'reset clears a pay whose month was stored only on the date');
   assert.ok(dateOnly.expenses[0].deleted, 'reset returns the matching cash expense');
+  var heldFn = appSandbox.reserveCashHeld;
+  var relFn = appSandbox.releaseReserveCash;
+  var editFn = appSandbox.applyReserveSaved;
+  assert.strictEqual(typeof relFn, 'function', 'releaseReserveCash exported');
+  var hist = { reserves: [{ id: 'r1', name: 'Отпуск', saved: 5000 }], reserveOps: [] };
+  assert.strictEqual(heldFn(hist, hist.reserves[0]), 0, 'historical reserve holds no cash');
+  assert.strictEqual(relFn(hist, hist.reserves[0], '2026-10-23'), 0, 'deleting historical reserve must not invent cash');
+  assert.strictEqual(hist.reserveOps.length, 0);
+  assert.strictEqual(hist.reserves[0].saved, 0);
+  var funded = { reserves: [{ id: 'r1', saved: 3000 }], reserveOps: [{ id: 'o1', reserveId: 'r1', type: 'deposit', amount: 3000, date: '2026-10-01' }] };
+  assert.strictEqual(relFn(funded, funded.reserves[0], '2026-10-23'), 3000, 'deleting a funded reserve returns the deposits');
+  assert.strictEqual(funded.reserves[0].saved, 0);
+  var mixed = { reserves: [{ id: 'r1', saved: 5800 }], reserveOps: [{ id: 'o1', reserveId: 'r1', type: 'deposit', amount: 800, date: '2026-10-01' }] };
+  assert.strictEqual(relFn(mixed, mixed.reserves[0], '2026-10-23'), 800, 'delete returns only the cash-backed part');
+  var edited = { reserves: [{ id: 'r1', saved: 5000 }], reserveOps: [] };
+  assert.strictEqual(editFn(edited, edited.reserves[0], 4000, '2026-10-23'), 0, 'lowering historical saved does not pay cash');
+  assert.strictEqual(edited.reserves[0].saved, 4000);
+  assert.strictEqual(edited.reserveOps.length, 0);
+  var raised = { reserves: [{ id: 'r1', saved: 5000 }], reserveOps: [] };
+  assert.strictEqual(editFn(raised, raised.reserves[0], 6000, '2026-10-23'), 0, 'raising historical saved does not spend cash');
+  assert.strictEqual(raised.reserveOps.length, 0);
+  assert.strictEqual(raised.reserves[0].saved, 6000);
+  var trimmed = { reserves: [{ id: 'r1', saved: 1000 }], reserveOps: [{ id: 'o1', reserveId: 'r1', type: 'deposit', amount: 1000, date: '2026-10-01' }] };
+  assert.strictEqual(editFn(trimmed, trimmed.reserves[0], 400, '2026-10-23'), 600, 'lowering below deposits returns the extra cash');
+  assert.strictEqual(trimmed.reserves[0].saved, 400);
 })();
 
 (function preAnchorRebalance(){
