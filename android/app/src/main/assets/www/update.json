@@ -1,7 +1,7 @@
 {
-  "versionCode": 186,
-  "versionName": "4.13.19",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.19/Fin.apk",
-  "sha256": "bc2404affacbbb6fcc18acd52092d96e6cf69d73f32d542d116ebd7204ed12c3",
-  "notes": "4.13.19 — облако не теряет платежи долга и резерв с другого телефона, правка расхода не сбивает категорию (versionCode 186)"
+  "versionCode": 187,
+  "versionName": "4.13.20",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.20/Fin.apk",
+  "sha256": "14320880478efe5bcec0f0cd4eb4aa4111005b219e929a331b5ec44f43e4de4b",
+  "notes": "4.13.20 — уже накопленное в резерве не двигает кассу; удаление возвращает только реальные пополнения (versionCode 187)"
 }
