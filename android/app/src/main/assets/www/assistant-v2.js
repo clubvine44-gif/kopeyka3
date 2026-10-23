@@ -1399,9 +1399,22 @@ function execute(a){
   }
   else if(t==='reserve_deposit'||t==='reserve_withdraw'){
     r=find(s.reserves,a.reserve||a.name,0);if(!r)throw Error('Резерв не найден');if(amt<=0)throw Error('Сумма > 0');
-    if(t==='reserve_withdraw'&&amt>n(r.saved))throw Error('В резерве '+fmt(r.saved));
-    r.saved=n(r.saved)+(t==='reserve_deposit'?amt:-amt);
-    s.reserveOps.push({id:id(),reserveId:r.id,type:t==='reserve_deposit'?'deposit':'withdraw',amount:amt,date:dateOf(a)});
+    if(t==='reserve_deposit'){
+      r.saved=n(r.saved)+amt;
+      s.reserveOps.push({id:id(),reserveId:r.id,type:'deposit',amount:amt,date:dateOf(a)});
+    }else{
+      if(amt>n(r.saved))throw Error('В резерве '+fmt(r.saved));
+      if(typeof window.takeReserve==='function')window.takeReserve(s,r,amt,dateOf(a));
+      else{
+        var heldW=0;
+        (s.reserveOps||[]).forEach(function(o){if(!o||o.deleted||o.reserveId!==r.id)return;heldW+=o.type==='withdraw'?-n(o.amount):n(o.amount);});
+        if(heldW<0)heldW=0;
+        if(heldW>n(r.saved))heldW=n(r.saved);
+        var cashW=Math.min(amt,heldW);
+        if(cashW>0)s.reserveOps.push({id:id(),reserveId:r.id,type:'withdraw',amount:cashW,date:dateOf(a)});
+        r.saved=Math.max(0,n(r.saved)-amt);
+      }
+    }
   }
   else if(t==='add_obligation'){if(amt<=0)throw Error('Сумма > 0');var day=n(a.day||25);if(day<1||day>31)throw Error('День 1–31');s.obligations.push({id:id(),name:String(a.name||'Платёж'),amount:amt,day:day,active:true});}
   else if(t==='delete_debt'){d=findDebt(s.debts,a.name);if(!d)throw Error('Долг «'+(a.name||'')+'» не найден. Имя должно совпадать со списком. Есть: '+(liveList(s.debts).map(function(x){return x.name;}).join(', ')||'нет'));softDel(s,'debts',d.id);}

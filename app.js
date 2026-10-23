@@ -1,4 +1,4 @@
-(function(){/* v118.24 4.13.20 */'use strict';
+(function(){/* v118.25 4.13.21 */'use strict';
 var KEY='kopeyka3_state_v1',ANCHOR='2026-08-17',CYCLE=['day','day','night','night','off','off'];
 var CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье','Прочее'];
 var BUDGET_CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
@@ -775,9 +775,26 @@ function releaseReserveCash(state, reserve, dateStr){
   reserve.saved=0;
   return back;
 }
+/** Снятие. В кассу возвращается только то, что уходило из неё пополнением.
+ *  Остаток «уже накоплено» уменьшается без проводки — этих денег в кассе не было.
+ *  Возвращает {cash, book, saved}. */
+function takeReserve(state, reserve, amount, dateStr){
+  var saved=reserve?num(reserve.saved):0;
+  if(!state||!reserve)return {cash:0,book:0,saved:saved};
+  amount=num(amount);
+  if(!(amount>0))return {cash:0,book:0,saved:saved};
+  if(amount>saved)amount=saved;
+  var cash=Math.min(amount, reserveCashHeld(state, reserve));
+  var book=amount-cash;
+  if(cash>0)pushReserveOp(state, reserve.id, 'withdraw', cash, dateStr);
+  reserve.saved=saved-amount;
+  if(reserve.saved<0)reserve.saved=0;
+  return {cash:cash, book:book, saved:num(reserve.saved)};
+}
 window.reserveCashHeld=reserveCashHeld;
 window.applyReserveSaved=applyReserveSaved;
 window.releaseReserveCash=releaseReserveCash;
+window.takeReserve=takeReserve;
 function save(skipUndo){
   try{
     // Locked encrypted blob: never write over it (even with "recovered" data).
@@ -2750,8 +2767,12 @@ if(k==='res'){var r=STATE.reserves.find(function(i){return i.id===id;});if(!r)re
     });
   } else if(act===1){
     appPrompt('Снять','0','Снять с резерва').then(function(av){
-      var a=num(av);if(!(a>0))return;if(a>num(r.saved))return toast('В резерве только '+fmt(num(r.saved)));pushUndo();r.saved=num(r.saved)-a;
-        STATE.reserveOps.push(stampOp({id:uid(),reserveId:id,type:'withdraw',amount:a,date:today()}));save(true);render();toast('Снято');
+      var a=num(av);if(!(a>0))return;if(a>num(r.saved))return toast('В резерве только '+fmt(num(r.saved)));pushUndo();
+        var took=takeReserve(STATE, r, a, today());
+        save(true);render();
+        if(took.cash>0&&took.book>0)toast('В кассу '+fmt(took.cash)+' · '+fmt(took.book)+' было до учёта кассы');
+        else if(took.cash>0)toast('Снято · в кассу '+fmt(took.cash));
+        else toast('Снято из накопленного до кассы · касса не изменилась');
     });
   } else if(act===0){
     appPrompt('Пополнить','0','Пополнить резерв').then(function(av){
