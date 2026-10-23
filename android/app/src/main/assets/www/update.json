@@ -1,7 +1,7 @@
 {
-  "versionCode": 187,
-  "versionName": "4.13.20",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.20/Fin.apk",
-  "sha256": "14320880478efe5bcec0f0cd4eb4aa4111005b219e929a331b5ec44f43e4de4b",
-  "notes": "4.13.20 — уже накопленное в резерве не двигает кассу; удаление возвращает только реальные пополнения (versionCode 187)"
+  "versionCode": 188,
+  "versionName": "4.13.21",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.21/Fin.apk",
+  "sha256": "daf2fc9030c87e18e91f79e0a5ac57ff7c863f1d7b5432d9c1e6a86a8be234c4",
+  "notes": "4.13.21 — снятие с резерва возвращает в кассу только реальные пополнения (versionCode 188)"
 }
