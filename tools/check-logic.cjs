@@ -89,6 +89,11 @@ var aug = sandbox.window.kopeykaEngine.month('2026-08');
 assert.strictEqual(aug.cash, 10000, 'previous empty month rolls back from anchor');
 
 assert.ok(sandbox.window.kopeykaEngine.categories.indexOf('Транспорт') >= 0, 'transport category present');
+vm.runInNewContext(fs.readFileSync(path.join(ROOT, 'products.js'), 'utf8'), sandbox, { filename: 'products.js' });
+assert.strictEqual(sandbox.window.kopeykaEngine.classifyName('латте', 'Прочее'), 'Продукты', 'cafe spend lands in the food budget');
+assert.strictEqual(sandbox.window.kopeykaEngine.classifyName('такси домой', 'Прочее'), 'Транспорт', 'fare lands in transport');
+assert.strictEqual(sandbox.window.kopeykaEngine.classifyName('сигареты', 'Прочее'), 'Карманные расходы', 'cigarettes land in pocket money');
+assert.strictEqual(sandbox.window.kopeykaEngine.classifyName('долг папе', 'Прочее'), 'Долг', 'debt label stays a debt');
 
 // Closing a reserve: keep historical ops, add withdraw of remaining saved, mark reserve deleted.
 sandbox.window.STATE.reserves = [
@@ -332,8 +337,8 @@ assert.ok(appSrc.indexOf('function flushLiveSave') >= 0, 'pagehide flushes live 
 assert.ok(storeSrc.indexOf('FinBridge.setInstallId') >= 0, 'install id mirrored to native prefs');
 
 var gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle'), 'utf8');
-assert.ok(/versionCode\s+188/.test(gradle), 'versionCode 188');
-assert.ok(/versionName\s+"4\.13\.21"/.test(gradle), 'versionName 4.13.21');
+assert.ok(/versionCode\s+189/.test(gradle), 'versionCode 189');
+assert.ok(/versionName\s+"4\.13\.22"/.test(gradle), 'versionName 4.13.22');
 
 var mainJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/MainActivity.java'), 'utf8');
 assert.ok(mainJava.indexOf('isTrustedApkUrl') >= 0, 'apk url allowlisted');
@@ -768,19 +773,19 @@ assert.ok(bakSrc.indexOf('stale finna-latest.json must not beat') >= 0, 'stale l
 assert.ok(bakSrc.indexOf('if (latest && latest.state)') < 0 || bakSrc.indexOf('pickNewestEmergency') >= 0, 'latest is not an early return winner');
 
 var swSrc = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
-assert.ok(swSrc.indexOf("CACHE='kopeyka3-v99'") >= 0, 'sw cache v99');
+assert.ok(swSrc.indexOf("CACHE='kopeyka3-v100'") >= 0, 'sw cache v100');
 assert.ok(swSrc.indexOf("profile.js?v=") >= 0, 'sw precaches profile.js');
-assert.ok(idx.indexOf("profile.js?v=2026102401") >= 0, 'index loads profile with cache bust');
-assert.ok(idx.indexOf("sw.js?v=99") >= 0, 'index registers sw v99');
-assert.ok(idx.indexOf("onboard.js?v=2026102401") >= 0, 'index onboard cache aligned');
-assert.ok(swSrc.indexOf("onboard.js?v=") >= 0 && swSrc.indexOf("2026102401") >= 0, 'sw onboard cache aligned');
-assert.ok(idx.indexOf("finn3d.js?v=2026102401") >= 0, 'index finn3d cache aligned');
+assert.ok(idx.indexOf("profile.js?v=2026102901") >= 0, 'index loads profile with cache bust');
+assert.ok(idx.indexOf("sw.js?v=100") >= 0, 'index registers sw v100');
+assert.ok(idx.indexOf("onboard.js?v=2026102901") >= 0, 'index onboard cache aligned');
+assert.ok(swSrc.indexOf("onboard.js?v=") >= 0 && swSrc.indexOf("2026102901") >= 0, 'sw onboard cache aligned');
+assert.ok(idx.indexOf("finn3d.js?v=2026102901") >= 0, 'index finn3d cache aligned');
 assert.ok(cloudSrc.indexOf('escHtml(currentUser.email') >= 0, 'cloud email escaped in auth UI');
 assert.ok(manifestXml.indexOf('android:allowBackup="false"') >= 0, 'android auto-backup off so cipher is not restored without key');
 assert.ok(updJava.indexOf('if (notifyUpdate(context, msg))') >= 0, 'notified_code only after successful push');
 assert.ok(updJava.indexOf('if (!can) return false') >= 0, 'no notify permission must retry later');
 assert.ok(bridgeJava.indexOf('pubMod > privMod') >= 0, 'backup read prefers newer Downloads copy');
-assert.ok(mainJava.indexOf('FinApp/4.13.21') >= 0, 'native UA matches release');
+assert.ok(mainJava.indexOf('FinApp/4.13.22') >= 0, 'native UA matches release');
 assert.ok(cloudSrc.indexOf('trustPreAnchorCash') >= 0, 'cloud apply trusts folded opening');
 assert.ok(appSrc.indexOf('function rebalancePreAnchorCash') >= 0, 'past-month edits move the cash anchor');
 assert.ok(appSrc.indexOf('function trustPreAnchorCash') >= 0, 'import/undo/fold do not double-count anchor');
@@ -797,6 +802,11 @@ assert.ok(asstSrc.indexOf('finAdjustLinkedExpense') >= 0, 'voice amount change a
 assert.ok(asstSrc.indexOf('function isNewerOp') >= 0, 'voice compares ops by time');
 assert.ok(appSrc.indexOf('function releaseReserveCash') >= 0, 'reserve delete returns only cash-backed savings');
 assert.ok(appSrc.indexOf('function takeReserve') >= 0, 'reserve withdraw returns only cash-backed savings');
+assert.ok(appSrc.indexOf('function adjustReserveOp') >= 0, 'reserve op edit keeps cash and saved together');
+assert.ok(appSrc.indexOf("k==='res-'||k==='res+'") >= 0, 'reserve rows in the ledger can be edited');
+assert.ok(appSrc.indexOf("o.type==='in'||o.type==='res+'") >= 0, 'withdraw from reserve shows as money back');
+assert.ok(appSrc.indexOf('function budgetCatOf') >= 0, 'alias categories count toward budget limits');
+assert.ok(appSrc.indexOf("e.category==='Долг'||e.category==='Обязательные')return;if(inMonth(e.date,month)&&String(e.date)<=t)spentSoFar") >= 0, 'forecast pace ignores debt and obligations');
 assert.ok(appSrc.indexOf('function applyReserveSaved') >= 0, 'reserve saved edit does not invent cash');
 assert.ok(appSrc.indexOf("type:'deposit',amount:s,date:today()") < 0, 'new reserve already-saved must not deposit from cash');
 assert.ok(asstSrc.indexOf('releaseReserveCash') >= 0, 'voice reserve delete uses cash-backed release');
@@ -1003,6 +1013,48 @@ assert.ok(asstSrc.indexOf('takeReserve') >= 0, 'voice reserve withdraw uses cash
   assert.strictEqual(tFund.cash, 1000, 'withdraw within deposits returns the full amount');
   assert.strictEqual(tFund.book, 0);
   assert.strictEqual(fundedTake.reserves[0].saved, 2000);
+  var adjR = appSandbox.adjustReserveOp;
+  var catOf = appSandbox.budgetCatOf;
+  assert.strictEqual(typeof adjR, 'function', 'adjustReserveOp exported');
+  assert.strictEqual(catOf('Кафе'), 'Продукты', 'old cafe rows still count as food');
+  assert.strictEqual(catOf('Проезд'), 'Транспорт');
+  assert.strictEqual(catOf('Долг'), 'Долг', 'debt is not a budget alias');
+  var dropDep = {
+    reserves: [{ id: 'r1', saved: 600 }],
+    reserveOps: [
+      { id: 'd1', reserveId: 'r1', type: 'deposit', amount: 1000, date: '2026-10-01' },
+      { id: 'w1', reserveId: 'r1', type: 'withdraw', amount: 400, date: '2026-10-02' }
+    ]
+  };
+  adjR(dropDep, dropDep.reserveOps[0], null);
+  assert.ok(dropDep.reserveOps[0].deleted, 'deposit op is voided');
+  assert.ok(dropDep.reserveOps[1].deleted, 'withdraw backed only by that deposit is voided so cash is not inflated');
+  assert.strictEqual(dropDep.reserves[0].saved, 0);
+  var keepBook = {
+    reserves: [{ id: 'r1', saved: 6000 }],
+    reserveOps: [{ id: 'd1', reserveId: 'r1', type: 'deposit', amount: 1000, date: '2026-10-01' }]
+  };
+  adjR(keepBook, keepBook.reserveOps[0], null);
+  assert.ok(keepBook.reserveOps[0].deleted);
+  assert.strictEqual(keepBook.reserves[0].saved, 5000, 'historical savings stay when the deposit row is removed');
+  var capW = {
+    reserves: [{ id: 'r1', saved: 2000 }],
+    reserveOps: [
+      { id: 'd1', reserveId: 'r1', type: 'deposit', amount: 3000, date: '2026-10-01' },
+      { id: 'w1', reserveId: 'r1', type: 'withdraw', amount: 1000, date: '2026-10-02' }
+    ]
+  };
+  var cappedW = adjR(capW, capW.reserveOps[1], 9000);
+  assert.strictEqual(cappedW, 3000, 'withdraw edit cannot exceed deposits');
+  assert.strictEqual(capW.reserveOps[1].amount, 3000);
+  assert.strictEqual(capW.reserves[0].saved, 0);
+  var downDep = {
+    reserves: [{ id: 'r1', saved: 1000 }],
+    reserveOps: [{ id: 'd1', reserveId: 'r1', type: 'deposit', amount: 1000, date: '2026-10-01' }]
+  };
+  adjR(downDep, downDep.reserveOps[0], 400);
+  assert.strictEqual(downDep.reserveOps[0].amount, 400);
+  assert.strictEqual(downDep.reserves[0].saved, 400, 'smaller deposit keeps less in the reserve');
 })();
 
 (function preAnchorRebalance(){

@@ -1,4 +1,4 @@
-(function(){/* v118.25 4.13.21 */'use strict';
+(function(){/* v118.26 4.13.22 */'use strict';
 var KEY='kopeyka3_state_v1',ANCHOR='2026-08-17',CYCLE=['day','day','night','night','off','off'];
 var CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье','Прочее'];
 var BUDGET_CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
@@ -121,6 +121,17 @@ function nextBudgetRangeAfter(from,end,mode){
   }
   return {start:ns, end:ey+'-'+pad2(em)+'-'+pad2(ed), mode:'payday'};
 }
+function budgetCatOf(cat){
+  cat=String(cat||'Прочее');
+  if(cat==='Долг'||cat==='Обязательные'||cat==='Прочее')return cat;
+  if(BUDGET_CATS.indexOf(cat)>=0)return cat;
+  var alias={
+    'Кафе':'Продукты','Проезд':'Транспорт','Сигареты':'Карманные расходы','Алкоголь':'Карманные расходы','Развлечения':'Карманные расходы',
+    'Жильё':'Аренда и коммунальные','Жилье':'Аренда и коммунальные','Связь':'Связь и подписки','Подписки':'Связь и подписки',
+    'Бытовая химия':'Гигиена','Красота':'Гигиена'
+  };
+  return alias[cat]||cat;
+}
 function spentInCatRange(cat,from,end){
   from=String(from||'').slice(0,10);
   end=String(end||'').slice(0,10);
@@ -128,7 +139,7 @@ function spentInCatRange(cat,from,end){
   var s=0;
   (STATE.expenses||[]).forEach(function(e){
     if(!e||e.deleted)return;
-    var cat0=String(e.category||'Прочее');
+    var cat0=budgetCatOf(e.category||'Прочее');
     if(cat0==='Долг'||cat0==='Обязательные')return;
     if(cat0!==String(cat))return;
     var ds=String(e.date||'').slice(0,10);
@@ -284,7 +295,7 @@ function categoryDailyLimit(cat,leftDays){
   (STATE.expenses||[]).forEach(function(e){
     if(!e||e.deleted)return;
     if(String(e.date||'').slice(0,10)!==td)return;
-    if(String(e.category||'')!==cat)return;
+    if(budgetCatOf(e.category)!==cat)return;
     st+=num(e.amount);
   });
   return {lim:lim,baseLim:baseLim,saved:saved,spent:spent,left:left,daily:daily,spentToday:st};
@@ -795,6 +806,61 @@ window.reserveCashHeld=reserveCashHeld;
 window.applyReserveSaved=applyReserveSaved;
 window.releaseReserveCash=releaseReserveCash;
 window.takeReserve=takeReserve;
+/** Правка или удаление проводки резерва.
+ *  «Уже накоплено» до кассы не двигается. Снятие не может вернуть больше, чем было пополнено из кассы:
+ *  если удалить пополнение, лишнее снятие тоже снимается, иначе касса раздувается. */
+function adjustReserveOp(state, op, nextAmount){
+  if(!state||!op)return 0;
+  var reserve=null;
+  (state.reserves||[]).forEach(function(r){if(r&&r.id===op.reserveId)reserve=r;});
+  var net0=reserve?reserveNetOf(state, reserve.id):0;
+  if(net0<0)net0=0;
+  var book=0;
+  if(reserve){
+    book=num(reserve.saved)-net0;
+    if(book<0)book=0;
+  }
+  var next=nextAmount==null?0:num(nextAmount);
+  if(next<0)next=0;
+  if(!(next>0)){
+    finSoftRow(state,'reserveOps',op);
+  }else{
+    if(op.type==='withdraw'){
+      var room=0;
+      (state.reserveOps||[]).forEach(function(o){
+        if(!alive(o)||o===op||o.reserveId!==op.reserveId)return;
+        var a=num(o.amount);
+        if(o.type==='withdraw')room-=a;
+        else if(o.type==='deposit')room+=a;
+      });
+      if(room<0)room=0;
+      if(next>room)next=room;
+    }
+    op.amount=next;
+    op.editedAt=new Date().toISOString();
+  }
+  if(reserve&&!reserve.deleted){
+    var net=reserveNetOf(state, reserve.id);
+    if(net<0){
+      var excess=-net;
+      var ops=state.reserveOps||[];
+      for(var i=ops.length-1;i>=0&&excess>0;i--){
+        var w=ops[i];
+        if(!alive(w)||w.reserveId!==reserve.id||w.type!=='withdraw')continue;
+        var wa=num(w.amount);
+        if(wa<=excess){finSoftRow(state,'reserveOps',w);excess-=wa;}
+        else{w.amount=wa-excess;w.editedAt=new Date().toISOString();excess=0;}
+      }
+      net=reserveNetOf(state, reserve.id);
+      if(net<0)net=0;
+    }
+    reserve.saved=book+net;
+    if(reserve.saved<0)reserve.saved=0;
+  }
+  return next;
+}
+window.adjustReserveOp=adjustReserveOp;
+window.budgetCatOf=budgetCatOf;
 function save(skipUndo){
   try{
     // Locked encrypted blob: never write over it (even with "recovered" data).
@@ -1051,6 +1117,7 @@ var by={};
   if(!inMonth(e.date,month))return;
   var cat=e.category||'Прочее';
   if(cat==='Долг'&&e.note)cat=e.note;
+  else if(cat!=='Долг'&&cat!=='Обязательные')cat=budgetCatOf(cat);
   by[cat]=(by[cat]||0)+num(e.amount);
 });
 var cats=Object.keys(by).map(function(k){return{name:k,amount:by[k]};}).sort(function(a,b){return b.amount-a.amount;});
@@ -2082,12 +2149,12 @@ function _renderNow(){
   var ops=[];
   STATE.income.forEach(function(i){if(inMonth(i.date,month))ops.push({t:i.date,type:'in',a:i.amount,n:i.note||'Доход',id:i.id,deleted:!!i.deleted,edited:!!i.editedAt,at:Number(i.createdAt)||0});});
   STATE.expenses.forEach(function(e){if(!inMonth(e.date,month))return;var label=e.category||'Расход';if(e.category==='Долг')label='Долг'+(e.note?(' · '+e.note):'');else if(e.category==='Обязательные'&&e.note)label=e.note;else if(e.note&&e.note!==label)label=label+' · '+e.note;ops.push({t:e.date,type:'ex',a:e.amount,n:label,id:e.id,deleted:!!e.deleted,edited:!!e.editedAt,at:Number(e.createdAt)||0});});
-  (STATE.reserveOps||[]).forEach(function(o){if(!alive(o))return;if(!inMonth(o.date,month))return;var rr=(STATE.reserves||[]).find(function(x){return x.id===o.reserveId;});var nm=rr?rr.name:'Резерв';ops.push({t:o.date,type:o.type==='deposit'?'res-':'res+',a:o.amount,n:(o.type==='deposit'?'В резерв «':'Из резерва «')+nm+'»',id:o.id,deleted:!!o.deleted,at:Number(o.createdAt)||0});});
+  (STATE.reserveOps||[]).forEach(function(o){if(!o||!o.id)return;if(!inMonth(o.date,month))return;var rr=(STATE.reserves||[]).find(function(x){return x.id===o.reserveId;});var nm=rr?rr.name:'Резерв';ops.push({t:o.date,type:o.type==='deposit'?'res-':'res+',a:o.amount,n:(o.type==='deposit'?'В резерв «':'Из резерва «')+nm+'»',id:o.id,deleted:!!o.deleted,edited:!!o.editedAt,at:Number(o.createdAt)||0});});
   ops.sort(function(a,b){var ta=Number(a.at)||0,tb=Number(b.at)||0;if(tb!==ta)return tb-ta;return(b.t||'').localeCompare(a.t||'')||String(b.id||'').localeCompare(String(a.id||''));});
   /* Limit ops list on budget devices to keep scroll light */
   var opsLimit=window.__FIN_PERF?24:48;
   if(ops.length>opsLimit)ops=ops.slice(0,opsLimit);
-  var opsH=ops.map(function(o){var mark=o.deleted?'<span class="op-mark del">удалено</span>':(o.edited?'<span class="op-mark edit">изменено</span>':'');return '<div class="item'+(o.deleted?' op-deleted':'')+'" data-id="'+o.id+'" data-k="'+o.type+'"><div class="left"><b>'+esc(o.n)+'</b>'+mark+'<span class="muted">'+(o.t||'')+'</span></div><div class="amt '+(o.type==='in'?'plus':'minus')+'">'+(o.type==='in'?'+':'−')+fmt(o.a)+'</div></div>';}).join('')||'<div class="empty tight">Нет операций</div>';
+  var opsH=ops.map(function(o){var mark=o.deleted?'<span class="op-mark del">удалено</span>':(o.edited?'<span class="op-mark edit">изменено</span>':'');var plus=o.type==='in'||o.type==='res+';return '<div class="item'+(o.deleted?' op-deleted':'')+'" data-id="'+o.id+'" data-k="'+o.type+'"><div class="left"><b>'+esc(o.n)+'</b>'+mark+'<span class="muted">'+(o.t||'')+'</span></div><div class="amt '+(plus?'plus':'minus')+'">'+(plus?'+':'−')+fmt(o.a)+'</div></div>';}).join('')||'<div class="empty tight">Нет операций</div>';
   var colors=['#E5A75E','#60A5FA','#F87171','#4ADE80','#A78BFA','#FBBF24','#F472B6','#2DD4BF'];var catH='';if(c.cats&&c.cats.length){var totalCat=c.cats.reduce(function(s,x){return s+x.amount;},0)||1;catH=c.cats.slice(0,6).map(function(x,i){return '<div class="mini-cat"><span class="leg-dot" style="background:'+colors[i%colors.length]+'"></span><span class="leg-name">'+esc(x.name)+'</span><span class="leg-pct">'+Math.round(x.amount/totalCat*100)+'%</span><b>'+fmt(x.amount)+'</b></div>';}).join('');}else catH='<div class="empty tight">Нет расходов</div>';
 
 function sec(id,title,right,body){var on=!!openSecs[id];return '<div class="sec'+(on?' open':'')+'" data-sec="'+id+'"><button type="button" class="sec-head"><span class="sec-title">'+title+'</span><span class="sec-right">'+right+'</span><span class="sec-chev">›</span></button><div class="sec-body">'+body+'</div></div>';}
@@ -2199,7 +2266,7 @@ var quickCats = Object.keys(catCount).sort(function(a,b){return catCount[b]-catC
 if(!quickCats.length) quickCats=['Продукты','Кафе','Проезд','Сигареты'];
 
 // Прогноз
-var spentSoFar=0;(STATE.expenses||[]).forEach(function(e){if(e.deleted)return;if(inMonth(e.date,month)&&String(e.date)<=t)spentSoFar+=num(e.amount);});
+var spentSoFar=0;(STATE.expenses||[]).forEach(function(e){if(!e||e.deleted)return;if(e.category==='Долг'||e.category==='Обязательные')return;if(inMonth(e.date,month)&&String(e.date)<=t)spentSoFar+=num(e.amount);});
 var daysPassed = isCurrent ? Math.max(1, Number(t.slice(8)) ) : 1;
 var pacePerDay = spentSoFar / daysPassed;
 var lastDayNum = new Date(ym[0],ym[1],0).getDate();
@@ -2724,6 +2791,7 @@ if(t.id==='mPrev'){viewMonth=shiftMonth(getViewMonth(),-1);render();return;}if(t
 }var id=t.dataset.id,k=t.dataset.k,month=getViewMonth();if(!id||!k)return;
 if(k==='in'){var inc=STATE.income.find(function(i){return i.id===id;});if(!inc)return;appChoice('Доход · '+fmt(inc.amount),['Изменить','Удалить'],'Доход').then(function(act){if(act===null)return;if(act===1){appConfirm('Удалить доход?','Удалить').then(function(ok){if(!ok)return;pushUndo();softDeleteIn('income',id,'income');if(STATE.lastOp&&STATE.lastOp.id===id)STATE.lastOp=null;save(true);render();toast('Удалено');});}else{appPrompt('Сумма',String(num(inc.amount)),'Изменить доход').then(function(av){if(av===null)return;appPrompt('Комментарий',inc.note||'','Комментарий',{text:true}).then(function(nn){if(nn===null)return;var a=num(av);if(a<=0)return toast('Укажи сумму');pushUndo();inc.amount=a;inc.note=String(nn||'Доход');inc.editedAt=new Date().toISOString();logOpChange('income',id,'edited',inc.note);save(true);render();toast('Доход обновлён');});});}});return;}
 if(k==='ex'){var exp=STATE.expenses.find(function(i){return i.id===id;});if(!exp)return;appChoice('Расход · '+fmt(exp.amount),['Изменить','Удалить'],'Расход').then(function(act){if(act===null)return;if(act===1){appConfirm('Удалить расход?','Удалить').then(function(ok){if(!ok)return;pushUndo();finAdjustLinkedExpense(STATE,exp,null);softDeleteIn('expenses',id,'expense');if(STATE.lastOp&&STATE.lastOp.id===id)STATE.lastOp=null;save(true);render();toast('Удалено');});}else{appPrompt('Сумма',String(num(exp.amount)),'Изменить расход').then(function(av){if(av===null)return;appPrompt('Категория / комментарий',exp.note||exp.category||'','Комментарий',{text:true}).then(function(nn){if(nn===null)return;var a=num(av);if(a<=0)return toast('Укажи сумму');var asked=a;pushUndo();var bookedEx=finAdjustLinkedExpense(STATE,exp,a);if(typeof bookedEx==='number')a=bookedEx;if(a<=0){if(undoStack.length)undoStack.pop();return toast('Укажи сумму');}exp.amount=a;applyExpenseEditLabel(exp, nn);var label=String((exp.category==='Долг'||exp.category==='Обязательные')?(exp.note||nn||exp.category):(nn||exp.note||exp.category||'Прочее'));exp.editedAt=new Date().toISOString();logOpChange('expense',id,'edited',label);save(true);render();toast(asked!==a?('Расход обновлён · по долгу учтено '+fmt(a)):'Расход обновлён');});});}});return;}
+if(k==='res-'||k==='res+'){var rop=(STATE.reserveOps||[]).find(function(o){return o&&o.id===id;});if(!rop||rop.deleted)return;var rname='Резерв';var rr0=(STATE.reserves||[]).find(function(r){return r&&r.id===rop.reserveId;});if(rr0&&rr0.name)rname=rr0.name;var rtitle=(rop.type==='withdraw'?'Из резерва «':'В резерв «')+rname+'»';appChoice(rtitle+' · '+fmt(rop.amount),['Изменить сумму','Удалить'],'Операция резерва').then(function(act){if(act===null)return;if(act===1){appConfirm('Удалить эту операцию резерва? Касса и накопленное пересчитаются.','Удалить').then(function(ok){if(!ok)return;pushUndo();adjustReserveOp(STATE,rop,null);save(true);render();toast('Операция резерва удалена');});return;}appPrompt('Сумма',String(num(rop.amount)),'Изменить').then(function(av){if(av===null)return;var a=num(av);if(!(a>0))return toast('Укажи сумму');pushUndo();var booked=adjustReserveOp(STATE,rop,a);save(true);render();toast(booked!==a?('Учтено '+fmt(booked)+' — больше из кассы в этот резерв не уходило'):'Операция резерва обновлена');});});return;}
 if(k==='res'){var r=STATE.reserves.find(function(i){return i.id===id;});if(!r)return;appChoice('Резерв «'+r.name+'»',['Пополнить','Снять','Значимость','Изменить','Удалить'],'Резерв').then(function(act){
   if(act===null)return;
   if(act===4){
