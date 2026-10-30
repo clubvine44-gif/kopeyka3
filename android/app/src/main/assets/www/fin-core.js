@@ -1,11 +1,11 @@
 /**
  * FinApp core facade — stable entry for modules.
- * Fin 4.13.22
+ * Fin 4.13.23
  */
 (function (g) {
   'use strict';
   var api = g.FinApp || {};
-  api.version = '4.13.22';
+  api.version = '4.13.23';
   api.build = function () { try { return g.__kopeykaBuild || ''; } catch (e) { return ''; } };
   api.hasSecureStore = function () { return !!(g.FinSecureStore && g.FinSecureStore.saveState); };
   api.compute = function () { try { if (typeof g.compute === 'function') return g.compute(); } catch (e) {} return null; };

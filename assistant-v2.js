@@ -1407,7 +1407,7 @@ function execute(a){
       if(typeof window.takeReserve==='function')window.takeReserve(s,r,amt,dateOf(a));
       else{
         var heldW=0;
-        (s.reserveOps||[]).forEach(function(o){if(!o||o.deleted||o.reserveId!==r.id)return;heldW+=o.type==='withdraw'?-n(o.amount):n(o.amount);});
+        (s.reserveOps||[]).forEach(function(o){if(!o||o.deleted||o.reserveId!==r.id)return;heldW+=o.type==='withdraw'?-n(o.amount):(o.type==='deposit'?n(o.amount):0);});
         if(heldW<0)heldW=0;
         if(heldW>n(r.saved))heldW=n(r.saved);
         var cashW=Math.min(amt,heldW);

@@ -1,4 +1,4 @@
-(function(){/* v118.26 4.13.22 */'use strict';
+(function(){/* v118.27 4.13.23 */'use strict';
 var KEY='kopeyka3_state_v1',ANCHOR='2026-08-17',CYCLE=['day','day','night','night','off','off'];
 var CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье','Прочее'];
 var BUDGET_CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
@@ -743,7 +743,7 @@ function reserveNetOf(state, reserveId){
     if(!alive(o)||o.reserveId!==reserveId)return;
     var a=num(o.amount);
     if(o.type==='withdraw')net-=a;
-    else net+=a;
+    else if(o.type==='deposit')net+=a;
   });
   return net;
 }
@@ -2214,17 +2214,14 @@ var nearestObl = [];
   var day=Math.min(Math.max(1,num(ob.day)||1), new Date(ym[0],ym[1],0).getDate());
   var dueDate = month+'-'+String(day).padStart(2,'0');
   var daysUntil = days(t, dueDate);
-  // если день платежа в этом месяце уже прошёл — считаем до того же дня следующего месяца
-  if(daysUntil < 0 && isCurrent){
-    var nm=nextMonth(month), np=nm.split('-').map(Number);
-    var dimN=new Date(np[0],np[1],0).getDate();
-    var dN=Math.min(day, dimN);
-    dueDate=nm+'-'+String(dN).padStart(2,'0');
-    daysUntil=days(t, dueDate);
-  }else if(daysUntil < 0){
-    daysUntil=0;
+  var overdue=false;
+  // Неоплаченный счёт, у которого день уже прошёл, — просрочка.
+  // Раньше его тихо переносили на следующий месяц, и «просрочен» никогда не загорался.
+  if(daysUntil < 0){
+    if(isCurrent || cmpMonth(month, t.slice(0,7))<0) overdue=true;
+    else daysUntil=0;
   }
-  nearestObl.push({name:ob.name, amount:left, day:day, daysUntil:daysUntil, overdue:false, id:ob.id, dueDate:dueDate});
+  nearestObl.push({name:ob.name, amount:left, day:day, daysUntil:daysUntil, overdue:overdue, id:ob.id, dueDate:dueDate});
 });
 nearestObl.sort(function(a,b){return a.daysUntil-b.daysUntil;});
 nearestObl = nearestObl.slice(0,3);
@@ -2267,11 +2264,23 @@ if(!quickCats.length) quickCats=['Продукты','Кафе','Проезд','�
 
 // Прогноз
 var spentSoFar=0;(STATE.expenses||[]).forEach(function(e){if(!e||e.deleted)return;if(e.category==='Долг'||e.category==='Обязательные')return;if(inMonth(e.date,month)&&String(e.date)<=t)spentSoFar+=num(e.amount);});
-var daysPassed = isCurrent ? Math.max(1, Number(t.slice(8)) ) : 1;
-var pacePerDay = spentSoFar / daysPassed;
 var lastDayNum = new Date(ym[0],ym[1],0).getDate();
-var daysAfterToday = isCurrent ? Math.max(0, lastDayNum - Number(t.slice(8))) : lastDayNum;
+var dayNumNow = Number(t.slice(8));
+var daysPassed, daysAfterToday;
+if(isCurrent){
+  daysPassed = Math.max(1, dayNumNow);
+  daysAfterToday = Math.max(0, lastDayNum - dayNumNow);
+}else if(month < t.slice(0,7)){
+  // Закрытый месяц: средний темп за все дни, а не «вся сумма за 1 день × длина месяца».
+  daysPassed = Math.max(1, lastDayNum);
+  daysAfterToday = 0;
+}else{
+  daysPassed = Math.max(1, lastDayNum);
+  daysAfterToday = lastDayNum;
+}
+var pacePerDay = spentSoFar / daysPassed;
 var forecastPace = Math.round(c.available - pacePerDay * daysAfterToday);
+var forecastTail = (month < t.slice(0,7)) ? 'месяц уже закрыт' : ('до конца месяца ~'+(daysAfterToday+(isCurrent?1:0))+' дн.');
 var remainToday = Math.max(0, (c.daily||0) - (spentToday||0));
 var plannedByLimit = remainToday + (c.daily||0) * daysAfterToday;
 var forecastStick = Math.round(c.available - plannedByLimit);
@@ -2507,7 +2516,7 @@ if(urgentResList.length){
 homeHtml += '<div class="card tight near-card" id="nearCard">';
 homeHtml += '<div class="sec-title-sm">БЛИЖАЙШИЕ ПЛАТЕЖИ</div>';
 var nearItems=[];
-nearestObl.forEach(function(o){nearItems.push({kind:'obl',id:o.id,name:o.name,when:o.overdue?'просрочен':('через '+o.daysUntil+' дн.'),amt:o.amount,days:o.daysUntil});});
+nearestObl.forEach(function(o){nearItems.push({kind:'obl',id:o.id,name:o.name,when:o.overdue?('просрочен на '+Math.abs(o.daysUntil)+' дн.'):(o.daysUntil===0?'сегодня':('через '+o.daysUntil+' дн.')),amt:o.amount,days:o.daysUntil});});
 /* срочные резервы вынесены в блок #urgentResCard */
 nearItems.sort(function(a,b){return a.days-b.days;});
 if(nearItems.length){
@@ -2526,7 +2535,7 @@ homeHtml += '</div>';
 // ===== 11. Прогноз =====
 homeHtml += '<div class="card tight forecast-card" id="forecastCard">';
 homeHtml += '<div class="sec-title-sm">ПРОГНОЗ</div>';
-homeHtml += '<div class="forecast-main">Сейчас свободно <b>'+fmt(c.available)+'</b> · до конца месяца ~'+(daysAfterToday+(isCurrent?1:0))+' дн.</div>';
+homeHtml += '<div class="forecast-main">Сейчас свободно <b>'+fmt(c.available)+'</b> · '+forecastTail+'</div>';
 homeHtml += '<div class="forecast-alt">При среднем <b>'+fmt(Math.round(pacePerDay))+'/день</b> к концу останется: <b>'+fmt(forecastPace)+'</b></div>';
 homeHtml += '<div class="forecast-alt muted">Если не выше лимита <b>'+fmt(c.daily)+'/день</b>: <b>'+fmt(forecastStick)+'</b></div>';
 homeHtml += '</div>';

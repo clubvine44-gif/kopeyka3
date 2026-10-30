@@ -262,7 +262,7 @@ function reserveNet(ops, id){
   (ops||[]).forEach(function(o){
     if(!o||o.deleted||o.reserveId!==id)return;
     var a=num0(o.amount);
-    if(o.type==='withdraw')s-=a; else s+=a;
+    if(o.type==='withdraw')s-=a; else if(o.type==='deposit')s+=a;
   });
   return s;
 }
