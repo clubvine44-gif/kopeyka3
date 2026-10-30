@@ -1,7 +1,7 @@
 {
-  "versionCode": 189,
-  "versionName": "4.13.22",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.22/Fin.apk",
-  "sha256": "75276f9bf91438370747933c1ad6c2008fe8cc87c303f7d3b09e62b36cf4ea3a",
-  "notes": "4.13.22 — операции резерва не раздувают кассу, лимиты видят кафе и проезд (versionCode 189)"
+  "versionCode": 190,
+  "versionName": "4.13.23",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.23/Fin.apk",
+  "sha256": "fb53f4a0ee337f3d066c34e809ad6f1b0f4c54f4490748726592866626061275",
+  "notes": "4.13.23 — просрочка платежа видна, прогноз закрытого месяца честный, чужая проводка резерва не рисует деньги (versionCode 190)"
 }
