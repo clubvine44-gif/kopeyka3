@@ -337,8 +337,8 @@ assert.ok(appSrc.indexOf('function flushLiveSave') >= 0, 'pagehide flushes live 
 assert.ok(storeSrc.indexOf('FinBridge.setInstallId') >= 0, 'install id mirrored to native prefs');
 
 var gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle'), 'utf8');
-assert.ok(/versionCode\s+190/.test(gradle), 'versionCode 190');
-assert.ok(/versionName\s+"4\.13\.23"/.test(gradle), 'versionName 4.13.23');
+assert.ok(/versionCode\s+191/.test(gradle), 'versionCode 191');
+assert.ok(/versionName\s+"4\.13\.24"/.test(gradle), 'versionName 4.13.24');
 
 var mainJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/MainActivity.java'), 'utf8');
 assert.ok(mainJava.indexOf('isTrustedApkUrl') >= 0, 'apk url allowlisted');
@@ -773,19 +773,19 @@ assert.ok(bakSrc.indexOf('stale finna-latest.json must not beat') >= 0, 'stale l
 assert.ok(bakSrc.indexOf('if (latest && latest.state)') < 0 || bakSrc.indexOf('pickNewestEmergency') >= 0, 'latest is not an early return winner');
 
 var swSrc = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
-assert.ok(swSrc.indexOf("CACHE='kopeyka3-v101'") >= 0, 'sw cache v101');
+assert.ok(swSrc.indexOf("CACHE='kopeyka3-v102'") >= 0, 'sw cache v102');
 assert.ok(swSrc.indexOf("profile.js?v=") >= 0, 'sw precaches profile.js');
-assert.ok(idx.indexOf("profile.js?v=2026103101") >= 0, 'index loads profile with cache bust');
-assert.ok(idx.indexOf("sw.js?v=101") >= 0, 'index registers sw v101');
-assert.ok(idx.indexOf("onboard.js?v=2026103101") >= 0, 'index onboard cache aligned');
-assert.ok(swSrc.indexOf("onboard.js?v=") >= 0 && swSrc.indexOf("2026103101") >= 0, 'sw onboard cache aligned');
-assert.ok(idx.indexOf("finn3d.js?v=2026103101") >= 0, 'index finn3d cache aligned');
+assert.ok(idx.indexOf("profile.js?v=2026110201") >= 0, 'index loads profile with cache bust');
+assert.ok(idx.indexOf("sw.js?v=102") >= 0, 'index registers sw v102');
+assert.ok(idx.indexOf("onboard.js?v=2026110201") >= 0, 'index onboard cache aligned');
+assert.ok(swSrc.indexOf("onboard.js?v=") >= 0 && swSrc.indexOf("2026110201") >= 0, 'sw onboard cache aligned');
+assert.ok(idx.indexOf("finn3d.js?v=2026110201") >= 0, 'index finn3d cache aligned');
 assert.ok(cloudSrc.indexOf('escHtml(currentUser.email') >= 0, 'cloud email escaped in auth UI');
 assert.ok(manifestXml.indexOf('android:allowBackup="false"') >= 0, 'android auto-backup off so cipher is not restored without key');
 assert.ok(updJava.indexOf('if (notifyUpdate(context, msg))') >= 0, 'notified_code only after successful push');
 assert.ok(updJava.indexOf('if (!can) return false') >= 0, 'no notify permission must retry later');
 assert.ok(bridgeJava.indexOf('pubMod > privMod') >= 0, 'backup read prefers newer Downloads copy');
-assert.ok(mainJava.indexOf('FinApp/4.13.23') >= 0, 'native UA matches release');
+assert.ok(mainJava.indexOf('FinApp/4.13.24') >= 0, 'native UA matches release');
 assert.ok(cloudSrc.indexOf('trustPreAnchorCash') >= 0, 'cloud apply trusts folded opening');
 assert.ok(appSrc.indexOf('function rebalancePreAnchorCash') >= 0, 'past-month edits move the cash anchor');
 assert.ok(appSrc.indexOf('function trustPreAnchorCash') >= 0, 'import/undo/fold do not double-count anchor');
@@ -850,6 +850,12 @@ assert.ok(asstSrc.indexOf('takeReserve') >= 0, 'voice reserve withdraw uses cash
   appSandbox.window.dispatchEvent = function () {};
   appSandbox.window.history = appSandbox.history;
   vm.runInNewContext(appSrc, appSandbox, { filename: 'app.js' });
+assert.ok(appSrc.indexOf('function billStatus') >= 0, 'overdue bill date is shared by reminders');
+assert.ok(appSrc.indexOf('if(d<day){m+=1') < 0, 'push reminder must not hide an overdue bill as next month');
+assert.ok(appSrc.indexOf('if(d<day){dueM+=1') < 0, 'inbox must not hide an overdue bill as next month');
+assert.ok(appSrc.indexOf(":'unknown'") >= 0, 'norm must not turn an unknown reserve row into a deposit');
+assert.ok(appSrc.indexOf('месяц ещё не начался') >= 0, 'future month forecast does not burn a whole limit');
+assert.ok(appSrc.indexOf("if(e.category==='Долг'||e.category==='Обязательные')return;spent+=num(e.amount)") >= 0, 'overspend alert ignores debt and bills');
   var heldUnknown = appSandbox.reserveCashHeld({
     reserveOps: [
       { id: 'd', reserveId: 'r1', type: 'deposit', amount: 400 },
@@ -857,6 +863,24 @@ assert.ok(asstSrc.indexOf('takeReserve') >= 0, 'voice reserve withdraw uses cash
     ]
   }, { id: 'r1', saved: 1000 });
   assert.strictEqual(heldUnknown, 400, 'unknown reserve type must not invent cash, got ' + heldUnknown);
+  appSandbox.STATE = {
+    settings: { openingBalance: 10000, month: '2026-11' },
+    income: [], expenses: [], reserves: [{ id: 'r1', name: 'Подушка', saved: 9000, target: 0 }],
+    debts: [], reserveOps: [{ id: 'x', reserveId: 'r1', type: 'note', amount: 9000, date: '2026-11-01' }],
+    obligations: [], obligationPays: []
+  };
+  assert.strictEqual(appSandbox.STATE.reserveOps[0].type, 'unknown', 'opening the till must not rewrite a foreign reserve row into a deposit');
+  var backUnknown = appSandbox.releaseReserveCash(appSandbox.STATE, appSandbox.STATE.reserves[0], '2026-11-02');
+  assert.strictEqual(backUnknown, 0, 'deleting a reserve must not return money that never left the till');
+  var late = appSandbox.billStatus({ day: 1, amount: 5000 }, '2026-11-02');
+  assert.strictEqual(late.overdue, true, 'day 1 on Nov 2 is overdue');
+  assert.strictEqual(late.days, -1);
+  var soon = appSandbox.billStatus({ day: 25 }, '2026-11-02');
+  assert.strictEqual(soon.overdue, false);
+  assert.strictEqual(soon.days, 23, 'a later day this month is not rolled to next month');
+  var feb = appSandbox.billStatus({ day: 31 }, '2026-02-10');
+  assert.strictEqual(feb.day, 28, 'payday-style day 31 clamps to February');
+  assert.strictEqual(feb.overdue, false);
   var adj = appSandbox.finAdjustLinkedExpense;
   assert.strictEqual(typeof adj, 'function', 'finAdjustLinkedExpense exported');
   var st = {
