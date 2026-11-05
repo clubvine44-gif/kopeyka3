@@ -1,4 +1,4 @@
-/* cloud.js v30 — mealPlan last-write, cash-anchor reconcile, debt/reserve counters follow merged ops */
+/* cloud.js v31 — same-period savings use the fuller spend; one bill is not charged twice */
 (function(){
 'use strict';
 const URL='https://cqslrfphsjllhltsvvuq.supabase.co';
@@ -84,6 +84,46 @@ function mergeLimitsMap(base,local,remote){
   });
   return out;
 }
+function mergeReportPair(a, b){
+  if(!a)return b;
+  if(!b)return a;
+  function cells(rep){return rep&&rep.byCat&&typeof rep.byCat==='object'?rep.byCat:{};}
+  var ca=cells(a), cb=cells(b);
+  var keys={};
+  Object.keys(ca).forEach(function(k){keys[k]=1;});
+  Object.keys(cb).forEach(function(k){keys[k]=1;});
+  var keyList=Object.keys(keys);
+  if(!keyList.length){
+    var sa=num0(a.totalSpent), sb=num0(b.totalSpent);
+    if(sa!==sb)return sa>sb?a:b;
+    return num0(a.totalSaved)<=num0(b.totalSaved)?a:b;
+  }
+  var by={}, totalSaved=0, totalSpent=0;
+  keyList.forEach(function(cat){
+    var xa=ca[cat]||{}, xb=cb[cat]||{};
+    var spentA=num0(xa.spent), spentB=num0(xb.spent);
+    var spent=Math.max(spentA, spentB);
+    var limA=xa.limit!=null?num0(xa.limit):null;
+    var limB=xb.limit!=null?num0(xb.limit):null;
+    var limit;
+    if(spentA===spentB){
+      if(limA==null)limit=limB==null?spent:limB;
+      else if(limB==null)limit=limA;
+      else limit=Math.min(limA, limB);
+    }else if(spentA>spentB){
+      limit=limA!=null?limA:(limB!=null?limB:spent);
+    }else{
+      limit=limB!=null?limB:(limA!=null?limA:spent);
+    }
+    var leftover=Math.max(0, limit-spent);
+    by[cat]={spent:spent, limit:limit, leftover:leftover};
+    totalSaved+=leftover;
+    totalSpent+=spent;
+  });
+  var newer=(Date.parse(b.closedAt)||0)>=(Date.parse(a.closedAt)||0)?b:a;
+  var out=Object.assign({}, newer, {byCat:by, totalSaved:totalSaved, totalSpent:totalSpent});
+  return out;
+}
 function mergePeriodReports(local,remote){
   var map={};
   function add(arr){
@@ -92,9 +132,7 @@ function mergePeriodReports(local,remote){
       var k=String(r.from||'')+'|'+String(r.end||'');
       if(k==='|')k=String(r.id||'');
       if(!k)return;
-      var prev=map[k];
-      if(!prev){map[k]=r;return;}
-      if(num0(r.totalSaved)>num0(prev.totalSaved))map[k]=r;
+      map[k]=mergeReportPair(map[k], r);
     });
   }
   add(local);add(remote);
@@ -117,7 +155,22 @@ function mergeSettings(base,local,remote,conflicts){
   out.periodReports=reports;
   var sav=mergeNumericMap(base&&base.budgetSavings, local&&local.budgetSavings, remote&&remote.budgetSavings);
   var rec=savingsFromReports(reports);
-  Object.keys(rec).forEach(function(cat){sav[cat]=Math.max(num0(sav[cat]), rec[cat]);});
+  var localExp=savingsFromReports(local&&local.periodReports);
+  var remoteExp=savingsFromReports(remote&&remote.periodReports);
+  // Один и тот же период не должен брать больший остаток: в отчёте уже максимум трат.
+  // Накопления сверх своих отчётов (старые периоды выпали из списка) сохраняем, но не дважды.
+  Object.keys(rec).forEach(function(cat){
+    var u=num0(rec[cat]);
+    var lE=num0(localExp[cat]);
+    var rE=num0(remoteExp[cat]);
+    var ls=num0(local&&local.budgetSavings&&local.budgetSavings[cat]);
+    var rs=num0(remote&&remote.budgetSavings&&remote.budgetSavings[cat]);
+    var gapL=Math.max(0, Math.max(0, ls-lE) - Math.max(0, u-lE));
+    var gapR=Math.max(0, Math.max(0, rs-rE) - Math.max(0, u-rE));
+    var total=u+Math.max(gapL, gapR);
+    if(total>0)sav[cat]=total;
+    else delete sav[cat];
+  });
   out.budgetSavings=sav;
   out.budgetLimits=mergeLimitsMap(base&&base.budgetLimits, local&&local.budgetLimits, remote&&remote.budgetLimits);
   if(local&&local.lastPeriodReport)out.lastPeriodReport=local.lastPeriodReport;
@@ -297,15 +350,96 @@ function bookOfReserve(state, id){
   if(book<0)book=0;
   return book;
 }
-/** Две копии могли добавить разные платежи и пополнения. Поле paid/saved — не максимум и не «чья копия последняя»: история без кассы сливается как обычно, а проведённые операции складываются. */
+function rowStamp(x){
+  var c=Number(x&&x.createdAt);
+  if(c>1e11)return c;
+  return Date.parse((x&&(x.editedAt||x.date||x.createdAt))||'')||0;
+}
+function markTomb(out, collection, id){
+  if(!id)return;
+  if(!out._deleted||typeof out._deleted!=='object')out._deleted={};
+  if(!out._deleted[collection]||typeof out._deleted[collection]!=='object')out._deleted[collection]={};
+  out._deleted[collection][String(id)]=Date.now();
+}
+/** Лишнюю сумму снимаем с более новой строки: вторая копия того же платежа не должна повторно уйти из кассы. */
+function shrinkMoneyRows(out, rows, excess, collection){
+  var list=(rows||[]).slice().sort(function(a,b){
+    var ta=rowStamp(a), tb=rowStamp(b);
+    if(ta!==tb)return tb-ta;
+    return String(b&&b.id||'').localeCompare(String(a&&a.id||''));
+  });
+  list.forEach(function(row){
+    if(!(excess>0)||!row||row.deleted)return;
+    var a=num0(row.amount);
+    if(a<=0)return;
+    if(a<=excess){
+      row.deleted=true;
+      row.deletedAt=new Date().toISOString();
+      markTomb(out, collection, row.id);
+      excess-=a;
+    }else{
+      row.amount=a-excess;
+      row.editedAt=new Date().toISOString();
+      excess=0;
+    }
+  });
+}
+function billMonthKey(row){
+  var pm=String(row&&(row.obligMonth||row.month||row.date)||'').slice(0,7);
+  return /^\d{4}-\d{2}$/.test(pm)?pm:'';
+}
+function capObligationBills(out){
+  (out.obligations||[]).forEach(function(ob){
+    if(!ob||ob.deleted||!ob.id)return;
+    var cap=num0(ob.amount);
+    if(!(cap>0))return;
+    var pays={}, exps={};
+    (out.obligationPays||[]).forEach(function(p){
+      if(!p||p.deleted||p.obligId!==ob.id)return;
+      var m=billMonthKey(p);
+      if(!pays[m])pays[m]=[];
+      pays[m].push(p);
+    });
+    (out.expenses||[]).forEach(function(e){
+      if(!e||e.deleted||e.obligId!==ob.id)return;
+      var m=billMonthKey(e);
+      if(!exps[m])exps[m]=[];
+      exps[m].push(e);
+    });
+    var months={};
+    Object.keys(pays).forEach(function(m){months[m]=1;});
+    Object.keys(exps).forEach(function(m){months[m]=1;});
+    Object.keys(months).forEach(function(m){
+      var plist=pays[m]||[], elist=exps[m]||[];
+      var ps=0, es=0;
+      plist.forEach(function(p){ps+=num0(p.amount);});
+      elist.forEach(function(e){es+=num0(e.amount);});
+      if(ps>cap)shrinkMoneyRows(out, plist, ps-cap, 'obligationPays');
+      if(es>cap)shrinkMoneyRows(out, elist, es-cap, 'expenses');
+    });
+  });
+}
+/** Две копии могли добавить разные платежи и пополнения. Поле paid/saved — не максимум и не «чья копия последняя»: история без кассы сливается как обычно, а проведённые операции складываются. Повторная оплата одного и того же счёта или долга сверх остатка в кассу второй раз не уходит. */
 function reconcileLinkedMoney(out, local, remote, base){
   try{
+    capObligationBills(out);
     (out.debts||[]).forEach(function(d){
       if(!d||d.deleted||!d.id)return;
       var book=pick3num(bookOfDebt(base,d.id), bookOfDebt(local,d.id), bookOfDebt(remote,d.id));
+      var tot=num0(d.total);
+      var cashRows=[];
+      (out.expenses||[]).forEach(function(e){
+        if(!e||e.deleted)return;
+        if(debtIdForExpense(e, out.debts)===d.id)cashRows.push(e);
+      });
+      var cashSum=0;
+      cashRows.forEach(function(e){cashSum+=num0(e.amount);});
+      if(tot>0){
+        var allowed=Math.max(0, tot-book);
+        if(cashSum>allowed)shrinkMoneyRows(out, cashRows, cashSum-allowed, 'expenses');
+      }
       var paid=book+linkedDebtPaid(out.expenses, out.debts, d.id);
       if(paid<0)paid=0;
-      var tot=num0(d.total);
       if(tot>0&&paid>tot)paid=tot;
       d.paid=paid;
     });

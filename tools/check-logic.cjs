@@ -337,8 +337,8 @@ assert.ok(appSrc.indexOf('function flushLiveSave') >= 0, 'pagehide flushes live 
 assert.ok(storeSrc.indexOf('FinBridge.setInstallId') >= 0, 'install id mirrored to native prefs');
 
 var gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle'), 'utf8');
-assert.ok(/versionCode\s+191/.test(gradle), 'versionCode 191');
-assert.ok(/versionName\s+"4\.13\.24"/.test(gradle), 'versionName 4.13.24');
+assert.ok(/versionCode\s+192/.test(gradle), 'versionCode 192');
+assert.ok(/versionName\s+"4\.13\.25"/.test(gradle), 'versionName 4.13.25');
 
 var mainJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/MainActivity.java'), 'utf8');
 assert.ok(mainJava.indexOf('isTrustedApkUrl') >= 0, 'apk url allowlisted');
@@ -549,6 +549,69 @@ var remoteLim = JSON.parse(JSON.stringify(baseLim));
 remoteLim.settings.budgetLimits = { 'Продукты': 12000 };
 var mergedLim = cloudSandbox.window.kopeykaCloud.threeWay(baseLim, localLim, remoteLim);
 assert.strictEqual(Number(mergedLim.settings.budgetLimits['Продукты']), 6000, 'conflicted limit keeps local, not max');
+
+(function samePeriodSavingsNotOptimistic(){
+  var baseS = JSON.parse(JSON.stringify(base2));
+  var localS = JSON.parse(JSON.stringify(baseS));
+  localS.settings.budgetSavings = { 'Продукты': 3000 };
+  localS.settings.periodReports = [{ from: '2026-08-15', end: '2026-09-14', totalSaved: 3000, totalSpent: 7000, byCat: { 'Продукты': { spent: 7000, limit: 10000, leftover: 3000 } } }];
+  var remoteS = JSON.parse(JSON.stringify(baseS));
+  remoteS.settings.budgetSavings = { 'Продукты': 1000 };
+  remoteS.settings.periodReports = [{ from: '2026-08-15', end: '2026-09-14', totalSaved: 1000, totalSpent: 9000, byCat: { 'Продукты': { spent: 9000, limit: 10000, leftover: 1000 } } }];
+  var m = cloudSandbox.window.kopeykaCloud.threeWay(baseS, localS, remoteS);
+  assert.strictEqual(Number(m.settings.budgetSavings['Продукты']), 1000, 'same period keeps the fuller spend, not the optimistic leftover, got ' + m.settings.budgetSavings['Продукты']);
+  assert.strictEqual(Number(m.settings.periodReports[0].byCat['Продукты'].spent), 9000, 'merged report keeps the higher spend');
+})();
+
+(function duplicateBillDoesNotDoubleCash(){
+  var baseO = {
+    settings: { openingBalance: 50000, month: '2026-10' },
+    income: [], expenses: [], reserves: [], debts: [], reserveOps: [],
+    obligations: [{ id: 'ob1', name: 'Аренда', amount: 20000, day: 5, active: true }],
+    obligationPays: []
+  };
+  var localO = JSON.parse(JSON.stringify(baseO));
+  localO.obligationPays = [{ id: 'pL', obligId: 'ob1', month: '2026-10', amount: 20000, date: '2026-10-05', createdAt: 1000 }];
+  localO.expenses = [{ id: 'eL', amount: 20000, category: 'Обязательные', note: 'Аренда', date: '2026-10-05', obligId: 'ob1', obligMonth: '2026-10', createdAt: 1000 }];
+  var remoteO = JSON.parse(JSON.stringify(baseO));
+  remoteO.obligationPays = [{ id: 'pR', obligId: 'ob1', month: '2026-10', amount: 20000, date: '2026-10-05', createdAt: 2000 }];
+  remoteO.expenses = [{ id: 'eR', amount: 20000, category: 'Обязательные', note: 'Аренда', date: '2026-10-05', obligId: 'ob1', obligMonth: '2026-10', createdAt: 2000 }];
+  var mo = cloudSandbox.window.kopeykaCloud.threeWay(baseO, localO, remoteO);
+  var sum = 0;
+  (mo.expenses || []).forEach(function (e) { if (e && !e.deleted) sum += Number(e.amount) || 0; });
+  assert.strictEqual(sum, 20000, 'two phones paying the same bill do not double-charge cash, got ' + sum);
+  var ps = 0;
+  (mo.obligationPays || []).forEach(function (p) { if (p && !p.deleted) ps += Number(p.amount) || 0; });
+  assert.strictEqual(ps, 20000, 'obligation pays capped to the bill, got ' + ps);
+  assert.strictEqual(cloudSandbox.window.kopeykaCloud.cashAtMonth(mo, '2026-10'), 30000, 'cash drops once for a duplicated bill');
+  var baseD = {
+    settings: { openingBalance: 30000, month: '2026-10' },
+    income: [], expenses: [], reserves: [], reserveOps: [], obligations: [], obligationPays: [],
+    debts: [{ id: 'd1', name: 'Папа', total: 10000, paid: 0 }]
+  };
+  var ld = JSON.parse(JSON.stringify(baseD));
+  ld.debts[0].paid = 10000;
+  ld.expenses = [{ id: 'e1', amount: 10000, category: 'Долг', note: 'Папа', date: '2026-10-02', debtId: 'd1', createdAt: 1000 }];
+  var rd = JSON.parse(JSON.stringify(baseD));
+  rd.debts[0].paid = 10000;
+  rd.expenses = [{ id: 'e2', amount: 10000, category: 'Долг', note: 'Папа', date: '2026-10-02', debtId: 'd1', createdAt: 2000 }];
+  var md = cloudSandbox.window.kopeykaCloud.threeWay(baseD, ld, rd);
+  assert.strictEqual(md.debts[0].paid, 10000, 'debt paid stays at the total');
+  var dsum = 0;
+  (md.expenses || []).forEach(function (e) { if (e && !e.deleted) dsum += Number(e.amount) || 0; });
+  assert.strictEqual(dsum, 10000, 'second payoff of the same debt does not leave the till twice, got ' + dsum);
+  assert.strictEqual(cloudSandbox.window.kopeykaCloud.cashAtMonth(md, '2026-10'), 20000, 'cash after one debt payoff');
+  var partL = JSON.parse(JSON.stringify(baseO));
+  partL.obligationPays = [{ id: 'pA', obligId: 'ob1', month: '2026-10', amount: 15000, date: '2026-10-05', createdAt: 1000 }];
+  partL.expenses = [{ id: 'eA', amount: 15000, category: 'Обязательные', date: '2026-10-05', obligId: 'ob1', obligMonth: '2026-10', createdAt: 1000 }];
+  var partR = JSON.parse(JSON.stringify(baseO));
+  partR.obligationPays = [{ id: 'pB', obligId: 'ob1', month: '2026-10', amount: 15000, date: '2026-10-06', createdAt: 3000 }];
+  partR.expenses = [{ id: 'eB', amount: 15000, category: 'Обязательные', date: '2026-10-06', obligId: 'ob1', obligMonth: '2026-10', createdAt: 3000 }];
+  var mp = cloudSandbox.window.kopeykaCloud.threeWay(baseO, partL, partR);
+  var psum = 0;
+  (mp.expenses || []).forEach(function (e) { if (e && !e.deleted) psum += Number(e.amount) || 0; });
+  assert.strictEqual(psum, 20000, 'partial payments from two phones fill the bill without going over, got ' + psum);
+})();
 
 // Skipped period leftover: two closed cycles accumulate without inflating limit.
 (function skippedPeriods(){
@@ -773,19 +836,19 @@ assert.ok(bakSrc.indexOf('stale finna-latest.json must not beat') >= 0, 'stale l
 assert.ok(bakSrc.indexOf('if (latest && latest.state)') < 0 || bakSrc.indexOf('pickNewestEmergency') >= 0, 'latest is not an early return winner');
 
 var swSrc = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
-assert.ok(swSrc.indexOf("CACHE='kopeyka3-v102'") >= 0, 'sw cache v102');
+assert.ok(swSrc.indexOf("CACHE='kopeyka3-v103'") >= 0, 'sw cache v103');
 assert.ok(swSrc.indexOf("profile.js?v=") >= 0, 'sw precaches profile.js');
-assert.ok(idx.indexOf("profile.js?v=2026110201") >= 0, 'index loads profile with cache bust');
-assert.ok(idx.indexOf("sw.js?v=102") >= 0, 'index registers sw v102');
-assert.ok(idx.indexOf("onboard.js?v=2026110201") >= 0, 'index onboard cache aligned');
-assert.ok(swSrc.indexOf("onboard.js?v=") >= 0 && swSrc.indexOf("2026110201") >= 0, 'sw onboard cache aligned');
-assert.ok(idx.indexOf("finn3d.js?v=2026110201") >= 0, 'index finn3d cache aligned');
+assert.ok(idx.indexOf("profile.js?v=2026110601") >= 0, 'index loads profile with cache bust');
+assert.ok(idx.indexOf("sw.js?v=103") >= 0, 'index registers sw v103');
+assert.ok(idx.indexOf("onboard.js?v=2026110601") >= 0, 'index onboard cache aligned');
+assert.ok(swSrc.indexOf("onboard.js?v=") >= 0 && swSrc.indexOf("2026110601") >= 0, 'sw onboard cache aligned');
+assert.ok(idx.indexOf("finn3d.js?v=2026110601") >= 0, 'index finn3d cache aligned');
 assert.ok(cloudSrc.indexOf('escHtml(currentUser.email') >= 0, 'cloud email escaped in auth UI');
 assert.ok(manifestXml.indexOf('android:allowBackup="false"') >= 0, 'android auto-backup off so cipher is not restored without key');
 assert.ok(updJava.indexOf('if (notifyUpdate(context, msg))') >= 0, 'notified_code only after successful push');
 assert.ok(updJava.indexOf('if (!can) return false') >= 0, 'no notify permission must retry later');
 assert.ok(bridgeJava.indexOf('pubMod > privMod') >= 0, 'backup read prefers newer Downloads copy');
-assert.ok(mainJava.indexOf('FinApp/4.13.24') >= 0, 'native UA matches release');
+assert.ok(mainJava.indexOf('FinApp/4.13.25') >= 0, 'native UA matches release');
 assert.ok(cloudSrc.indexOf('trustPreAnchorCash') >= 0, 'cloud apply trusts folded opening');
 assert.ok(appSrc.indexOf('function rebalancePreAnchorCash') >= 0, 'past-month edits move the cash anchor');
 assert.ok(appSrc.indexOf('function trustPreAnchorCash') >= 0, 'import/undo/fold do not double-count anchor');

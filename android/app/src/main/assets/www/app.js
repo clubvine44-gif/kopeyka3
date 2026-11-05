@@ -1,4 +1,4 @@
-(function(){/* v118.28 4.13.24 */'use strict';
+(function(){/* v118.29 4.13.25 */'use strict';
 var KEY='kopeyka3_state_v1',ANCHOR='2026-08-17',CYCLE=['day','day','night','night','off','off'];
 var CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье','Прочее'];
 var BUDGET_CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
@@ -563,13 +563,14 @@ function finFindDebt(state, exp){
   if(exp.category!=='Долг')return null;
   var note=finNormName(exp.note);
   if(!note)return null;
+  var hits=[];
   for(var j=0;j<debts.length;j++){
     var d2=debts[j];
     if(!d2||d2.deleted)continue;
     var nm=finNormName(d2.name);
-    if(nm&&nm===note)return d2;
+    if(nm&&nm===note)hits.push(d2);
   }
-  return null;
+  return hits.length===1?hits[0]:null;
 }
 function finPayMonth(p){
   var pm=String(p&&p.month||'').slice(0,7);
@@ -1612,19 +1613,27 @@ function dayPlanEditor(ds, onDone){
           STATE.income.push(stampOp({id:opId,amount:amount,note:title,date:ds,fromPlan:true}));
         } else if(type==='debt'){
           var debts=STATE.debts;
-          var found=null;
           var q=finNormName(title);
+          var hits=[];
           for(var di=0;di<debts.length;di++){
             if(!debts[di]||debts[di].deleted)continue;
             var nm=finNormName(debts[di].name);
-            if(nm&&nm===q){found=debts[di];break;}
+            if(nm&&nm===q)hits.push(debts[di]);
           }
+          var found=hits.length===1?hits[0]:null;
           var pay=amount;
+          if(hits.length>1){
+            if(undoStack.length)undoStack.pop();
+            toast('Несколько долгов «'+title+'». Имя должно быть одно.');
+            return;
+          }
           if(found){
             var room=Math.max(0,num(found.total)-num(found.paid));
             if(room<=0){
               if(undoStack.length)undoStack.pop();
-              toast('Долг уже закрыт');return;
+              var shownLeft=Math.max(0,num(found.total)-debtPaidThrough(found, String(ds).slice(0,7)));
+              toast(shownLeft>0?'Этот остаток уже заложен платежом на будущий месяц':'Долг уже закрыт');
+              return;
             }
             if(amount>room)pay=room;
             found.paid=num(found.paid)+pay;
@@ -2267,6 +2276,7 @@ recentOps = recentOps.slice(0,8);
 // Быстрые категории из истории
 var catCount={};
 (STATE.expenses||[]).forEach(function(e){
+  if(!e||e.deleted)return;
   var cat=e.category||'Прочее';
   if(cat==='Долг'||cat==='Обязательные')return;
   catCount[cat]=(catCount[cat]||0)+1;
@@ -2947,8 +2957,15 @@ if(k==='debt'){var d=STATE.debts.find(function(i){return i.id===id;});if(!d)retu
       }
       (STATE.expenses||[]).forEach(function(e){
         if(!e)return;
-        if(e.debtId===d.id)e.note=name;
-        else if(e.category==='Долг'&&String(e.note||'')===String(oldName))e.note=name;
+        if(e.debtId===d.id){e.note=name;return;}
+        if(e.category!=='Долг'||e.debtId)return;
+        if(String(e.note||'')!==String(oldName))return;
+        var others=0;
+        (STATE.debts||[]).forEach(function(x){
+          if(!x||x.deleted||x.id===d.id)return;
+          if(String(x.name||'')===String(oldName))others++;
+        });
+        if(!others)e.note=name;
       });
       save(true);render();
       toast('Долг обновлён: '+fmt(tot)+(tot!==oldTotal?(' (было '+fmt(oldTotal)+')'):''));
