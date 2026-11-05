@@ -1,7 +1,7 @@
 {
-  "versionCode": 191,
-  "versionName": "4.13.24",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.24/Fin.apk",
-  "sha256": "e034b6cd2eb6cb748b35863f0df33fdf003e51b69d61c698a323f5de67021376",
-  "notes": "4.13.24 — чужая проводка резерва не становится пополнением, просрочка видна в уведомлениях, прогноз будущего месяца честный (versionCode 191)"
+  "versionCode": 192,
+  "versionName": "4.13.25",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.25/Fin.apk",
+  "sha256": "8bfde29c544b9df706652a2e1e2209b565410df88f11fc61a7bccf5b0750c0a0",
+  "notes": "4.13.25 — повторная оплата счёта и долга с двух телефонов не списывает кассу дважды, накопления периода не завышаются (versionCode 192)"
 }
