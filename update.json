@@ -1,7 +1,7 @@
 {
-  "versionCode": 192,
-  "versionName": "4.13.25",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.25/Fin.apk",
-  "sha256": "8bfde29c544b9df706652a2e1e2209b565410df88f11fc61a7bccf5b0750c0a0",
-  "notes": "4.13.25 — повторная оплата счёта и долга с двух телефонов не списывает кассу дважды, накопления периода не завышаются (versionCode 192)"
+  "versionCode": 193,
+  "versionName": "4.13.26",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.26/Fin.apk",
+  "sha256": "a3d0c353936e7e50cbc5ac5dc8456d2c37717aa55406461318c04e32e3264982",
+  "notes": "4.13.26 — закрытый резерв не рисует деньги при правке проводок, счёт нельзя оплатить выше суммы (versionCode 193)"
 }
