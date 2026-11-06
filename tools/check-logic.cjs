@@ -337,8 +337,8 @@ assert.ok(appSrc.indexOf('function flushLiveSave') >= 0, 'pagehide flushes live 
 assert.ok(storeSrc.indexOf('FinBridge.setInstallId') >= 0, 'install id mirrored to native prefs');
 
 var gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle'), 'utf8');
-assert.ok(/versionCode\s+192/.test(gradle), 'versionCode 192');
-assert.ok(/versionName\s+"4\.13\.25"/.test(gradle), 'versionName 4.13.25');
+assert.ok(/versionCode\s+193/.test(gradle), 'versionCode 193');
+assert.ok(/versionName\s+"4\.13\.26"/.test(gradle), 'versionName 4.13.26');
 
 var mainJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/MainActivity.java'), 'utf8');
 assert.ok(mainJava.indexOf('isTrustedApkUrl') >= 0, 'apk url allowlisted');
@@ -836,19 +836,19 @@ assert.ok(bakSrc.indexOf('stale finna-latest.json must not beat') >= 0, 'stale l
 assert.ok(bakSrc.indexOf('if (latest && latest.state)') < 0 || bakSrc.indexOf('pickNewestEmergency') >= 0, 'latest is not an early return winner');
 
 var swSrc = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
-assert.ok(swSrc.indexOf("CACHE='kopeyka3-v103'") >= 0, 'sw cache v103');
+assert.ok(swSrc.indexOf("CACHE='kopeyka3-v104'") >= 0, 'sw cache v104');
 assert.ok(swSrc.indexOf("profile.js?v=") >= 0, 'sw precaches profile.js');
-assert.ok(idx.indexOf("profile.js?v=2026110601") >= 0, 'index loads profile with cache bust');
-assert.ok(idx.indexOf("sw.js?v=103") >= 0, 'index registers sw v103');
-assert.ok(idx.indexOf("onboard.js?v=2026110601") >= 0, 'index onboard cache aligned');
-assert.ok(swSrc.indexOf("onboard.js?v=") >= 0 && swSrc.indexOf("2026110601") >= 0, 'sw onboard cache aligned');
-assert.ok(idx.indexOf("finn3d.js?v=2026110601") >= 0, 'index finn3d cache aligned');
+assert.ok(idx.indexOf("profile.js?v=2026110701") >= 0, 'index loads profile with cache bust');
+assert.ok(idx.indexOf("sw.js?v=104") >= 0, 'index registers sw v104');
+assert.ok(idx.indexOf("onboard.js?v=2026110701") >= 0, 'index onboard cache aligned');
+assert.ok(swSrc.indexOf("onboard.js?v=") >= 0 && swSrc.indexOf("2026110701") >= 0, 'sw onboard cache aligned');
+assert.ok(idx.indexOf("finn3d.js?v=2026110701") >= 0, 'index finn3d cache aligned');
 assert.ok(cloudSrc.indexOf('escHtml(currentUser.email') >= 0, 'cloud email escaped in auth UI');
 assert.ok(manifestXml.indexOf('android:allowBackup="false"') >= 0, 'android auto-backup off so cipher is not restored without key');
 assert.ok(updJava.indexOf('if (notifyUpdate(context, msg))') >= 0, 'notified_code only after successful push');
 assert.ok(updJava.indexOf('if (!can) return false') >= 0, 'no notify permission must retry later');
 assert.ok(bridgeJava.indexOf('pubMod > privMod') >= 0, 'backup read prefers newer Downloads copy');
-assert.ok(mainJava.indexOf('FinApp/4.13.25') >= 0, 'native UA matches release');
+assert.ok(mainJava.indexOf('FinApp/4.13.26') >= 0, 'native UA matches release');
 assert.ok(cloudSrc.indexOf('trustPreAnchorCash') >= 0, 'cloud apply trusts folded opening');
 assert.ok(appSrc.indexOf('function rebalancePreAnchorCash') >= 0, 'past-month edits move the cash anchor');
 assert.ok(appSrc.indexOf('function trustPreAnchorCash') >= 0, 'import/undo/fold do not double-count anchor');
@@ -994,6 +994,15 @@ assert.ok(appSrc.indexOf("if(e.category==='Долг'||e.category==='Обязат
   assert.strictEqual(ob2.obligationPays[0].amount, 2000, 'September bill stays when October expense shrinks');
   assert.ok(!ob2.obligationPays[0].deleted, 'September pay is not voided');
   assert.strictEqual(ob2.obligationPays[1].amount, 500, 'October pay follows the October expense');
+  var obCap = {
+    debts: [],
+    expenses: [{ id: 'eOct', amount: 800, category: 'Обязательные', date: '2026-10-20', obligId: 'ob1', obligMonth: '2026-10' }],
+    obligationPays: [{ id: 'pOct', obligId: 'ob1', month: '2026-10', amount: 800, date: '2026-10-20' }],
+    obligations: [{ id: 'ob1', name: 'Аренда', amount: 2000 }]
+  };
+  var cappedBill = adj(obCap, obCap.expenses[0], 9000);
+  assert.strictEqual(cappedBill, 2000, 'obligation expense cannot grow past the bill, got ' + cappedBill);
+  assert.strictEqual(obCap.obligationPays[0].amount, 2000, 'obligation pay stays within the bill');
   var reset = appSandbox.finResetObligationMonth;
   assert.strictEqual(typeof reset, 'function', 'finResetObligationMonth exported');
   reset(ob2, 'ob1', '2026-10');
@@ -1154,6 +1163,48 @@ assert.ok(appSrc.indexOf("if(e.category==='Долг'||e.category==='Обязат
   adjR(downDep, downDep.reserveOps[0], 400);
   assert.strictEqual(downDep.reserveOps[0].amount, 400);
   assert.strictEqual(downDep.reserves[0].saved, 400, 'smaller deposit keeps less in the reserve');
+  function aliveReserveNet(st, id){
+    var n = 0;
+    (st.reserveOps || []).forEach(function (o) {
+      if (!o || o.deleted || o.reserveId !== id) return;
+      if (o.type === 'deposit') n += o.amount;
+      else if (o.type === 'withdraw') n -= o.amount;
+    });
+    return n;
+  }
+  var closedDrop = {
+    reserves: [{ id: 'r1', saved: 0, deleted: true }],
+    reserveOps: [
+      { id: 'd1', reserveId: 'r1', type: 'deposit', amount: 3000, date: '2026-10-01' },
+      { id: 'w1', reserveId: 'r1', type: 'withdraw', amount: 3000, date: '2026-10-02' }
+    ]
+  };
+  adjR(closedDrop, closedDrop.reserveOps[0], null);
+  assert.ok(closedDrop.reserveOps[0].deleted, 'closed-reserve deposit can be voided');
+  assert.strictEqual(aliveReserveNet(closedDrop, 'r1'), 0, 'voiding a deposit on a closed reserve must not leave the closing withdraw');
+  assert.strictEqual(closedDrop.reserves[0].saved, 0);
+  var closedDown = {
+    reserves: [{ id: 'r1', saved: 0, deleted: true }],
+    reserveOps: [
+      { id: 'd1', reserveId: 'r1', type: 'deposit', amount: 3000, date: '2026-10-01' },
+      { id: 'w1', reserveId: 'r1', type: 'withdraw', amount: 3000, date: '2026-10-02' }
+    ]
+  };
+  adjR(closedDown, closedDown.reserveOps[0], 1000);
+  assert.strictEqual(closedDown.reserveOps[0].amount, 1000);
+  assert.strictEqual(aliveReserveNet(closedDown, 'r1'), 0, 'shrinking a closed-reserve deposit shrinks the return to cash');
+  assert.strictEqual(closedDown.reserves[0].saved, 0);
+  var closedUp = {
+    reserves: [{ id: 'r1', saved: 0, deleted: true }],
+    reserveOps: [
+      { id: 'd1', reserveId: 'r1', type: 'deposit', amount: 3000, date: '2026-10-01' },
+      { id: 'w1', reserveId: 'r1', type: 'withdraw', amount: 3000, date: '2026-10-02' }
+    ]
+  };
+  adjR(closedUp, closedUp.reserveOps[0], 5000);
+  assert.strictEqual(closedUp.reserveOps[0].amount, 5000);
+  assert.strictEqual(aliveReserveNet(closedUp, 'r1'), 0, 'raising a deposit on a closed reserve returns the extra cash');
+  assert.strictEqual(closedUp.reserves[0].saved, 0);
 })();
 
 (function preAnchorRebalance(){

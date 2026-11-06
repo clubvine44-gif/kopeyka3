@@ -1,4 +1,4 @@
-(function(){/* v118.29 4.13.25 */'use strict';
+(function(){/* v118.30 4.13.26 */'use strict';
 var KEY='kopeyka3_state_v1',ANCHOR='2026-08-17',CYCLE=['day','day','night','night','off','off'];
 var CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье','Прочее'];
 var BUDGET_CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
@@ -637,6 +637,28 @@ function finAdjustLinkedExpense(state, exp, nextAmount){
     debt.paid=paid;
     return applied;
   }
+  if(exp.obligId&&next>old){
+    var obRow=null;
+    (state.obligations||[]).forEach(function(x){if(x&&x.id===exp.obligId&&!x.deleted)obRow=x;});
+    var cap=obRow?num(obRow.amount):0;
+    if(cap>0){
+      var om=String(exp.obligMonth||String(exp.date||'').slice(0,7)||'').slice(0,7);
+      var paySum=0, expOthers=0;
+      (state.obligationPays||[]).forEach(function(p){
+        if(!p||p.deleted||p.obligId!==exp.obligId)return;
+        if(finPayHitsMonth(p, om))paySum+=num(p.amount);
+      });
+      (state.expenses||[]).forEach(function(e){
+        if(!e||e.deleted||e===exp||e.obligId!==exp.obligId)return;
+        var tag=String(e.obligMonth||String(e.date||'').slice(0,7)||'').slice(0,7);
+        if(tag===om)expOthers+=num(e.amount);
+      });
+      var roomExp=Math.max(0, cap-expOthers);
+      var roomPay=Math.max(0, cap-paySum+old);
+      var room=Math.min(roomExp, roomPay);
+      if(next>room)next=Math.max(old, room);
+    }
+  }
   var delta=next-old;
   if(!delta)return next;
   if(exp.obligId){
@@ -840,23 +862,35 @@ function adjustReserveOp(state, op, nextAmount){
     op.amount=next;
     op.editedAt=new Date().toISOString();
   }
-  if(reserve&&!reserve.deleted){
-    var net=reserveNetOf(state, reserve.id);
+  var rid=op.reserveId;
+  if(rid){
+    var net=reserveNetOf(state, rid);
     if(net<0){
       var excess=-net;
       var ops=state.reserveOps||[];
       for(var i=ops.length-1;i>=0&&excess>0;i--){
         var w=ops[i];
-        if(!alive(w)||w.reserveId!==reserve.id||w.type!=='withdraw')continue;
+        if(!alive(w)||w.reserveId!==rid||w.type!=='withdraw')continue;
         var wa=num(w.amount);
+        if(wa<=0)continue;
         if(wa<=excess){finSoftRow(state,'reserveOps',w);excess-=wa;}
         else{w.amount=wa-excess;w.editedAt=new Date().toISOString();excess=0;}
       }
-      net=reserveNetOf(state, reserve.id);
+      net=reserveNetOf(state, rid);
       if(net<0)net=0;
     }
-    reserve.saved=book+net;
-    if(reserve.saved<0)reserve.saved=0;
+    if(reserve){
+      if(reserve.deleted){
+        if(net>0){
+          pushReserveOp(state, reserve.id, 'withdraw', net, op.date||today());
+          net=0;
+        }
+        reserve.saved=0;
+      }else{
+        reserve.saved=book+net;
+        if(reserve.saved<0)reserve.saved=0;
+      }
+    }
   }
   return next;
 }
