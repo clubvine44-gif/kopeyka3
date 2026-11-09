@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no"><meta name="theme-color" content="#0A0B0E"><title>Финна</title><link rel="manifest" href="manifest.json"><link rel="icon" href="icon.svg" type="image/svg+xml"><style>
+<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=5"><meta name="theme-color" content="#0A0B0E"><title>Финна</title><link rel="manifest" href="manifest.json"><link rel="icon" href="icon.svg" type="image/svg+xml"><style>
 :root{
   --bg:#0B0906;
   --bg2:#120E0A;
@@ -892,6 +892,30 @@ html.fin-tour-scroll .card{content-visibility:visible!important;contain:none!imp
 #finSplash .sp-bar i{display:block;height:100%;width:40%;border-radius:99px;background:linear-gradient(90deg,transparent,#E8A657,#F0C060,transparent);animation:spLoad 1.1s ease-in-out infinite}
 @keyframes spPulse{0%,100%{transform:scale(1);box-shadow:0 0 40px rgba(232,166,87,.2)}50%{transform:scale(1.04);box-shadow:0 0 56px rgba(232,166,87,.35)}}
 @keyframes spLoad{0%{transform:translateX(-100%)}100%{transform:translateX(280%)}}
+
+/* fin-ux-20261109: touch, accessibility and small-screen refinement */
+:root{--radius:20px;--shadow:0 5px 20px rgba(0,0,0,.26)}
+.topbar{min-height:60px;gap:10px}
+.top-title{min-height:44px;touch-action:manipulation}
+.top-title .tt-name{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.icon-btn,.bn-item,.mm-item,.dlg-actions .btn,.modal .btn{min-height:44px;touch-action:manipulation}
+.bn-item{min-width:0}
+.card{border-color:rgba(232,166,87,.17)}
+.card.hero{border-color:rgba(232,166,87,.3)}
+button:disabled,[aria-disabled="true"]{opacity:.48;cursor:not-allowed}
+:where(button,a,input,select,textarea,[role="button"]):focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+:where(input,select,textarea){font-size:max(16px,1em);min-width:0}
+.model-menu{overscroll-behavior:contain;max-height:min(72dvh,480px)}
+.modal{max-height:min(84dvh,680px);overscroll-behavior:contain}
+.wrap,.card,.modal{overflow-wrap:anywhere}
+@media(max-width:360px){
+  .wrap{padding-left:10px;padding-right:10px}
+  .card{padding:13px;border-radius:16px}
+  .topbar{padding-left:8px;padding-right:8px;gap:5px}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+}
 </style></head><body class="has-bnav">
 <div id="finSplash" aria-hidden="true">
   <div class="sp-mark"><span>Ф</span></div>
@@ -907,7 +931,7 @@ html.fin-tour-scroll .card{content-visibility:visible!important;contain:none!imp
       <div class="finn-tip-tooltip">Нажми, чтобы поговорить с Финной</div>
     </div>
   </div>
-  <div class="top-title" id="finTitle" role="button" aria-label="Выбор модели ИИ">
+  <div class="top-title" id="finTitle" role="button" tabindex="0" aria-expanded="false" aria-controls="finModelMenu" aria-label="Выбор модели ИИ">
     <div class="tt-name">Финна <span class="tt-chev">▾</span></div>
     <div class="tt-model" id="finModelLabel">модель…</div>
     <div class="model-menu" id="finModelMenu" aria-hidden="true">
@@ -1056,7 +1080,7 @@ html.fin-tour-scroll .card{content-visibility:visible!important;contain:none!imp
   }
   function closeMenu(){
     var t=document.getElementById('finTitle');
-    if(t)t.classList.remove('open');
+    if(t){t.classList.remove('open');t.setAttribute('aria-expanded','false');}
     var m=document.getElementById('finModelMenu');
     if(m)m.setAttribute('aria-hidden','true');
   }
@@ -1145,7 +1169,7 @@ html.fin-tour-scroll .card{content-visibility:visible!important;contain:none!imp
     var open=t.classList.contains('open');
     if(open){closeMenu();return;}
     renderList();
-    t.classList.add('open');
+    t.classList.add('open');t.setAttribute('aria-expanded','true');
     var m=document.getElementById('finModelMenu');
     if(m)m.setAttribute('aria-hidden','false');
   }
@@ -1158,12 +1182,21 @@ html.fin-tour-scroll .card{content-visibility:visible!important;contain:none!imp
         if(e.target.closest&&e.target.closest('.model-menu'))return;
         toggle(e);
       });
+      t.addEventListener('keydown',function(e){
+        if(e.target!==t)return;
+        if(e.key==='Enter'||e.key===' '){e.preventDefault();toggle(e);}
+      });
     }
     document.addEventListener('click',function(e){
       var t=document.getElementById('finTitle');
       if(!t||!t.classList.contains('open'))return;
       if(t.contains(e.target))return;
       closeMenu();
+    });
+    document.addEventListener('keydown',function(e){
+      if(e.key!=='Escape')return;
+      var title=document.getElementById('finTitle');
+      if(title&&title.classList.contains('open')){closeMenu();title.focus();}
     });
     window.__finnaModelChanged=function(){label();};
     // автовыбор лучшей доступной при старте
