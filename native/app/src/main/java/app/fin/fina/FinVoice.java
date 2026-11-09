@@ -2,23 +2,20 @@ package app.fin.fina;
 
 import android.Manifest;
 import android.app.Activity;
-import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.os.Bundle;
-import android.speech.RecognitionListener;
-import android.speech.RecognizerIntent;
-import android.speech.SpeechRecognizer;
 import android.speech.tts.TextToSpeech;
-import java.util.ArrayList;
+import org.json.JSONObject;
+import org.vosk.Model;
+import org.vosk.Recognizer;
+import org.vosk.android.RecognitionListener;
+import org.vosk.android.SpeechService;
+import org.vosk.android.StorageService;
+import java.io.IOException;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * Voice control separated from rendering and finance logic.
- * SpeechRecognizer is only a platform adapter, NOT guaranteed offline.
- * No cloud API keys or LLM integrations.
- */
+/** Vosk Russian speech recognition operates wholly on-device; no API keys or network. */
 public final class FinVoice {
   public interface Actions {
     void onStatus(String text,FinOrbView.Mood mood);
@@ -26,9 +23,10 @@ public final class FinVoice {
   }
   private final Activity activity;
   private final Actions actions;
-  private SpeechRecognizer recognizer;
+  private Model model;
+  private SpeechService service;
   private TextToSpeech tts;
-  private boolean alive=true;
+  private boolean alive=true,loading=false,pendingListen=false,gotResult=false;
   public FinVoice(Activity activity,Actions actions){
     this.activity=activity;this.actions=actions;
     tts=new TextToSpeech(activity,status->{if(status==TextToSpeech.SUCCESS&&tts!=null)tts.setLanguage(new Locale("ru","RU"));});
@@ -36,41 +34,71 @@ public final class FinVoice {
   public void listen(){
     if(!alive)return;
     if(activity.checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){
-      activity.requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},100);actions.onStatus("Разреши доступ к микрофону",FinOrbView.Mood.IDLE);return;
+      activity.requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},100);
+      actions.onStatus("Разреши доступ к микрофону",FinOrbView.Mood.IDLE);return;
     }
-    if(!SpeechRecognizer.isRecognitionAvailable(activity)){actions.onStatus("На устройстве нет службы распознавания речи",FinOrbView.Mood.IDLE);return;}
-    stopRecognizer();
-    recognizer=SpeechRecognizer.createSpeechRecognizer(activity);
-    recognizer.setRecognitionListener(new RecognitionListener(){
-      public void onReadyForSpeech(Bundle params){actions.onStatus("Слушаю",FinOrbView.Mood.LISTENING);}
-      public void onBeginningOfSpeech(){actions.onStatus("Слушаю",FinOrbView.Mood.LISTENING);}
-      public void onRmsChanged(float rms){}
-      public void onBufferReceived(byte[] buffer){}
-      public void onEndOfSpeech(){actions.onStatus("Обрабатываю",FinOrbView.Mood.THINKING);}
-      public void onError(int error){actions.onStatus("Не расслышала. Попробуй ещё раз",FinOrbView.Mood.IDLE);stopRecognizer();}
-      public void onResults(Bundle results){
-        ArrayList<String> candidates=results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-        if(candidates!=null&&!candidates.isEmpty())actions.onCommand(candidates.get(0));
-        else actions.onStatus("Команда не распознана",FinOrbView.Mood.IDLE);
-        stopRecognizer();
-      }
-      public void onPartialResults(Bundle results){}
-      public void onEvent(int eventType,Bundle params){}
+    pendingListen=true;
+    if(model!=null){begin();return;}
+    if(loading){actions.onStatus("Подготавливаю локальную модель…",FinOrbView.Mood.THINKING);return;}
+    loading=true;
+    actions.onStatus("Первый запуск: готовлю офлайн-распознавание…",FinOrbView.Mood.THINKING);
+    StorageService.unpack(activity,"model-ru","model-ru",
+      unpacked->activity.runOnUiThread(()->{
+        loading=false;
+        if(!alive){unpacked.close();return;}
+        model=unpacked;
+        if(pendingListen)begin();
+        else actions.onStatus("Готова слушать",FinOrbView.Mood.IDLE);
+      }),
+      error->activity.runOnUiThread(()->{
+        loading=false;pendingListen=false;
+        if(alive)actions.onStatus("Модель недоступна: "+error.getMessage(),FinOrbView.Mood.IDLE);
+      }));
+  }
+  private void begin(){
+    if(!alive||model==null)return;
+    halt();
+    pendingListen=true;gotResult=false;
+    try{
+      Recognizer recognizer=new Recognizer(model,16000.0f);
+      service=new SpeechService(recognizer,16000.0f);
+      actions.onStatus("Слушаю (офлайн)",FinOrbView.Mood.LISTENING);
+      service.startListening(new RecognitionListener(){
+        @Override public void onPartialResult(String hypothesis){}
+        @Override public void onResult(String hypothesis){handle(hypothesis);}
+        @Override public void onFinalResult(String hypothesis){handle(hypothesis);}
+        @Override public void onError(Exception e){activity.runOnUiThread(()->{if(alive)actions.onStatus("Ошибка микрофона: "+e.getMessage(),FinOrbView.Mood.IDLE);halt();});}
+        @Override public void onTimeout(){activity.runOnUiThread(()->{if(alive&&!gotResult)actions.onStatus("Не расслышала",FinOrbView.Mood.IDLE);halt();});}
+      });
+    }catch(IOException e){halt();actions.onStatus("Не удалось запустить распознавание",FinOrbView.Mood.IDLE);}
+  }
+  private void handle(String json){
+    String recognized="";try{recognized=new JSONObject(json).optString("text","").trim();}catch(Exception ignored){}
+    if(recognized.isEmpty())return;
+    final String words=recognized;
+    activity.runOnUiThread(()->{
+      if(!alive||gotResult)return;
+      gotResult=true;
+      actions.onStatus("Распознано: "+words,FinOrbView.Mood.THINKING);
+      halt();
+      actions.onCommand(words);
     });
-    Intent i=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-    i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-    i.putExtra(RecognizerIntent.EXTRA_LANGUAGE,"ru-RU");
-    i.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS,false);
-    i.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE,true);
-    recognizer.startListening(i);
   }
   public void say(String text){
     actions.onStatus(text,FinOrbView.Mood.SPEAKING);
     if(tts!=null)tts.speak(text,TextToSpeech.QUEUE_FLUSH,null,"fina-response");
   }
-  private void stopRecognizer(){if(recognizer!=null){try{recognizer.cancel();recognizer.destroy();}catch(Exception ignored){}recognizer=null;}}
-  public void pause(){stopRecognizer();}
-  public void destroy(){alive=false;stopRecognizer();if(tts!=null){tts.stop();tts.shutdown();tts=null;}}
+  private void halt(){
+    pendingListen=false;
+    SpeechService old=service;service=null;
+    if(old!=null){try{old.stop();old.shutdown();}catch(Exception ignored){}}
+  }
+  public void pause(){halt();}
+  public void destroy(){
+    alive=false;halt();
+    if(model!=null){model.close();model=null;}
+    if(tts!=null){tts.stop();tts.shutdown();tts=null;}
+  }
   public static final class Parsed {
     public final String type,category,original;
     public final long amount;
