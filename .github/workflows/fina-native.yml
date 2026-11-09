@@ -20,6 +20,14 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.2.1'
+      - name: Bundle verified Russian Vosk model
+        run: |
+          curl -fL --retry 3 --connect-timeout 30 "https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip" -o /tmp/fina-ru-model.zip
+          echo "961d5ff98a17f4aa6de69864d0aa71fa5bac682301d2b5d17a3f24c5c99a46d4  /tmp/fina-ru-model.zip" | sha256sum -c -
+          mkdir -p native/app/src/main/assets
+          unzip -q /tmp/fina-ru-model.zip -d native/app/src/main/assets
+          mv native/app/src/main/assets/vosk-model-small-ru-0.22 native/app/src/main/assets/model-ru
+          echo "model-small-ru-0.22-2026" > native/app/src/main/assets/model-ru/uuid
       - name: Compile native Android app
         working-directory: native
         run: gradle assembleDebug --stacktrace --no-daemon
