@@ -29,6 +29,7 @@ public final class MainActivity extends Activity implements FinVoice.Actions {
   private static final int TEXT=Color.rgb(239,242,240), MUTED=Color.rgb(139,153,161), ACCENT=Color.rgb(159,206,192);
   private static final int RED=Color.rgb(226,152,146), HAIR=Color.rgb(44,54,63);
   private Ledger ledger;
+  private Planner planner;
   private FinVoice voice;
   private FinOrbView orb;
   private TextView voiceLabel;
@@ -43,7 +44,7 @@ public final class MainActivity extends Activity implements FinVoice.Actions {
     getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);
     getWindow().getDecorView().setSystemUiVisibility(0);
     getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
-    ledger=new Ledger(this);voice=new FinVoice(this,this);
+    ledger=new Ledger(this);planner=new Planner(this);voice=new FinVoice(this,this);
     if(state!=null){tab=state.getInt("tab",0);scrollY=state.getInt("scroll",0);}
     render();
   }
@@ -76,12 +77,12 @@ public final class MainActivity extends Activity implements FinVoice.Actions {
     header.addView(title,new LinearLayout.LayoutParams(0,-2,1f));
     TextView menu=text("•••",25,MUTED,true);menu.setGravity(Gravity.CENTER);
     menu.setBackground(shape(SURFACE,13));header.addView(menu,lp(44,44));
-    menu.setOnClickListener(v->{tab=3;scrollY=0;render();});
+    menu.setOnClickListener(v->{tab=4;scrollY=0;render();});
     root.addView(header,lp(-1,-2));
     ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setVerticalScrollBarEnabled(false);
     content=linear(true);pad(content,20,10,20,26);scroll.addView(content);
     root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1f));
-    if(tab==0)home();else if(tab==1)operations();else if(tab==2)assistant();else settings();
+    if(tab==0)home();else if(tab==1)operations();else if(tab==2)plan();else if(tab==3)assistant();else settings();
     scroll.post(()->scroll.scrollTo(0,scrollY));
     scroll.setOnTouchListener((v,e)->{scrollY=scroll.getScrollY();return false;});
     addBottomNav();
@@ -119,7 +120,7 @@ public final class MainActivity extends Activity implements FinVoice.Actions {
     TextView symbol=text("◉",31,ACCENT,true);row.addView(symbol,lp(50,55));
     LinearLayout group=linear(true);group.addView(text("Спросить Финну",16,TEXT,true));group.addView(text("Баланс, расходы, доходы",12,MUTED,false),spaced(-1,-2,6));
     row.addView(group,new LinearLayout.LayoutParams(0,-2,1f));row.addView(text("›",28,ACCENT,true));teaser.addView(row);
-    teaser.setOnClickListener(v->{tab=2;scrollY=0;render();});
+    teaser.setOnClickListener(v->{tab=3;scrollY=0;render();});
   }
   private void addMetric(LinearLayout parent,String key,String val,int valueColor){
     LinearLayout group=linear(true);group.addView(text(key,9,MUTED,true));group.addView(text(val,17,valueColor,true),spaced(-1,-2,9));
@@ -170,6 +171,116 @@ public final class MainActivity extends Activity implements FinVoice.Actions {
       content.addView(example,spaced(-1,-2,9));example.setOnClickListener(v->onCommand(cmd));
     }
   }
+  private void plan(){
+    java.time.YearMonth month=java.time.YearMonth.now();
+    int[] shifts=planner.monthShiftCounts(month);
+    section(content,"План месяца",new java.text.SimpleDateFormat("LLLL yyyy",new Locale("ru","RU")).format(new java.util.Date()));
+    LinearLayout forecast=card(content,true);
+    forecast.addView(text("ПРОГНОЗ ДОХОДА ПО СМЕНАМ",11,ACCENT,true));
+    forecast.addView(text(Ledger.money(planner.forecastIncome(month)),30,TEXT,true),spaced(-1,-2,13));
+    forecast.addView(text(shifts[0]+" дневных  ·  "+shifts[1]+" ночных  ·  "+shifts[2]+" выходных",13,MUTED,false),spaced(-1,-2,10));
+    forecast.addView(text("После регулярных платежей: "+Ledger.money(planner.forecastIncome(month)-planner.recurringTotal()),13,TEXT,true),spaced(-1,-2,16));
+    section(content,"График смен",null);
+    LinearLayout calendar=card(content,false);
+    android.widget.GridLayout grid=new android.widget.GridLayout(this);
+    grid.setColumnCount(7);
+    String[] week={"ПН","ВТ","СР","ЧТ","ПТ","СБ","ВС"};
+    for(String x:week){TextView w=text(x,10,MUTED,true);w.setGravity(Gravity.CENTER);grid.addView(w,new android.widget.GridLayout.LayoutParams(
+      android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED,1f),android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED,1f)));}
+    int offset=month.atDay(1).getDayOfWeek().getValue()-1;
+    for(int i=0;i<offset;i++){TextView blank=text("",13,MUTED,false);grid.addView(blank);}
+    for(int n=1;n<=month.lengthOfMonth();n++){
+      final java.time.LocalDate day=month.atDay(n);String shift=planner.shift(day);
+      int tint=shift.equals("day")?ACCENT:shift.equals("night")?Color.rgb(155,164,220):MUTED;
+      TextView d=text(String.valueOf(n)+"\n"+(shift.equals("day")?"Д":shift.equals("night")?"Н":"·"),12,tint,true);
+      d.setGravity(Gravity.CENTER);pad(d,2,9,2,9);
+      d.setBackground(shape(shift.equals("off")?BG:PANEL,8));
+      android.widget.GridLayout.LayoutParams cell=new android.widget.GridLayout.LayoutParams(
+        android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED,1f),android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED,1f));
+      cell.width=0;cell.setGravity(Gravity.FILL_HORIZONTAL);cell.setMargins(dp(2),dp(2),dp(2),dp(2));
+      grid.addView(d,cell);
+    }
+    calendar.addView(grid,lp(-1,-2));
+    calendar.addView(text("Д — дневная смена    Н — ночная    · — выходной",11,MUTED,false),spaced(-1,-2,15));
+    TextView changeRates=text("Изменить ставку и начало цикла  ›",13,ACCENT,true);
+    calendar.addView(changeRates,spaced(-1,38,12));changeRates.setOnClickListener(v->shiftDialog());
+    section(content,"Обязательные платежи",null);
+    LinearLayout obligations=card(content,false);
+    obligations.addView(text("Всего в месяц: "+Ledger.money(planner.recurringTotal()),16,TEXT,true));
+    for(Planner.Recurring p:planner.recurring()){
+      TextView item=text(p.name+" · "+p.day+"-е  —  "+Ledger.money(p.amount),13,MUTED,false);
+      obligations.addView(item,spaced(-1,41,8));
+      item.setOnLongClickListener(v->{new AlertDialog.Builder(this).setTitle("Удалить платёж?")
+        .setMessage(p.name).setNegativeButton("Отмена",null)
+        .setPositiveButton("Удалить",(dialog,w)->{planner.removeRecurring(p.id);render();}).show();return true;});
+    }
+    TextView add=text("＋ Добавить платёж",14,ACCENT,true);obligations.addView(add,spaced(-1,43,10));add.setOnClickListener(v->recurringDialog());
+    section(content,"Цели и резервы",null);
+    LinearLayout goals=card(content,false);
+    List<Planner.Goal> all=planner.goals();
+    if(all.isEmpty())goals.addView(text("Пока нет целей. Добавь финансовую цель.",13,MUTED,false));
+    for(Planner.Goal g:all){
+      TextView title=text(g.name,15,TEXT,true);goals.addView(title,spaced(-1,-2,14));
+      goals.addView(text(Ledger.money(g.saved)+" из "+Ledger.money(g.target),12,MUTED,false),spaced(-1,-2,6));
+      ProgressBar bar=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);
+      bar.setMax(1000);bar.setProgress((int)Math.min(1000,g.target>0?1000.0*g.saved/g.target:0));
+      bar.setProgressTintList(ColorStateList.valueOf(ACCENT));
+      goals.addView(bar,spaced(-1,5,9));
+      TextView top=text("Пополнить цель  ›",12,ACCENT,true);goals.addView(top,spaced(-1,38,4));
+      top.setOnClickListener(v->depositDialog(g));
+      title.setOnLongClickListener(v->{new AlertDialog.Builder(this).setTitle("Удалить цель?")
+        .setMessage(g.name).setNegativeButton("Отмена",null)
+        .setPositiveButton("Удалить",(dialog,w)->{planner.removeGoal(g.id);render();}).show();return true;});
+    }
+    TextView addGoal=text("＋ Новая цель",14,ACCENT,true);goals.addView(addGoal,spaced(-1,44,11));addGoal.setOnClickListener(v->goalDialog());
+    content.addView(text("Прогноз — расчёт по графику, а не гарантия выплаты. Переводы в цели пока не списываются с основного баланса.",11,MUTED,false),spaced(-1,-2,13));
+  }
+  private EditText edit(String hint,boolean digits){
+    EditText e=new EditText(this);e.setHint(hint);e.setTextColor(TEXT);e.setHintTextColor(MUTED);
+    e.setSingleLine(true);if(digits)e.setInputType(InputType.TYPE_CLASS_NUMBER);return e;
+  }
+  private long readMoney(EditText e){long n=Long.parseLong(e.getText().toString().trim());if(n<=0)throw new IllegalArgumentException("Сумма должна быть больше нуля");return n;}
+  private void shiftDialog(){
+    LinearLayout form=linear(true);pad(form,20,10,20,0);
+    EditText anchor=edit("Начало цикла YYYY-MM-DD",false);anchor.setText(planner.shiftStart().toString());form.addView(anchor);
+    EditText day=edit("Дневная ставка",true);day.setText(String.valueOf(planner.dayRate()));form.addView(day);
+    EditText night=edit("Ночная ставка",true);night.setText(String.valueOf(planner.nightRate()));form.addView(night);
+    new AlertDialog.Builder(this).setTitle("График 2/2/2").setView(form)
+      .setNegativeButton("Отмена",null).setPositiveButton("Сохранить",(d,w)->{
+        try{planner.updateShift(java.time.LocalDate.parse(anchor.getText().toString()),
+          Long.parseLong(day.getText().toString()),Long.parseLong(night.getText().toString()));render();}
+        catch(Exception e){toast("Проверь дату и ставки");}
+      }).show();
+  }
+  private void recurringDialog(){
+    LinearLayout form=linear(true);pad(form,20,10,20,0);
+    EditText name=edit("Название платежа",false);form.addView(name);
+    EditText amount=edit("Сумма, ₽",true);form.addView(amount);
+    EditText day=edit("День месяца (1–31)",true);form.addView(day);
+    new AlertDialog.Builder(this).setTitle("Новый платёж").setView(form)
+      .setNegativeButton("Отмена",null).setPositiveButton("Добавить",(d,w)->{
+        try{planner.addRecurring(name.getText().toString(),readMoney(amount),Integer.parseInt(day.getText().toString()));render();}
+        catch(Exception e){toast("Проверь данные платежа");}
+      }).show();
+  }
+  private void goalDialog(){
+    LinearLayout form=linear(true);pad(form,20,10,20,0);
+    EditText name=edit("Название цели",false);form.addView(name);
+    EditText target=edit("Необходимая сумма, ₽",true);form.addView(target);
+    new AlertDialog.Builder(this).setTitle("Финансовая цель").setView(form)
+      .setNegativeButton("Отмена",null).setPositiveButton("Создать",(d,w)->{
+        try{planner.addGoal(name.getText().toString(),readMoney(target));render();}
+        catch(Exception e){toast("Проверь цель и сумму");}
+      }).show();
+  }
+  private void depositDialog(Planner.Goal goal){
+    EditText amount=edit("Пополнение цели, ₽",true);
+    new AlertDialog.Builder(this).setTitle(goal.name).setView(amount)
+      .setNegativeButton("Отмена",null).setPositiveButton("Пополнить",(d,w)->{
+        try{planner.deposit(goal.id,readMoney(amount));render();}
+        catch(Exception e){toast("Проверь сумму");}
+      }).show();
+  }
   private void settings(){
     section(content,"Настройки","Управление без аккаунта и облачных сервисов");
     LinearLayout box=card(content,false);
@@ -190,7 +301,7 @@ public final class MainActivity extends Activity implements FinVoice.Actions {
   private void addBottomNav(){
     bottom=linear(false);pad(bottom,14,10,14,13);bottom.setBackgroundColor(BG);
     root.addView(line(),lp(-1,1));
-    String[] items={"Обзор","История","Финна","Ещё"};String[] glyph={"◫","≡","◉","⋯"};
+    String[] items={"Обзор","История","План","Финна","Ещё"};String[] glyph={"◫","≡","▦","◉","⋯"};
     for(int i=0;i<items.length;i++){
       final int target=i;
       LinearLayout item=linear(true);item.setGravity(Gravity.CENTER);
@@ -251,7 +362,7 @@ public final class MainActivity extends Activity implements FinVoice.Actions {
       FinVoice.Parsed cmd=FinVoice.parse(text);
       if(cmd.type.equals("balance"))voice.say("Твой текущий баланс: "+Ledger.money(ledger.balance()));
       else if(cmd.type.equals("history")){tab=1;scrollY=0;render();voice.say("Открываю историю операций");}
-      else if(cmd.type.equals("settings")){tab=3;scrollY=0;render();voice.say("Открываю настройки");}
+      else if(cmd.type.equals("settings")){tab=4;scrollY=0;render();voice.say("Открываю настройки");}
       else if(cmd.type.equals("help"))voice.say("Я могу показать баланс, историю, записать доход или расход.");
       else if(cmd.type.equals("expense")||cmd.type.equals("income")){
         boolean income=cmd.type.equals("income");
