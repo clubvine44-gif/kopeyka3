@@ -97,10 +97,10 @@ public final class MainActivity extends Activity implements FinVoice.Actions {
     parent.addView(box,spaced(-1,-2,16));return box;
   }
   private void home(){
-    TextView pre=text("ОБЩИЙ БАЛАНС",11,ACCENT,true);
+    TextView pre=text("ДОСТУПНЫЙ ОСТАТОК",11,ACCENT,true);
     LinearLayout hero=card(content,true);hero.addView(pre);
-    hero.addView(text(Ledger.money(ledger.balance()),34,TEXT,true),spaced(-1,-2,16));
-    hero.addView(text("Доступные средства • локально на устройстве",12,MUTED,false),spaced(-1,-2,9));
+    hero.addView(text(Ledger.money(ledger.balance()-planner.reservedTotal()),34,TEXT,true),spaced(-1,-2,16));
+    hero.addView(text("Всего денег: "+Ledger.money(ledger.balance())+" · Резервы: "+Ledger.money(planner.reservedTotal()),12,MUTED,false),spaced(-1,-2,9));
     gap(hero,20);hero.addView(line(),lp(-1,1));gap(hero,18);
     LinearLayout stats=linear(false);
     addMetric(stats,"ДОХОДЫ ЗА МЕСЯЦ",Ledger.money(ledger.monthIncome()),ACCENT);
@@ -277,8 +277,8 @@ public final class MainActivity extends Activity implements FinVoice.Actions {
     EditText amount=edit("Пополнение цели, ₽",true);
     new AlertDialog.Builder(this).setTitle(goal.name).setView(amount)
       .setNegativeButton("Отмена",null).setPositiveButton("Пополнить",(d,w)->{
-        try{planner.deposit(goal.id,readMoney(amount));render();}
-        catch(Exception e){toast("Проверь сумму");}
+        try{long deposit=readMoney(amount);if(ledger.balance()-planner.reservedTotal()<deposit)throw new IllegalArgumentException("Недостаточно свободных денег");planner.deposit(goal.id,deposit);render();}
+        catch(Exception e){toast("Пополнение не выполнено: "+e.getMessage());}
       }).show();
   }
   private void settings(){
@@ -348,12 +348,33 @@ public final class MainActivity extends Activity implements FinVoice.Actions {
   @Override protected void onActivityResult(int request,int result,Intent data){
     super.onActivityResult(request,result,data);if(result!=RESULT_OK||data==null||data.getData()==null)return;
     try{
-      if(request==201){try(OutputStream stream=getContentResolver().openOutputStream(data.getData())){if(stream==null)throw new Exception("Нет доступа к файлу");stream.write(ledger.exportJson().getBytes(StandardCharsets.UTF_8));}toast("Резервная копия сохранена");}
+      if(request==201){try(OutputStream stream=getContentResolver().openOutputStream(data.getData())){if(stream==null)throw new Exception("Нет доступа к файлу");stream.write(exportBundle().getBytes(StandardCharsets.UTF_8));}toast("Резервная копия сохранена");}
       else if(request==202){byte[] bytes;try(InputStream stream=getContentResolver().openInputStream(data.getData())){if(stream==null)throw new Exception("Нет доступа к файлу");java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream();byte[] buffer=new byte[8192];int n,total=0;while((n=stream.read(buffer))>0){total+=n;if(total>5000000)throw new Exception("Файл слишком большой");out.write(buffer,0,n);}bytes=out.toByteArray();}
        new AlertDialog.Builder(this).setTitle("Импортировать данные?").setMessage("Текущие операции будут заменены. Сохрани копию перед импортом.")
-        .setNegativeButton("Отмена",null).setPositiveButton("Импортировать",(d,w)->{try{ledger.importJson(new String(bytes,StandardCharsets.UTF_8));render();toast("Импорт выполнен");}catch(Exception e){toast("Ошибка импорта: "+e.getMessage());}}).show();
+        .setNegativeButton("Отмена",null).setPositiveButton("Импортировать",(d,w)->{try{importBundle(new String(bytes,StandardCharsets.UTF_8));render();toast("Импорт выполнен");}catch(Exception e){toast("Ошибка импорта: "+e.getMessage());}}).show();
       }
     }catch(Exception e){toast("Ошибка файла: "+e.getMessage());}
+  }
+  private String exportBundle() throws Exception{
+    org.json.JSONObject b=new org.json.JSONObject();
+    b.put("format","fina-native-v2");
+    b.put("ledger",new org.json.JSONObject(ledger.exportJson()));
+    b.put("planner",new org.json.JSONObject(planner.exportJson()));
+    return b.toString(2);
+  }
+  private void importBundle(String json) throws Exception{
+    org.json.JSONObject b=new org.json.JSONObject(json);
+    if(!"fina-native-v2".equals(b.optString("format"))){
+      ledger.importJson(json);return;
+    }
+    String oldLedger=ledger.exportJson(),oldPlanner=planner.exportJson();
+    try{
+      ledger.importJson(b.getJSONObject("ledger").toString());
+      planner.importJson(b.getJSONObject("planner").toString());
+    }catch(Exception e){
+      try{ledger.importJson(oldLedger);planner.importJson(oldPlanner);}catch(Exception rollback){}
+      throw e;
+    }
   }
   private void toast(String m){Toast.makeText(this,m,Toast.LENGTH_LONG).show();}
   @Override public void onStatus(String message,FinOrbView.Mood mood){runOnUiThread(()->{if(voiceLabel!=null)voiceLabel.setText(message);if(orb!=null)orb.setMood(mood);});}

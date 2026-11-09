@@ -74,6 +74,40 @@ public final class Planner {
     if(day<0||night<0)throw new IllegalArgumentException("Ставка не может быть отрицательной");
     shiftStart=firstDay;dayRate=day;nightRate=night;save();
   }
+  public synchronized long reservedTotal(){long n=0;for(Goal g:goals)n+=g.saved;return n;}
+  public synchronized String exportJson(){
+    try{
+      JSONObject o=new JSONObject(prefs.getString("state","{}"));
+      o.put("format","fina-native-plan-v1");return o.toString();
+    }catch(Exception e){throw new IllegalStateException("Ошибка резервной копии",e);}
+  }
+  public synchronized void importJson(String json){
+    try{
+      JSONObject o=new JSONObject(json);
+      if(!"fina-native-plan-v1".equals(o.optString("format")))throw new IllegalArgumentException("Неизвестный формат планов");
+      LocalDate next=LocalDate.parse(o.getString("shiftStart"));
+      long day=o.getLong("dayRate"),night=o.getLong("nightRate");
+      if(day<0||night<0)throw new IllegalArgumentException("Некорректная ставка");
+      List<Goal> gs=new ArrayList<>();JSONArray a=o.getJSONArray("goals");
+      if(a.length()>500)throw new IllegalArgumentException("Слишком много целей");
+      for(int i=0;i<a.length();i++){
+        JSONObject g=a.getJSONObject(i);long target=g.getLong("target"),saved=g.getLong("saved");
+        if(target<=0||saved<0)throw new IllegalArgumentException("Некорректная цель");
+        gs.add(new Goal(g.getString("id"),g.getString("name"),target,saved));
+      }
+      List<Recurring> rs=new ArrayList<>();JSONArray b=o.getJSONArray("recurring");
+      if(b.length()>500)throw new IllegalArgumentException("Слишком много платежей");
+      for(int i=0;i<b.length();i++){
+        JSONObject x=b.getJSONObject(i);long amount=x.getLong("amount");int paymentDay=x.getInt("day");
+        if(amount<=0||paymentDay<1||paymentDay>31)throw new IllegalArgumentException("Некорректный платёж");
+        rs.add(new Recurring(x.getString("id"),x.getString("name"),amount,paymentDay));
+      }
+      String original=prefs.getString("state","{}");
+      if(!prefs.edit().putString("state",json).commit())throw new IllegalStateException("Не удалось сохранить");
+      goals.clear();goals.addAll(gs);recurring.clear();recurring.addAll(rs);
+      shiftStart=next;dayRate=day;nightRate=night;
+    }catch(Exception e){throw new IllegalArgumentException("Ошибка импорта планов: "+e.getMessage(),e);}
+  }
   public synchronized void addGoal(String name,long target){
     if(name.trim().isEmpty()||target<=0)throw new IllegalArgumentException("Укажи цель и сумму");
     goals.add(new Goal("g"+System.currentTimeMillis(),name.trim(),target,0));save();

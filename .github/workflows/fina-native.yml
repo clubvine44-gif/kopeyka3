@@ -30,7 +30,7 @@ jobs:
           echo "model-small-ru-0.22-2026" > native/app/src/main/assets/model-ru/uuid
       - name: Compile native Android app
         working-directory: native
-        run: gradle assembleDebug --stacktrace --no-daemon
+        run: gradle testDebugUnitTest assembleDebug --stacktrace --no-daemon
       - uses: actions/upload-artifact@v4
         if: success()
         with:

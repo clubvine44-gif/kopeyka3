@@ -125,9 +125,5 @@ public final class FinVoice {
     if(s.contains("аптек")||s.contains("лекарств")||s.contains("здоров"))return "Здоровье";
     return "Другое";
   }
-  private static long extractAmount(String s){
-    Matcher m=Pattern.compile("(\\d[\\d\\s]*)(?:\\s*(тысяч|тысячи|тысяча|тыс))?").matcher(s);
-    if(!m.find())return 0;
-    try{long n=Long.parseLong(m.group(1).replace(" ",""));if(m.group(2)!=null)n=Math.multiplyExact(n,1000);return n;}catch(Exception ignored){return 0;}
-  }
+  private static long extractAmount(String s){return MoneySpeech.amount(s);}
 }

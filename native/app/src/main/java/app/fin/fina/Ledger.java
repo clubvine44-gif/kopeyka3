@@ -46,10 +46,11 @@ public final class Ledger {
   }
   public synchronized void add(long amount,String category,String note){
     if(amount==0||Math.abs(amount)>100000000000L)throw new IllegalArgumentException("Проверь сумму");
-    entries.add(0,new Entry(System.currentTimeMillis(),System.currentTimeMillis(),amount,category,note));
-    persist();
+    Entry value=new Entry(System.currentTimeMillis(),System.currentTimeMillis(),amount,category,note);
+    entries.add(0,value);
+    try{persist();}catch(Exception e){entries.remove(value);throw e;}
   }
-  public synchronized void setOpeningBalance(long value){openingBalance=value;persist();}
+  public synchronized void setOpeningBalance(long value){long old=openingBalance;openingBalance=value;try{persist();}catch(Exception e){openingBalance=old;throw e;}}
   public synchronized long openingBalance(){return openingBalance;}
   public synchronized long balance(){long result=openingBalance;for(Entry e:entries)result+=e.amount;return result;}
   public synchronized long monthExpense(){return monthSum(false);}
