@@ -844,10 +844,10 @@ var swSrc = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 assert.ok(swSrc.includes("event.request.mode==='navigate'"), 'offline fallback only serves HTML to navigation requests');
 assert.ok(swSrc.includes("Response.error()"), 'missing offline assets fail closed instead of masquerading as HTML');
 
-assert.ok(swSrc.indexOf("CACHE='kopeyka3-v105'") >= 0, 'sw cache v104');
+assert.ok(swSrc.indexOf("CACHE='kopeyka3-v105'") >= 0, 'sw cache v105');
 assert.ok(swSrc.indexOf("profile.js?v=") >= 0, 'sw precaches profile.js');
 assert.ok(idx.indexOf("profile.js?v=2026110701") >= 0, 'index loads profile with cache bust');
-assert.ok(idx.indexOf("sw.js?v=104") >= 0, 'index registers sw v104');
+assert.ok(idx.indexOf("sw.js?v=105") >= 0, 'index registers sw v105');
 assert.ok(idx.indexOf("onboard.js?v=2026110701") >= 0, 'index onboard cache aligned');
 assert.ok(swSrc.indexOf("onboard.js?v=") >= 0 && swSrc.indexOf("2026110701") >= 0, 'sw onboard cache aligned');
 assert.ok(idx.indexOf("finn3d.js?v=2026110701") >= 0, 'index finn3d cache aligned');
