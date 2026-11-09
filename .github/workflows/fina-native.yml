@@ -37,3 +37,27 @@ jobs:
           name: fina-native-debug-preview
           path: native/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+      - name: Android emulator lifecycle smoke test (without screenshots)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          emulator-boot-timeout: 600
+          script: |
+            set -euo pipefail
+            adb install -r native/app/build/outputs/apk/debug/app-debug.apk
+            adb shell am start -W -n app.fin.fina/.MainActivity
+            sleep 5
+            FIRST=$(adb shell pidof app.fin.fina | tr -d '\r')
+            test -n "$FIRST"
+            adb shell uiautomator dump /sdcard/fina-ui.xml > /dev/null
+            adb shell cat /sdcard/fina-ui.xml | grep -q "ДОСТУПНЫЙ ОСТАТОК"
+            adb shell input keyevent KEYCODE_HOME
+            sleep 2
+            adb shell am start -W -n app.fin.fina/.MainActivity
+            sleep 3
+            SECOND=$(adb shell pidof app.fin.fina | tr -d '\r')
+            test "$FIRST" = "$SECOND"
+            adb shell uiautomator dump /sdcard/fina-ui.xml > /dev/null
+            adb shell cat /sdcard/fina-ui.xml | grep -q "ДОСТУПНЫЙ ОСТАТОК"
