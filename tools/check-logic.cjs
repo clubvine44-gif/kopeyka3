@@ -337,8 +337,8 @@ assert.ok(appSrc.indexOf('function flushLiveSave') >= 0, 'pagehide flushes live 
 assert.ok(storeSrc.indexOf('FinBridge.setInstallId') >= 0, 'install id mirrored to native prefs');
 
 var gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle'), 'utf8');
-assert.ok(/versionCode\s+193/.test(gradle), 'versionCode 193');
-assert.ok(/versionName\s+"4\.13\.26"/.test(gradle), 'versionName 4.13.26');
+assert.ok(/versionCode\s+194/.test(gradle), 'versionCode 194');
+assert.ok(/versionName\s+"4\.13\.27"/.test(gradle), 'versionName 4.13.27');
 
 var mainJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/MainActivity.java'), 'utf8');
 assert.ok(mainJava.indexOf('isTrustedApkUrl') >= 0, 'apk url allowlisted');
@@ -369,6 +369,11 @@ assert.ok(cloudSrc.indexOf("Восстановлено из облака") >= 0 
 assert.ok(cloudSrc.indexOf('recoverLockedState') >= 0, 'cloud uses recovery helper');
 
 var idx = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+assert.ok(idx.includes('fin-ux-20261109'), 'refined touch/accessibility CSS packaged');
+assert.ok(idx.includes('tabindex="0" aria-expanded="false" aria-controls="finModelMenu"'), 'model selector keyboard accessible');
+assert.ok(idx.includes('prefers-reduced-motion:reduce'), 'reduced motion support');
+assert.ok(idx.includes('maximum-scale=5'), 'screen zoom not blocked');
+
 assert.ok(idx.indexOf('budget-carry.js') >= 0, 'index must load leftover overlay');
 assert.ok(idx.indexOf('meal-plan.js') >= 0, 'index must load meal-plan');
 assert.ok(idx.indexOf('cdn.jsdelivr.net/gh/clubvine44-gif/kopeyka3') < 0, 'pages must not boot from CDN stub');
@@ -836,10 +841,13 @@ assert.ok(bakSrc.indexOf('stale finna-latest.json must not beat') >= 0, 'stale l
 assert.ok(bakSrc.indexOf('if (latest && latest.state)') < 0 || bakSrc.indexOf('pickNewestEmergency') >= 0, 'latest is not an early return winner');
 
 var swSrc = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
-assert.ok(swSrc.indexOf("CACHE='kopeyka3-v104'") >= 0, 'sw cache v104');
+assert.ok(swSrc.includes("event.request.mode==='navigate'"), 'offline fallback only serves HTML to navigation requests');
+assert.ok(swSrc.includes("Response.error()"), 'missing offline assets fail closed instead of masquerading as HTML');
+
+assert.ok(swSrc.indexOf("CACHE='kopeyka3-v105'") >= 0, 'sw cache v105');
 assert.ok(swSrc.indexOf("profile.js?v=") >= 0, 'sw precaches profile.js');
 assert.ok(idx.indexOf("profile.js?v=2026110701") >= 0, 'index loads profile with cache bust');
-assert.ok(idx.indexOf("sw.js?v=104") >= 0, 'index registers sw v104');
+assert.ok(idx.indexOf("sw.js?v=105") >= 0, 'index registers sw v105');
 assert.ok(idx.indexOf("onboard.js?v=2026110701") >= 0, 'index onboard cache aligned');
 assert.ok(swSrc.indexOf("onboard.js?v=") >= 0 && swSrc.indexOf("2026110701") >= 0, 'sw onboard cache aligned');
 assert.ok(idx.indexOf("finn3d.js?v=2026110701") >= 0, 'index finn3d cache aligned');
