@@ -31,7 +31,7 @@ public final class MainActivity extends Activity implements FinVoice.Actions {
   private Ledger ledger;
   private Planner planner;
   private FinVoice voice;
-  private FinOrbView orb;
+  private View orb;
   private TextView voiceLabel;
   private LinearLayout root,content,bottom;
   private int tab=0,scrollY=0;
@@ -48,8 +48,8 @@ public final class MainActivity extends Activity implements FinVoice.Actions {
     if(state!=null){tab=state.getInt("tab",0);scrollY=state.getInt("scroll",0);}
     render();
   }
-  @Override protected void onResume(){super.onResume();foreground=true;if(orb!=null)orb.resume();}
-  @Override protected void onPause(){foreground=false;if(orb!=null)orb.pause();if(voice!=null)voice.pause();super.onPause();}
+  @Override protected void onResume(){super.onResume();foreground=true;resumeOrb();}
+  @Override protected void onPause(){foreground=false;pauseOrb();if(voice!=null)voice.pause();super.onPause();}
   @Override protected void onDestroy(){if(voice!=null)voice.destroy();super.onDestroy();}
   @Override protected void onSaveInstanceState(Bundle b){b.putInt("tab",tab);b.putInt("scroll",scrollY);super.onSaveInstanceState(b);}
   private int dp(float d){return (int)(d*getResources().getDisplayMetrics().density+.5f);}
@@ -86,7 +86,7 @@ public final class MainActivity extends Activity implements FinVoice.Actions {
     scroll.post(()->scroll.scrollTo(0,scrollY));
     scroll.setOnTouchListener((v,e)->{scrollY=scroll.getScrollY();return false;});
     addBottomNav();
-    if(foreground&&orb!=null)orb.resume();
+    if(foreground)resumeOrb();
   }
   private void section(LinearLayout parent,String title,String subtitle){
     parent.addView(text(title,19,TEXT,true),spaced(-1,-2,22));
@@ -160,11 +160,11 @@ public final class MainActivity extends Activity implements FinVoice.Actions {
   private void assistant(){
     section(content,"Финна","Твой голосовой помощник");
     LinearLayout stage=card(content,true);
-    orb=new FinOrbView(this);stage.addView(orb,lp(-1,268));
+    try{orb=new FinOrb3DView(this);}catch(Throwable error){orb=new FinOrbView(this);}stage.addView(orb,lp(-1,268));
     voiceLabel=text("Готова слушать",15,TEXT,true);voiceLabel.setGravity(Gravity.CENTER);
     stage.addView(voiceLabel,spaced(-1,30,2));stage.addView(text("Пространственная анимация реагирует на состояние",11,MUTED,false),spaced(-1,-2,7));
     TextView start=text("◉   Говорить с Финной",16,BG,true);start.setGravity(Gravity.CENTER);start.setBackground(shape(ACCENT,16));
-    stage.addView(start,spaced(-1,57,20));start.setOnClickListener(v->{orb.setMood(FinOrbView.Mood.LISTENING);voice.listen();});
+    stage.addView(start,spaced(-1,57,20));start.setOnClickListener(v->{setOrbMood(FinOrbView.Mood.LISTENING);voice.listen();});
     section(content,"Попробуй сказать",null);
     for(String cmd:new String[]{"Сколько у меня денег?","Запиши расход 500 рублей на продукты","Запиши доход 4800 рублей","Покажи историю операций"}){
       TextView example=text(cmd,14,TEXT,false);pad(example,16,16,16,16);example.setBackground(outline(SURFACE,15,HAIR));
@@ -310,7 +310,7 @@ public final class MainActivity extends Activity implements FinVoice.Actions {
       TextView text=text(items[i],11,i==tab?ACCENT:MUTED,i==tab);text.setGravity(Gravity.CENTER);
       item.addView(text,spaced(-1,19,6));
       bottom.addView(item,new LinearLayout.LayoutParams(0,dp(56),1f));
-      item.setOnClickListener(v->{if(tab!=target){tab=target;scrollY=0;orb=null;render();}});
+      item.setOnClickListener(v->{if(tab!=target){tab=target;scrollY=0;pauseOrb();orb=null;render();}});
     }
     root.addView(bottom,lp(-1,80));
   }
@@ -376,8 +376,20 @@ public final class MainActivity extends Activity implements FinVoice.Actions {
       throw e;
     }
   }
+  private void resumeOrb(){
+    if(orb instanceof FinOrb3DView)((FinOrb3DView)orb).onResume();
+    else if(orb instanceof FinOrbView)((FinOrbView)orb).resume();
+  }
+  private void pauseOrb(){
+    if(orb instanceof FinOrb3DView)((FinOrb3DView)orb).onPause();
+    else if(orb instanceof FinOrbView)((FinOrbView)orb).pause();
+  }
+  private void setOrbMood(FinOrbView.Mood mood){
+    if(orb instanceof FinOrb3DView)((FinOrb3DView)orb).setMood(mood);
+    else if(orb instanceof FinOrbView)((FinOrbView)orb).setMood(mood);
+  }
   private void toast(String m){Toast.makeText(this,m,Toast.LENGTH_LONG).show();}
-  @Override public void onStatus(String message,FinOrbView.Mood mood){runOnUiThread(()->{if(voiceLabel!=null)voiceLabel.setText(message);if(orb!=null)orb.setMood(mood);});}
+  @Override public void onStatus(String message,FinOrbView.Mood mood){runOnUiThread(()->{if(voiceLabel!=null)voiceLabel.setText(message);setOrbMood(mood);});}
   @Override public void onCommand(String text){
     runOnUiThread(()->{
       FinVoice.Parsed cmd=FinVoice.parse(text);
