@@ -80,6 +80,15 @@ assert.strictEqual(c.reservesTotal, 3000, 'deleted reserve must be ignored');
 assert.strictEqual(c.obligationsRemaining, 1500, 'deleted obligation/pay must be ignored');
 assert.strictEqual(c.available, c.cash - 3000 - 1500);
 assert.ok(c.dailyBudget === c.daily, 'daily aliases');
+var negEng = loadEngine({
+  settings: { openingBalance: 1000, month: '2026-10' },
+  income: [{ id: 'ni', amount: -400, date: '2026-10-01' }],
+  expenses: [{ id: 'ne', amount: -500, date: '2026-10-02', category: 'Продукты' }],
+  reserves: [], debts: [],
+  reserveOps: [{ id: 'nd', reserveId: 'r', amount: -300, type: 'deposit', date: '2026-10-03' }],
+  obligations: [], obligationPays: []
+});
+assert.strictEqual(negEng.month('2026-10').cash, 1000, 'negative operation amounts must not mint cash');
 
 var oct = sandbox.window.kopeykaEngine.month('2026-10');
 assert.strictEqual(oct.openingBalance, c.cash, 'next month opening is previous cash');
@@ -337,8 +346,8 @@ assert.ok(appSrc.indexOf('function flushLiveSave') >= 0, 'pagehide flushes live 
 assert.ok(storeSrc.indexOf('FinBridge.setInstallId') >= 0, 'install id mirrored to native prefs');
 
 var gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle'), 'utf8');
-assert.ok(/versionCode\s+194/.test(gradle), 'versionCode 194');
-assert.ok(/versionName\s+"4\.13\.27"/.test(gradle), 'versionName 4.13.27');
+assert.ok(/versionCode\s+195/.test(gradle), 'versionCode 195');
+assert.ok(/versionName\s+"4\.13\.28"/.test(gradle), 'versionName 4.13.28');
 
 var mainJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/MainActivity.java'), 'utf8');
 assert.ok(mainJava.indexOf('isTrustedApkUrl') >= 0, 'apk url allowlisted');
@@ -828,6 +837,34 @@ assert.strictEqual(Number(mergedMeal2.mealPlan.lastPlan.total), 7777, 'newer rem
   var resMerged = cloudSandbox.window.kopeykaCloud.threeWay(resBase, resLocal, resRemote);
   assert.strictEqual(resMerged.reserves[0].saved, 2300, 'reserve balance keeps both phones deposits, got ' + resMerged.reserves[0].saved);
   assert.strictEqual(cloudSandbox.window.kopeykaCloud.cashAtMonth(resMerged, '2026-10'), 7700, 'cash still drops by every reserve deposit');
+  var closeBase = {
+    settings: { openingBalance: 10000, month: '2026-10' },
+    income: [], expenses: [],
+    reserves: [{ id: 'r1', name: 'Отпуск', saved: 1000, target: 5000 }],
+    debts: [],
+    reserveOps: [{ id: 'o0', reserveId: 'r1', amount: 1000, type: 'deposit', date: '2026-10-01' }],
+    obligations: [], obligationPays: []
+  };
+  var closeLocal = JSON.parse(JSON.stringify(closeBase));
+  closeLocal.reserves[0].saved = 0;
+  closeLocal.reserveOps.push({ id: 'wL', reserveId: 'r1', amount: 1000, type: 'withdraw', date: '2026-10-05', createdAt: 1000 });
+  var closeRemote = JSON.parse(JSON.stringify(closeBase));
+  closeRemote.reserves[0].saved = 0;
+  closeRemote.reserves[0].deleted = true;
+  closeRemote.reserveOps.push({ id: 'wR', reserveId: 'r1', amount: 1000, type: 'withdraw', date: '2026-10-05', createdAt: 2000 });
+  var closeMerged = cloudSandbox.window.kopeykaCloud.threeWay(closeBase, closeLocal, closeRemote);
+  var withdrawSum = 0;
+  (closeMerged.reserveOps || []).forEach(function (o) {
+    if (o && !o.deleted && o.type === 'withdraw') withdrawSum += o.amount;
+  });
+  assert.strictEqual(withdrawSum, 1000, 'two phones withdrawing one reserve must not return cash twice, got ' + withdrawSum);
+  assert.strictEqual(cloudSandbox.window.kopeykaCloud.cashAtMonth(closeMerged, '2026-10'), 10000, 'closing the same reserve on two phones stays at opening cash');
+  var negCash = cloudSandbox.window.kopeykaCloud.cashAtMonth({
+    settings: { openingBalance: 1000, month: '2026-10' },
+    income: [], expenses: [{ id: 'ne', amount: -500, date: '2026-10-01' }],
+    reserves: [], debts: [], reserveOps: [], obligations: [], obligationPays: []
+  }, '2026-10');
+  assert.strictEqual(negCash, 1000, 'cloud cash ignores a negative expense');
 })();
 
 assert.ok(bakSrc.indexOf('function snapTimeMs') >= 0, 'emergency rank uses parsed timestamps');
@@ -856,7 +893,7 @@ assert.ok(manifestXml.indexOf('android:allowBackup="false"') >= 0, 'android auto
 assert.ok(updJava.indexOf('if (notifyUpdate(context, msg))') >= 0, 'notified_code only after successful push');
 assert.ok(updJava.indexOf('if (!can) return false') >= 0, 'no notify permission must retry later');
 assert.ok(bridgeJava.indexOf('pubMod > privMod') >= 0, 'backup read prefers newer Downloads copy');
-assert.ok(mainJava.indexOf('FinApp/4.13.27') >= 0, 'native UA matches release');
+assert.ok(mainJava.indexOf('FinApp/4.13.28') >= 0, 'native UA matches release');
 assert.ok(cloudSrc.indexOf('trustPreAnchorCash') >= 0, 'cloud apply trusts folded opening');
 assert.ok(appSrc.indexOf('function rebalancePreAnchorCash') >= 0, 'past-month edits move the cash anchor');
 assert.ok(appSrc.indexOf('function trustPreAnchorCash') >= 0, 'import/undo/fold do not double-count anchor');
@@ -1135,6 +1172,31 @@ assert.ok(appSrc.indexOf("if(e.category==='Долг'||e.category==='Обязат
   assert.strictEqual(catOf('Кафе'), 'Продукты', 'old cafe rows still count as food');
   assert.strictEqual(catOf('Проезд'), 'Транспорт');
   assert.strictEqual(catOf('Долг'), 'Долг', 'debt is not a budget alias');
+  assert.strictEqual(catOf('Хозтовары'), 'Прочее', 'old household rows count toward the misc limit');
+  var capOb = appSandbox.finCapObligationAmount;
+  assert.strictEqual(typeof capOb, 'function', 'lowering a bill refunds the overpay');
+  var bill = {
+    obligations: [{ id: 'ob1', name: 'Аренда', amount: 1000, day: 10, active: true }],
+    obligationPays: [{ id: 'p1', obligId: 'ob1', month: '2026-10', amount: 5000, date: '2026-10-10' }],
+    expenses: [{ id: 'e1', obligId: 'ob1', obligMonth: '2026-10', amount: 5000, category: 'Обязательные', date: '2026-10-10' }]
+  };
+  capOb(bill, bill.obligations[0]);
+  assert.strictEqual(bill.expenses[0].amount, 1000, 'bill cut returns the extra expense to cash');
+  assert.strictEqual(bill.obligationPays[0].amount, 1000, 'bill cut keeps the paid mark inside the new amount');
+  var sepBill = {
+    obligations: [{ id: 'ob1', amount: 2000, day: 5, active: true }],
+    obligationPays: [
+      { id: 'p9', obligId: 'ob1', month: '2026-09', amount: 2000, date: '2026-09-05' },
+      { id: 'p10', obligId: 'ob1', month: '2026-10', amount: 2000, date: '2026-10-05' }
+    ],
+    expenses: [
+      { id: 'e9', obligId: 'ob1', obligMonth: '2026-09', amount: 2000, category: 'Обязательные', date: '2026-09-05' },
+      { id: 'e10', obligId: 'ob1', obligMonth: '2026-10', amount: 2000, category: 'Обязательные', date: '2026-10-05' }
+    ]
+  };
+  capOb(sepBill, sepBill.obligations[0]);
+  assert.strictEqual(sepBill.expenses[0].amount, 2000, 'a lower-or-equal bill does not touch another month');
+  assert.strictEqual(sepBill.expenses[1].amount, 2000, 'october payment stays when the bill still covers it');
   var dropDep = {
     reserves: [{ id: 'r1', saved: 600 }],
     reserveOps: [

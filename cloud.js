@@ -1,4 +1,4 @@
-/* cloud.js v31 — same-period savings use the fuller spend; one bill is not charged twice */
+/* cloud.js v32 — reserve withdraws cannot exceed deposits; one bill is not charged twice */
 (function(){
 'use strict';
 const URL='https://cqslrfphsjllhltsvvuq.supabase.co';
@@ -223,9 +223,10 @@ function aliveRow(x){return !!(x&&!x.deleted);}
 function monthOfDate(d){return String(d||'').slice(0,7);}
 function monthDelta(s,m){
   var inc=0,exp=0,dep=0,wd=0;
-  (s.income||[]).forEach(function(x){if(!aliveRow(x))return;if(monthOfDate(x.date)===m)inc+=num0(x.amount);});
-  (s.expenses||[]).forEach(function(x){if(!aliveRow(x))return;if(monthOfDate(x.date)===m)exp+=num0(x.amount);});
-  (s.reserveOps||[]).forEach(function(x){if(!aliveRow(x))return;if(monthOfDate(x.date)!==m)return;var a=num0(x.amount);if(x.type==='deposit')dep+=a;else if(x.type==='withdraw')wd+=a;});
+  function money0(v){var x=num0(v);return x>0?x:0;}
+  (s.income||[]).forEach(function(x){if(!aliveRow(x))return;if(monthOfDate(x.date)===m)inc+=money0(x.amount);});
+  (s.expenses||[]).forEach(function(x){if(!aliveRow(x))return;if(monthOfDate(x.date)===m)exp+=money0(x.amount);});
+  (s.reserveOps||[]).forEach(function(x){if(!aliveRow(x))return;if(monthOfDate(x.date)!==m)return;var a=money0(x.amount);if(x.type==='deposit')dep+=a;else if(x.type==='withdraw')wd+=a;});
   return inc-exp-dep+wd;
 }
 function impliedOpeningAt(state,targetMonth){
@@ -346,7 +347,9 @@ function bookOfReserve(state, id){
   var row=null;
   (state.reserves||[]).forEach(function(r){if(r&&r.id===id&&!r.deleted)row=r;});
   if(!row)return null;
-  var book=num0(row.saved)-reserveNet(state.reserveOps, id);
+  var net=reserveNet(state.reserveOps, id);
+  if(net<0)net=0;
+  var book=num0(row.saved)-net;
   if(book<0)book=0;
   return book;
 }
@@ -388,6 +391,20 @@ function billMonthKey(row){
   var pm=String(row&&(row.obligMonth||row.month||row.date)||'').slice(0,7);
   return /^\d{4}-\d{2}$/.test(pm)?pm:'';
 }
+function capReserveWithdraws(out){
+  var ids={};
+  (out.reserveOps||[]).forEach(function(o){if(o&&o.reserveId)ids[o.reserveId]=1;});
+  Object.keys(ids).forEach(function(id){
+    var net=reserveNet(out.reserveOps, id);
+    if(net>=0)return;
+    var rows=[];
+    (out.reserveOps||[]).forEach(function(o){
+      if(!o||o.deleted||o.reserveId!==id||o.type!=='withdraw')return;
+      rows.push(o);
+    });
+    shrinkMoneyRows(out, rows, -net, 'reserveOps');
+  });
+}
 function capObligationBills(out){
   (out.obligations||[]).forEach(function(ob){
     if(!ob||ob.deleted||!ob.id)return;
@@ -423,6 +440,7 @@ function capObligationBills(out){
 function reconcileLinkedMoney(out, local, remote, base){
   try{
     capObligationBills(out);
+    capReserveWithdraws(out);
     (out.debts||[]).forEach(function(d){
       if(!d||d.deleted||!d.id)return;
       var book=pick3num(bookOfDebt(base,d.id), bookOfDebt(local,d.id), bookOfDebt(remote,d.id));

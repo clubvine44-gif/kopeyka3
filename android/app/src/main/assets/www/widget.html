@@ -44,9 +44,10 @@ a.open{display:block;text-align:center;margin-top:10px;color:#E5A75E;font-size:1
   function nextMonth(ym){var p=String(ym||'').split('-').map(Number);if(p.length<2||!p[0]||!p[1])return ym;var y=p[0],m=p[1]+1;if(m>12){m=1;y++;}return y+'-'+String(m).padStart(2,'0');}
   function monthDelta(st,m){
     var inc=0,exp=0,dep=0,wd=0;
-    (st.income||[]).forEach(function(i){if(!alive(i))return;if(monthOf(i.date)===m)inc+=Math.round(Number(i.amount||0)||0);});
-    (st.expenses||[]).forEach(function(e){if(!alive(e))return;if(monthOf(e.date)===m)exp+=Math.round(Number(e.amount||0)||0);});
-    (st.reserveOps||[]).forEach(function(o){if(!alive(o))return;if(monthOf(o.date)!==m)return;var a=Math.round(Number(o.amount||0)||0);if(o.type==='deposit')dep+=a;else if(o.type==='withdraw')wd+=a;});
+    function money(v){var x=Math.round(Number(v)||0);return x>0?x:0;}
+    (st.income||[]).forEach(function(i){if(!alive(i))return;if(monthOf(i.date)===m)inc+=money(i.amount);});
+    (st.expenses||[]).forEach(function(e){if(!alive(e))return;if(monthOf(e.date)===m)exp+=money(e.amount);});
+    (st.reserveOps||[]).forEach(function(o){if(!alive(o))return;if(monthOf(o.date)!==m)return;var a=money(o.amount);if(o.type==='deposit')dep+=a;else if(o.type==='withdraw')wd+=a;});
     return {inc:inc,exp:exp,dep:dep,wd:wd,delta:inc-exp-dep+wd};
   }
   function openingFor(st, target){

@@ -10,6 +10,7 @@ function canonCat(c){
 }
 var ANCHOR='2026-08-17',CYCLE=['day','day','night','night','off','off'],MONTHS=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 function n(v){var x=Number(v);return isFinite(x)&&x===x?Math.round(x):0;}
+function pos(v){var x=n(v);return x>0?x:0;}
 function state(){return window.STATE&&typeof window.STATE==='object'?window.STATE:{};}
 function today(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function monthOf(d){return String(d||'').slice(0,7);}
@@ -18,7 +19,7 @@ function next(m){var p=String(m).split('-').map(Number),y=p[0],x=p[1]+1;if(x>12)
 function prev(m){var p=String(m).split('-').map(Number),y=p[0],x=p[1]-1;if(x<1){x=12;y--;}return y+'-'+String(x).padStart(2,'0');}
 function cmpMonth(a,b){return String(a||'').localeCompare(String(b||''));}
 function alive(x){return !!(x&&!x.deleted);}
-function monthOps(m){var s=state(),inc=0,exp=0,dep=0,wd=0;(s.income||[]).forEach(function(x){if(!alive(x))return;if(monthOf(x.date)===m)inc+=n(x.amount);});(s.expenses||[]).forEach(function(x){if(!alive(x))return;if(monthOf(x.date)===m)exp+=n(x.amount);});(s.reserveOps||[]).forEach(function(x){if(!alive(x))return;if(monthOf(x.date)!==m)return;var a=n(x.amount);if(x.type==='deposit')dep+=a;else if(x.type==='withdraw')wd+=a;});return{income:inc,expenses:exp,deposits:dep,withdrawals:wd,delta:inc-exp-dep+wd};}
+function monthOps(m){var s=state(),inc=0,exp=0,dep=0,wd=0;(s.income||[]).forEach(function(x){if(!alive(x))return;if(monthOf(x.date)===m)inc+=pos(x.amount);});(s.expenses||[]).forEach(function(x){if(!alive(x))return;if(monthOf(x.date)===m)exp+=pos(x.amount);});(s.reserveOps||[]).forEach(function(x){if(!alive(x))return;if(monthOf(x.date)!==m)return;var a=pos(x.amount);if(x.type==='deposit')dep+=a;else if(x.type==='withdraw')wd+=a;});return{income:inc,expenses:exp,deposits:dep,withdrawals:wd,delta:inc-exp-dep+wd};}
 function selectedMonth(){if(window.__kopeykaViewMonth)return window.__kopeykaViewMonth;var el=document.querySelector('.month-title'),parts=String(el&&el.textContent||'').trim().split(/\s+/),i=MONTHS.indexOf(parts[0]),y=parts[1];if(i>=0&&/^\d{4}$/.test(y))return y+'-'+String(i+1).padStart(2,'0');var s=state();return s.settings&&s.settings.month||today().slice(0,7);}
 function opening(m){var s=state(),anchor=s.settings&&s.settings.month||today().slice(0,7),open=n(s.settings&&s.settings.openingBalance),guard=0;if(m===anchor)return open;if(m>anchor){for(var x=anchor;x!==m&&guard++<240;x=next(x))open+=monthOps(x).delta;return open;}for(var y=anchor;y!==m&&guard++<240;){y=prev(y);open-=monthOps(y).delta;}return open;}
 function debtActiveInMonth(d,month){
