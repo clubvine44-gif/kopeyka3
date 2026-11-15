@@ -1,7 +1,7 @@
 {
-  "versionCode": 194,
-  "versionName": "4.13.27",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.27/Fin.apk",
-  "sha256": "6ebf21e80ab8b6344fba4ae5d2b42b0ae959f57a389489dcb6f11398583c7a87",
-  "notes": "4.13.27 — удобнее управление, оформление на малых экранах и офлайн-режим; данные сохранены (versionCode 194)"
+  "versionCode": 195,
+  "versionName": "4.13.28",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.28/Fin.apk",
+  "sha256": "492bea47cba036a4ac57f1d1202939dff8aee8e06dc4e91c46eea236666d5a36",
+  "notes": "4.13.28 — снятие резерва с двух телефонов не удваивается, переплата по счёту возвращается в кассу, данные сохранены (versionCode 195)"
 }
