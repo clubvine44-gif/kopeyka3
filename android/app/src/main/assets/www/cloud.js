@@ -1,4 +1,4 @@
-/* cloud.js v32 — reserve withdraws cannot exceed deposits; one bill is not charged twice */
+/* cloud.js v33 — negative amounts do not invent paid, savings or available cash */
 (function(){
 'use strict';
 const URL='https://cqslrfphsjllhltsvvuq.supabase.co';
@@ -48,6 +48,7 @@ function mergeArray(base,local,remote,k,conflicts,bd,ld,rd){var bm=mapById(base)
 });Object.keys(deleted).forEach(function(id){if(!lm[id]&&!rm[id]&&!bm[id]&&!ld[id]&&!rd[id]&&!bd[id])delete deleted[id];});return{items:out,deleted:deleted};}
 function mergeObject(base,local,remote,kind,conflicts){var out={},keys={};[base,local,remote].forEach(function(o){if(o&&typeof o==='object')Object.keys(o).forEach(function(k){keys[k]=1;});});Object.keys(keys).forEach(function(k){var b=base&&base[k],l=local&&local[k],r=remote&&remote[k],lc=!same(l,b),rc=!same(r,b);if(lc&&!rc)out[k]=l;else if(!lc&&rc)out[k]=r;else if(lc&&rc){if(same(l,r))out[k]=l;else{out[k]=l;conflict(conflicts,kind,'state',k,l,r);}}else if(r!==undefined)out[k]=r;else if(l!==undefined)out[k]=l;});return out;}
 function num0(v){var x=Number(v);return isFinite(x)?Math.round(x):0;}
+function pos0(v){var x=num0(v);return x>0?x:0;}
 function mergeNumericMap(base,local,remote){
   var out={},keys={};
   [base,local,remote].forEach(function(o){if(o&&typeof o==='object'&&!Array.isArray(o))Object.keys(o).forEach(function(k){keys[k]=1;});});
@@ -307,7 +308,7 @@ function linkedDebtPaid(expenses, debts, debtId){
   var s=0;
   (expenses||[]).forEach(function(e){
     if(!e||e.deleted)return;
-    if(debtIdForExpense(e, debts)===debtId)s+=num0(e.amount);
+    if(debtIdForExpense(e, debts)===debtId)s+=pos0(e.amount);
   });
   return s;
 }
@@ -315,7 +316,7 @@ function reserveNet(ops, id){
   var s=0;
   (ops||[]).forEach(function(o){
     if(!o||o.deleted||o.reserveId!==id)return;
-    var a=num0(o.amount);
+    var a=pos0(o.amount);
     if(o.type==='withdraw')s-=a; else if(o.type==='deposit')s+=a;
   });
   return s;
@@ -429,8 +430,8 @@ function capObligationBills(out){
     Object.keys(months).forEach(function(m){
       var plist=pays[m]||[], elist=exps[m]||[];
       var ps=0, es=0;
-      plist.forEach(function(p){ps+=num0(p.amount);});
-      elist.forEach(function(e){es+=num0(e.amount);});
+      plist.forEach(function(p){ps+=pos0(p.amount);});
+      elist.forEach(function(e){es+=pos0(e.amount);});
       if(ps>cap)shrinkMoneyRows(out, plist, ps-cap, 'obligationPays');
       if(es>cap)shrinkMoneyRows(out, elist, es-cap, 'expenses');
     });

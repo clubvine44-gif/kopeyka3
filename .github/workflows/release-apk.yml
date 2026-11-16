@@ -142,7 +142,7 @@ jobs:
           "$BUILD_TOOLS/apksigner" verify --verbose Fin.apk
           unzip -p Fin.apk assets/www/index.html | grep -q 'meal-plan.js' || { echo 'meal-plan not in index'; exit 1; }
           unzip -p Fin.apk assets/www/index.html | grep -q 'fin-ux-20261109' || { echo 'UX update missing from APK'; exit 1; }
-          unzip -p Fin.apk assets/www/sw.js | grep -q 'kopeyka3-v105' || { echo 'new offline cache missing'; exit 1; }
+          unzip -p Fin.apk assets/www/sw.js | grep -q 'kopeyka3-v106' || { echo 'new offline cache missing'; exit 1; }
           unzip -l Fin.apk | grep -E 'assets/www/(fin-plan|meal-plan)\.js'
           sha256sum Fin.apk | tee Fin.apk.sha256
           ls -lh Fin.apk
@@ -156,7 +156,7 @@ jobs:
           gh release delete "$TAG" --yes 2>/dev/null || true
           timeout 120 gh release create "$TAG" Fin.apk Fin.apk.sha256 \
             --title "Финн ${RELEASE_VERSION_NAME}" \
-            --notes "Финна ${RELEASE_VERSION_NAME} (versionCode ${RELEASE_VERSION_CODE}). Два телефона больше не возвращают в кассу одно и то же снятие с резерва. Если обязательный платёж стал меньше уже оплаченного, переплата возвращается в кассу. Отрицательная сумма операции не рисует деньги. Финансовые данные не сбрасываются." \
+            --notes "Финна ${RELEASE_VERSION_NAME} (versionCode ${RELEASE_VERSION_CODE}). Отрицательная сумма больше не уменьшает траты по категориям и не раздувает «Доступно». «Подстроить кассу» ставит сумму, которая на экране, даже в другом месяце. День зарплаты 31-го в коротком месяце — последний день. Финансовые данные не сбрасываются." \
             --repo "${{ github.repository }}"
       - name: Update public update manifest
         run: |
@@ -171,7 +171,7 @@ jobs:
               'versionName':vn,
               'apkUrl':f'https://github.com/clubvine44-gif/kopeyka3/releases/download/v{vn}/Fin.apk',
               'sha256':sha,
-              'notes':f'{vn} — снятие резерва с двух телефонов не удваивается, переплата по счёту возвращается в кассу, данные сохранены (versionCode {vc})'
+              'notes':f'{vn} — отрицательные суммы не рисуют экономию и «Доступно», подстройка кассы попадает в месяц на экране, короткий месяц зарплаты считается верно (versionCode {vc})'
           },ensure_ascii=False,indent=2)+'\n'
           Path('update.json').write_text(body)
           www=Path('android/app/src/main/assets/www/update.json')

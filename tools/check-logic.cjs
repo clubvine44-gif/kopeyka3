@@ -89,6 +89,30 @@ var negEng = loadEngine({
   obligations: [], obligationPays: []
 });
 assert.strictEqual(negEng.month('2026-10').cash, 1000, 'negative operation amounts must not mint cash');
+var negCat = loadEngine({
+  settings: { openingBalance: 10000, month: '2026-10' },
+  income: [],
+  expenses: [
+    { id: 'food', amount: 2000, date: '2026-10-02', category: 'Продукты' },
+    { id: 'neg', amount: -5000, date: '2026-10-03', category: 'Продукты' },
+    { id: 'fut', amount: -4000, category: 'Долг', note: 'Папа', date: '2026-11-02', debtId: 'd1' }
+  ],
+  reserves: [],
+  debts: [{ id: 'd1', name: 'Папа', total: 8000, paid: 3000 }],
+  reserveOps: [],
+  obligations: [{ id: 'ob1', amount: 2000, day: 10, active: true }],
+  obligationPays: [
+    { id: 'p1', obligId: 'ob1', month: '2026-10', amount: 500 },
+    { id: 'p2', obligId: 'ob1', month: '2026-10', amount: -9000 }
+  ]
+});
+var octNeg = negCat.month('2026-10');
+assert.strictEqual(octNeg.cash, 8000, 'negative expense still ignored by cash');
+assert.strictEqual(octNeg.expenses, 2000, 'negative expense is not a refund');
+var foodRow = (octNeg.expenseByCategory || []).filter(function (c) { return c.name === 'Продукты'; })[0];
+assert.ok(foodRow && foodRow.amount === 2000, 'negative spend must not shrink the food total or mint leftover');
+assert.strictEqual(octNeg.debtRemaining, 5000, 'negative future debt payment must not shrink the debt, got ' + octNeg.debtRemaining);
+assert.strictEqual(octNeg.obligationsRemaining, 1500, 'negative obligation pay must not change the bill, got ' + octNeg.obligationsRemaining);
 
 var oct = sandbox.window.kopeykaEngine.month('2026-10');
 assert.strictEqual(oct.openingBalance, c.cash, 'next month opening is previous cash');
@@ -202,6 +226,7 @@ assert.strictEqual(closed2.cash, 10000, 'withdraw offsets deposit after reserve 
   var sandbox = {
     STATE: null,
     num: function (v) { var x = Number(v); return isFinite(x) ? Math.round(x) : 0; },
+    cashAmt: function (v) { var x = Number(v); x = isFinite(x) ? Math.round(x) : 0; return x > 0 ? x : 0; },
     today: function () { return '2026-10-19'; },
     cmpMonth: function (a, b) { return String(a || '').localeCompare(String(b || '')); }
   };
@@ -346,8 +371,8 @@ assert.ok(appSrc.indexOf('function flushLiveSave') >= 0, 'pagehide flushes live 
 assert.ok(storeSrc.indexOf('FinBridge.setInstallId') >= 0, 'install id mirrored to native prefs');
 
 var gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle'), 'utf8');
-assert.ok(/versionCode\s+195/.test(gradle), 'versionCode 195');
-assert.ok(/versionName\s+"4\.13\.28"/.test(gradle), 'versionName 4.13.28');
+assert.ok(/versionCode\s+196/.test(gradle), 'versionCode 196');
+assert.ok(/versionName\s+"4\.13\.29"/.test(gradle), 'versionName 4.13.29');
 
 var mainJava = fs.readFileSync(path.join(ROOT, 'android/app/src/main/java/app/fin/kopeyka/MainActivity.java'), 'utf8');
 assert.ok(mainJava.indexOf('isTrustedApkUrl') >= 0, 'apk url allowlisted');
@@ -865,6 +890,19 @@ assert.strictEqual(Number(mergedMeal2.mealPlan.lastPlan.total), 7777, 'newer rem
     reserves: [], debts: [], reserveOps: [], obligations: [], obligationPays: []
   }, '2026-10');
   assert.strictEqual(negCash, 1000, 'cloud cash ignores a negative expense');
+  var negDebt = {
+    settings: { openingBalance: 10000, month: '2026-10' },
+    income: [],
+    expenses: [{ id: 'bad', amount: -4000, category: 'Долг', note: 'Папа', date: '2026-10-02', debtId: 'd1' }],
+    reserves: [{ id: 'r1', name: 'Отпуск', saved: 1000, target: 5000 }],
+    debts: [{ id: 'd1', name: 'Папа', total: 10000, paid: 1000 }],
+    reserveOps: [{ id: 'nd', reserveId: 'r1', amount: -800, type: 'deposit', date: '2026-10-03' }],
+    obligations: [], obligationPays: []
+  };
+  var negMerged = cloudSandbox.window.kopeykaCloud.threeWay(negDebt, negDebt, negDebt);
+  assert.strictEqual(negMerged.debts[0].paid, 1000, 'negative debt expense must not raise paid, got ' + negMerged.debts[0].paid);
+  assert.strictEqual(negMerged.reserves[0].saved, 1000, 'negative reserve deposit must not shrink saved, got ' + negMerged.reserves[0].saved);
+  assert.strictEqual(cloudSandbox.window.kopeykaCloud.cashAtMonth(negMerged, '2026-10'), 10000, 'negative rows still do not move cloud cash');
 })();
 
 assert.ok(bakSrc.indexOf('function snapTimeMs') >= 0, 'emergency rank uses parsed timestamps');
@@ -881,19 +919,19 @@ var swSrc = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
 assert.ok(swSrc.includes("event.request.mode==='navigate'"), 'offline fallback only serves HTML to navigation requests');
 assert.ok(swSrc.includes("Response.error()"), 'missing offline assets fail closed instead of masquerading as HTML');
 
-assert.ok(swSrc.indexOf("CACHE='kopeyka3-v105'") >= 0, 'sw cache v105');
+assert.ok(swSrc.indexOf("CACHE='kopeyka3-v106'") >= 0, 'sw cache v106');
 assert.ok(swSrc.indexOf("profile.js?v=") >= 0, 'sw precaches profile.js');
-assert.ok(idx.indexOf("profile.js?v=2026110701") >= 0, 'index loads profile with cache bust');
-assert.ok(idx.indexOf("sw.js?v=105") >= 0, 'index registers sw v105');
-assert.ok(idx.indexOf("onboard.js?v=2026110701") >= 0, 'index onboard cache aligned');
-assert.ok(swSrc.indexOf("onboard.js?v=") >= 0 && swSrc.indexOf("2026110701") >= 0, 'sw onboard cache aligned');
-assert.ok(idx.indexOf("finn3d.js?v=2026110701") >= 0, 'index finn3d cache aligned');
+assert.ok(idx.indexOf("profile.js?v=2026111701") >= 0, 'index loads profile with cache bust');
+assert.ok(idx.indexOf("sw.js?v=106") >= 0, 'index registers sw v106');
+assert.ok(idx.indexOf("onboard.js?v=2026111701") >= 0, 'index onboard cache aligned');
+assert.ok(swSrc.indexOf("onboard.js?v=") >= 0 && swSrc.indexOf("2026111701") >= 0, 'sw onboard cache aligned');
+assert.ok(idx.indexOf("finn3d.js?v=2026111701") >= 0, 'index finn3d cache aligned');
 assert.ok(cloudSrc.indexOf('escHtml(currentUser.email') >= 0, 'cloud email escaped in auth UI');
 assert.ok(manifestXml.indexOf('android:allowBackup="false"') >= 0, 'android auto-backup off so cipher is not restored without key');
 assert.ok(updJava.indexOf('if (notifyUpdate(context, msg))') >= 0, 'notified_code only after successful push');
 assert.ok(updJava.indexOf('if (!can) return false') >= 0, 'no notify permission must retry later');
 assert.ok(bridgeJava.indexOf('pubMod > privMod') >= 0, 'backup read prefers newer Downloads copy');
-assert.ok(mainJava.indexOf('FinApp/4.13.28') >= 0, 'native UA matches release');
+assert.ok(mainJava.indexOf('FinApp/4.13.29') >= 0, 'native UA matches release');
 assert.ok(cloudSrc.indexOf('trustPreAnchorCash') >= 0, 'cloud apply trusts folded opening');
 assert.ok(appSrc.indexOf('function rebalancePreAnchorCash') >= 0, 'past-month edits move the cash anchor');
 assert.ok(appSrc.indexOf('function trustPreAnchorCash') >= 0, 'import/undo/fold do not double-count anchor');
@@ -963,7 +1001,7 @@ assert.ok(appSrc.indexOf('if(d<day){m+=1') < 0, 'push reminder must not hide an 
 assert.ok(appSrc.indexOf('if(d<day){dueM+=1') < 0, 'inbox must not hide an overdue bill as next month');
 assert.ok(appSrc.indexOf(":'unknown'") >= 0, 'norm must not turn an unknown reserve row into a deposit');
 assert.ok(appSrc.indexOf('месяц ещё не начался') >= 0, 'future month forecast does not burn a whole limit');
-assert.ok(appSrc.indexOf("if(e.category==='Долг'||e.category==='Обязательные')return;spent+=num(e.amount)") >= 0, 'overspend alert ignores debt and bills');
+assert.ok(appSrc.indexOf("if(e.category==='Долг'||e.category==='Обязательные')return;spent+=cashAmt(e.amount)") >= 0, 'overspend alert ignores debt and bills');
   var heldUnknown = appSandbox.reserveCashHeld({
     reserveOps: [
       { id: 'd', reserveId: 'r1', type: 'deposit', amount: 400 },
@@ -1388,6 +1426,70 @@ assert.ok(appSrc.indexOf("if(e.category==='Долг'||e.category==='Обязат
   assert.strictEqual(memF.finna_backup_slot_1, slot1, 'hide with no cash change must not rotate slot 1');
 })();
 
+(function shownCashAndPayday(){
+  var appSrc = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+  var appSandbox = {
+    window: {},
+    document: {
+      readyState: 'loading',
+      addEventListener: function () {},
+      getElementById: function () { return null; },
+      querySelector: function () { return null; },
+      querySelectorAll: function () { return []; }
+    },
+    navigator: { onLine: true, userAgent: 'test', hardwareConcurrency: 8, deviceMemory: 8 },
+    localStorage: {
+      _d: {},
+      getItem: function (k) { return this._d[k] || null; },
+      setItem: function (k, v) { this._d[k] = String(v); },
+      removeItem: function (k) { delete this._d[k]; }
+    },
+    console: console,
+    setTimeout: function () {},
+    clearTimeout: function () {},
+    requestAnimationFrame: function () {},
+    history: { pushState: function () {} },
+    Date: Date, JSON: JSON, Object: Object, Array: Array, Math: Math, Number: Number,
+    String: String, Error: Error, Promise: Promise, isFinite: isFinite, parseInt: parseInt, parseFloat: parseFloat
+  };
+  appSandbox.window = appSandbox;
+  appSandbox.global = appSandbox;
+  appSandbox.window.localStorage = appSandbox.localStorage;
+  appSandbox.window.document = appSandbox.document;
+  appSandbox.window.navigator = appSandbox.navigator;
+  appSandbox.window.addEventListener = function () {};
+  appSandbox.window.dispatchEvent = function () {};
+  appSandbox.window.history = appSandbox.history;
+  vm.runInNewContext(appSrc, appSandbox, { filename: 'app-cash-payday.js' });
+  assert.strictEqual(appSandbox.daysUntilPayday(31, '2026-02-28'), 0, 'payday 31 in February is the 28th');
+  assert.strictEqual(appSandbox.daysUntilPayday(31, '2026-02-27'), 1, 'Feb 27 is the day before a clamped payday');
+  assert.strictEqual(appSandbox.daysUntilPayday(31, '2026-04-30'), 0, 'payday 31 in April is the 30th');
+  assert.strictEqual(appSandbox.daysUntilPayday(2, '2026-03-30'), 3, 'next payday counts the real length of the month');
+  assert.strictEqual(appSandbox.daysUntilPayday(15, '2026-10-15'), 0);
+  assert.strictEqual(appSandbox.daysUntilPayday(15, '2026-10-10'), 5);
+  appSandbox.STATE = {
+    settings: { openingBalance: 10000, month: '2026-11', paydayDay: null, limitHorizon: 'month', budgetLimits: { 'Продукты': 10000 }, budgetSavings: {}, periodReports: [] },
+    income: [{ id: 'i', amount: 2000, date: '2026-10-05' }],
+    expenses: [
+      { id: 'e', amount: 500, date: '2026-11-02', category: 'Продукты' },
+      { id: 'neg', amount: -9000, date: '2026-10-20', category: 'Продукты' },
+      { id: 'fut', amount: -4000, category: 'Долг', note: 'Папа', date: '2026-11-02', debtId: 'd1' }
+    ],
+    reserves: [],
+    debts: [{ id: 'd1', name: 'Папа', total: 8000, paid: 3000 }],
+    reserveOps: [],
+    obligations: [{ id: 'ob', name: 'Свет', amount: 2000, day: 10, active: true }],
+    obligationPays: [{ id: 'pneg', obligId: 'ob', month: '2026-10', amount: -500 }]
+  };
+  assert.strictEqual(appSandbox.spentInCatRange('Продукты', '2026-10-01', '2026-10-31'), 0, 'negative october spend must not create a negative category total');
+  var oct = appSandbox.computeForMonth('2026-10');
+  assert.strictEqual(oct.cash, 10000, 'october cash before adjust, got ' + oct.cash);
+  assert.strictEqual(oct.debtLeft, 5000, 'future negative debt payment must not change october debt');
+  assert.strictEqual(oct.obligDue, 2000, 'negative obligation pay must not shrink the bill, got ' + oct.obligDue);
+  appSandbox.adjustOpeningToShownCash(9000, oct.cash);
+  assert.strictEqual(appSandbox.computeForMonth('2026-10').cash, 9000, 'adjusting the cash on screen changes that month');
+  assert.strictEqual(appSandbox.computeForMonth('2026-11').cash, 8500, 'later month moves by the same delta, not reset to the typed number');
+})();
 
 function finish(extra){
   console.log('logic ok', JSON.stringify(Object.assign({
