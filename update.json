@@ -1,7 +1,7 @@
 {
-  "versionCode": 196,
-  "versionName": "4.13.29",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.29/Fin.apk",
-  "sha256": "fd2e7b3db08824cc7d9014bb515ea9189bc13fc8715d09a16f8b15f9dbd6b802",
-  "notes": "4.13.29 — отрицательные суммы не рисуют экономию и «Доступно», подстройка кассы попадает в месяц на экране, короткий месяц зарплаты считается верно (versionCode 196)"
+  "versionCode": 197,
+  "versionName": "4.13.30",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.30/Fin.apk",
+  "sha256": "b2e72c2b97263023b9a86b9f3468c17e0f43e867190779277c984770f396f21d",
+  "notes": "4.13.30 — платёж не перескакивает на другой долг с тем же именем, правка второго долга не возвращает чужие деньги в кассу, отрицательная проводка резерва не двигает накопленное из кассы (versionCode 197)"
 }
