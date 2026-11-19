@@ -290,6 +290,7 @@ function debtIdForExpense(e, debts){
     for(var i=0;i<list.length;i++){
       if(list[i]&&list[i].id===e.debtId&&!list[i].deleted)return list[i].id;
     }
+    return null;
   }
   if(e.category!=='Долг')return null;
   var note=normDebtName(e.note);

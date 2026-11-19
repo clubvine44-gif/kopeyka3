@@ -1386,8 +1386,13 @@ function execute(a){
       var futurePay=0;
       (s.expenses||[]).forEach(function(e){
         if(!e||e.deleted)return;
-        var linked=e.debtId&&e.debtId===d.id;
-        if(!linked&&e.category==='Долг'&&norm(e.note)===norm(d.name))linked=true;
+        var linked=false;
+        if(e.debtId)linked=e.debtId===d.id;
+        else if(e.category==='Долг'&&norm(e.note)===norm(d.name)){
+          var same=0;
+          (s.debts||[]).forEach(function(x){if(x&&!x.deleted&&norm(x.name)===norm(d.name))same++;});
+          linked=same===1;
+        }
         if(!linked)return;
         var em=String(e.date||'').slice(0,7);
         if(/^\d{4}-\d{2}$/.test(em)&&em>today().slice(0,7))futurePay+=n(e.amount);
@@ -1407,7 +1412,7 @@ function execute(a){
       if(typeof window.takeReserve==='function')window.takeReserve(s,r,amt,dateOf(a));
       else{
         var heldW=0;
-        (s.reserveOps||[]).forEach(function(o){if(!o||o.deleted||o.reserveId!==r.id)return;heldW+=o.type==='withdraw'?-n(o.amount):(o.type==='deposit'?n(o.amount):0);});
+        (s.reserveOps||[]).forEach(function(o){if(!o||o.deleted||o.reserveId!==r.id)return;heldW+=o.type==='withdraw'?-Math.max(0,n(o.amount)):(o.type==='deposit'?Math.max(0,n(o.amount)):0);});
         if(heldW<0)heldW=0;
         if(heldW>n(r.saved))heldW=n(r.saved);
         var cashW=Math.min(amt,heldW);

@@ -72,7 +72,7 @@ a.open{display:block;text-align:center;margin-top:10px;color:#E5A75E;font-size:1
     var ops=monthDelta(st,month);
     var open=openingFor(st,month);
     var cash=open+ops.delta;
-    var resT=0;(st.reserves||[]).forEach(function(r){if(!alive(r))return;resT+=Math.round(Number(r.saved||0)||0);});
+    var resT=0;(st.reserves||[]).forEach(function(r){if(!alive(r))return;resT+=Math.max(0,Math.round(Number(r.saved||0)||0));});
     document.getElementById('cash').textContent=fmt(cash);
     document.getElementById('inc').textContent='+'+fmt(ops.inc);
     document.getElementById('exp').textContent='−'+fmt(ops.exp);

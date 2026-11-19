@@ -1,4 +1,4 @@
-(function(){/* v118.31 4.13.29 */'use strict';
+(function(){/* v118.32 4.13.30 */'use strict';
 var KEY='kopeyka3_state_v1',ANCHOR='2026-08-17',CYCLE=['day','day','night','night','off','off'];
 var CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье','Прочее'];
 var BUDGET_CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
@@ -469,12 +469,24 @@ function stampOp(o){if(!o||typeof o!=='object')return o;if(!o.createdAt)o.create
 
 function debtExpenseLinked(e, d, nameHint){
   if(!e||!d)return false;
-  if(e.debtId&&e.debtId===d.id)return true;
+  // Явная связь важнее имени: платёж одного долга не должен трогать другой, даже если названия совпали.
+  if(e.debtId)return e.debtId===d.id;
   if(e.category!=='Долг')return false;
   var note=String(e.note||'').toLowerCase().replace(/ё/g,'е').trim();
   var nm=String(nameHint||d.name||'').toLowerCase().replace(/ё/g,'е').trim();
-  if(!note||!nm)return false;
-  return note===nm;
+  if(!note||!nm||note!==nm)return false;
+  var pool=null;
+  try{pool=STATE&&STATE.debts;}catch(err){pool=null;}
+  if(!pool||!pool.length)return true;
+  var hits=0;
+  for(var i=0;i<pool.length;i++){
+    var x=pool[i];
+    if(!x||x.deleted)continue;
+    var xn=String(x.name||'').toLowerCase().replace(/ё/g,'е').trim();
+    if(xn&&xn===note)hits++;
+    if(hits>1)return false;
+  }
+  return hits===1;
 }
 /** Сводит кассу и расходы к newPaid.
  *  Уменьшение paid → касса растёт (снимаем расходы или добавляем доход-возврат).
@@ -832,7 +844,8 @@ function reserveNetOf(state, reserveId){
   var net=0;
   ((state&&state.reserveOps)||[]).forEach(function(o){
     if(!alive(o)||o.reserveId!==reserveId)return;
-    var a=num(o.amount);
+    var a=cashAmt(o.amount);
+    if(!(a>0))return;
     if(o.type==='withdraw')net-=a;
     else if(o.type==='deposit')net+=a;
   });
@@ -1149,7 +1162,7 @@ function debtPaidThrough(d, month){
   if(eff>tot)eff=tot;
   return eff;
 }
-function computeForMonth(month){month=String(month||today().slice(0,7));var ops=monthOps(month);var open=openingForMonth(month);var cash=open+ops.delta;var resT=0;(STATE.reserves||[]).forEach(function(r){if(!alive(r))return;resT+=num(r.saved);});var debt=0;(STATE.debts||[]).forEach(function(d){if(!debtActiveInMonth(d,month))return;debt+=Math.max(0,num(d.total)-debtPaidThrough(d,month));});var obligDue=0,obligPaid=0;(STATE.obligations||[]).forEach(function(ob){if(!alive(ob)||ob.active===false)return;var paid=0;(STATE.obligationPays||[]).forEach(function(p){if(!alive(p))return;if(p.obligId===ob.id&&finPayHitsMonth(p,month))paid+=cashAmt(p.amount);});obligPaid+=paid;obligDue+=Math.max(0,num(ob.amount)-paid);});var avail=cash-debt-obligDue;var t=today(),p=month.split('-').map(Number);var last=new Date(p[0],p[1],0).getDate();var dayNum=Number(t.slice(8));
+function computeForMonth(month){month=String(month||today().slice(0,7));var ops=monthOps(month);var open=openingForMonth(month);var cash=open+ops.delta;var resT=0;(STATE.reserves||[]).forEach(function(r){if(!alive(r))return;resT+=Math.max(0,num(r.saved));});var debt=0;(STATE.debts||[]).forEach(function(d){if(!debtActiveInMonth(d,month))return;debt+=Math.max(0,num(d.total)-debtPaidThrough(d,month));});var obligDue=0,obligPaid=0;(STATE.obligations||[]).forEach(function(ob){if(!alive(ob)||ob.active===false)return;var paid=0;(STATE.obligationPays||[]).forEach(function(p){if(!alive(p))return;if(p.obligId===ob.id&&finPayHitsMonth(p,month))paid+=cashAmt(p.amount);});obligPaid+=paid;obligDue+=Math.max(0,num(ob.amount)-paid);});var avail=cash-debt-obligDue;var t=today(),p=month.split('-').map(Number);var last=new Date(p[0],p[1],0).getDate();var dayNum=Number(t.slice(8));
 var payday=STATE.settings&&STATE.settings.paydayDay!=null?num(STATE.settings.paydayDay):0;
 var daysToMonthEnd=month===t.slice(0,7)?Math.max(1,last-dayNum+1):last;
 // Календарные дни до даты зарплаты (0 = сегодня день зарплаты)
