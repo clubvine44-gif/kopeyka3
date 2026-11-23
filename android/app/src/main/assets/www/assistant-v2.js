@@ -1395,7 +1395,7 @@ function execute(a){
         }
         if(!linked)return;
         var em=String(e.date||'').slice(0,7);
-        if(/^\d{4}-\d{2}$/.test(em)&&em>today().slice(0,7))futurePay+=n(e.amount);
+        if(/^\d{4}-\d{2}$/.test(em)&&em>today().slice(0,7))futurePay+=Math.max(0,n(e.amount));
       });
       var left=Math.max(0,n(d.total)-n(d.paid));
       if(amt>left)throw Error(futurePay>0?('Осталось '+fmt(left)+' — остальное уже в будущем платеже'):('Осталось '+fmt(left)));
@@ -1459,7 +1459,19 @@ function execute(a){
     }
   }
   else if(t==='change_last'){var target2=a.target||'expense',arr=target2==='income'?s.income:s.expenses;var lastLive=null;if(s.lastOp&&s.lastOp.id&&((target2==='income'&&s.lastOp.kind==='income')||(target2!=='income'&&s.lastOp.kind==='expense'))){lastLive=(arr||[]).find(function(x){return x&&x.id===s.lastOp.id&&!x.deleted;})||null;}if(!lastLive)lastLive=newestAlive(arr);if(!lastLive)throw Error('Нет операции');if(amt<=0)throw Error('Сумма > 0');if(target2!=='income'){try{if(typeof window.finAdjustLinkedExpense==='function'){var bookedAmt=window.finAdjustLinkedExpense(s,lastLive,amt);if(typeof bookedAmt==='number'&&isFinite(bookedAmt))amt=bookedAmt;}}catch(e){}}if(amt<=0)throw Error('Сумма > 0');lastLive.amount=amt;if(a.name)lastLive.note=String(a.name);lastLive.editedAt=new Date().toISOString();}
-  else if(t==='set_opening_balance'){s.settings=s.settings||{};s.settings.openingBalance=amt;}
+  else if(t==='set_opening_balance'){
+    s.settings=s.settings||{};
+    var shownCash=n(s.settings.openingBalance);
+    try{
+      if(typeof window.computeForMonth==='function'){
+        var viewM=window.__kopeykaViewMonth||s.settings.month||today().slice(0,7);
+        var calc=window.computeForMonth(viewM);
+        if(calc&&isFinite(Number(calc.cash)))shownCash=Math.round(Number(calc.cash));
+      }
+    }catch(eCash){}
+    if(typeof window.openingBalanceForShownCash==='function')s.settings.openingBalance=window.openingBalanceForShownCash(s.settings.openingBalance, shownCash, amt);
+    else s.settings.openingBalance=n(s.settings.openingBalance)+(amt-shownCash);
+  }
   else if(t==='set_day_rate'){s.settings=s.settings||{};s.settings.dayRate=amt;}
   else if(t==='set_night_rate'){s.settings=s.settings||{};s.settings.nightRate=amt;}
   else if(t==='set_limit_horizon'){

@@ -1,4 +1,4 @@
-(function(){/* v118.32 4.13.30 */'use strict';
+(function(){/* v118.33 4.13.31 */'use strict';
 var KEY='kopeyka3_state_v1',ANCHOR='2026-08-17',CYCLE=['day','day','night','night','off','off'];
 var CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье','Прочее'];
 var BUDGET_CATS=['Продукты','Одежда','Транспорт','Карманные расходы','Аренда и коммунальные','Связь и подписки','Гигиена','Здоровье'];
@@ -352,8 +352,13 @@ function adjustOpeningToShownCash(want, shownCash){
   STATE.settings.openingBalance=num(STATE.settings.openingBalance)+diff;
   return num(STATE.settings.openingBalance);
 }
+/** Якорь, при котором касса на экране становится want. Голос и кнопка «Подстроить кассу» считают одинаково. */
+function openingBalanceForShownCash(openingNow, shownCash, want){
+  return num(openingNow)+(num(want)-num(shownCash));
+}
 window.daysUntilPayday=daysUntilPayday;
 window.adjustOpeningToShownCash=adjustOpeningToShownCash;
+window.openingBalanceForShownCash=openingBalanceForShownCash;
 function sane(v){return num(v);}
 function esc(s){return String(s==null?'':s).replace(/&/g,'&'+'amp;').replace(/</g,'&'+'lt;').replace(/>/g,'&'+'gt;').replace(/\"/g,'&'+'quot;').replace(/'/g,'&#39;');}
 function pd(s){var p=String(s||'').split('-').map(Number);return new Date(p[0],(p[1]||1)-1,p[2]||1);}
@@ -933,7 +938,8 @@ function adjustReserveOp(state, op, nextAmount){
       var room=0;
       (state.reserveOps||[]).forEach(function(o){
         if(!alive(o)||o===op||o.reserveId!==op.reserveId)return;
-        var a=num(o.amount);
+        var a=cashAmt(o.amount);
+        if(!(a>0))return;
         if(o.type==='withdraw')room-=a;
         else if(o.type==='deposit')room+=a;
       });

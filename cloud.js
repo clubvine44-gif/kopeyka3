@@ -1,4 +1,4 @@
-/* cloud.js v33 — negative amounts do not invent paid, savings or available cash */
+/* cloud.js v34 — negative debt rows cannot hide an overpayment from the till cap */
 (function(){
 'use strict';
 const URL='https://cqslrfphsjllhltsvvuq.supabase.co';
@@ -453,7 +453,7 @@ function reconcileLinkedMoney(out, local, remote, base){
         if(debtIdForExpense(e, out.debts)===d.id)cashRows.push(e);
       });
       var cashSum=0;
-      cashRows.forEach(function(e){cashSum+=num0(e.amount);});
+      cashRows.forEach(function(e){cashSum+=pos0(e.amount);});
       if(tot>0){
         var allowed=Math.max(0, tot-book);
         if(cashSum>allowed)shrinkMoneyRows(out, cashRows, cashSum-allowed, 'expenses');
