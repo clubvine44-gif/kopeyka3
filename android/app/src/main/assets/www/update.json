@@ -1,7 +1,7 @@
 {
-  "versionCode": 197,
-  "versionName": "4.13.30",
-  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.30/Fin.apk",
-  "sha256": "b2e72c2b97263023b9a86b9f3468c17e0f43e867190779277c984770f396f21d",
-  "notes": "4.13.30 — платёж не перескакивает на другой долг с тем же именем, правка второго долга не возвращает чужие деньги в кассу, отрицательная проводка резерва не двигает накопленное из кассы (versionCode 197)"
+  "versionCode": 198,
+  "versionName": "4.13.31",
+  "apkUrl": "https://github.com/clubvine44-gif/kopeyka3/releases/download/v4.13.31/Fin.apk",
+  "sha256": "13cd8bdee50b6cf834a0d160c7932aa38e53d11a330593b3b4616f85bb8837ec",
+  "notes": "4.13.31 — названная касса ставится на экран, отрицательная проводка резерва не блокирует снятие, минус по долгу не прячет переплату (versionCode 198)"
 }
